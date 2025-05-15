@@ -87,16 +87,6 @@
         };
     };
 
-    macros {
-        hangul: hangul {
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings = <&none>, <&macro_press>;
-
-            label = "HANGUL";
-        };
-    };
-
     keymap {
         compatible = "zmk,keymap";
 
