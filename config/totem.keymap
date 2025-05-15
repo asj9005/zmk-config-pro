@@ -51,27 +51,27 @@
     combos {
         compatible = "zmk,combos";
 
-        Ctrl+x {
+        combo_ctrl_x {
             bindings = <&kp LC(X)>;
             key-positions = <21 22>;
         };
 
-        Ctrl+c {
+        combo_ctrl_c {
             bindings = <&kp LC(C)>;
             key-positions = <22 23>;
         };
 
-        Ctrl+V {
+        combo_ctrl_v {
             bindings = <&kp LC(V)>;
             key-positions = <23 24>;
         };
 
-        Delete {
+        delete {
             bindings = <&kp DELETE>;
             key-positions = <6 7>;
         };
 
-        Backspace {
+        backspace {
             bindings = <&kp BACKSPACE>;
             key-positions = <7 8>;
         };
