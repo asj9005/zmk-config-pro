@@ -175,10 +175,10 @@
 
         Asj {
             bindings = <
-        &trans  &kp F23  &kp F24  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans   &trans   &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans   &trans   &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                         &trans   &trans  &trans    &trans  &trans  &trans
+        &trans  &kp F23  &kp F24  &trans  &trans     &trans  &trans  &trans  &trans  &trans
+        &trans  &trans   &trans   &trans  &trans     &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans   &trans   &trans  &trans     &trans  &trans  &trans  &trans  &trans  &trans
+                         &trans   &trans  &kp F24    &trans  &trans  &trans
             >;
         };
     };
