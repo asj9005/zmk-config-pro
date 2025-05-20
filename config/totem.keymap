@@ -90,6 +90,12 @@
             bindings = <&kp ESCAPE>;
             key-positions = <1 2 3>;
         };
+
+        mousehold {
+            bindings = <&tog 1>;
+            key-positions = <33 34>;
+            layers = <1 0>;
+        };
     };
 
     macros {
