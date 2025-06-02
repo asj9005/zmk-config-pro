@@ -146,7 +146,8 @@
                 <&macro_press>,
                 <&kp LEFT_GUI>,
                 <&macro_tap>,
-                <&kp LEFT_ARROW>;
+                <&kp LEFT_ARROW>,
+                <&macro_release>;
 
             label = "LANG_TOGGLE";
         };
