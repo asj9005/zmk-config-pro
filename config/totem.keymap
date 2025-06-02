@@ -286,6 +286,7 @@
         };
     };
 };
+};
 
 #include <input/processors.dtsi>
 
