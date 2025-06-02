@@ -262,8 +262,8 @@
         Fast {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &new_macro  &trans  &fancyzone                &trans          &mkp MB4          &mmv MOVE_X(600)   &mkp MB5           &trans
-        &kp PRINTSCREEN  &trans  &trans      &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_Y(600)  &mmv MOVE_X(-600)  &mmv MOVE_Y(-600)  &msc SCRL_RIGHT
+        &kp LC(LS(Q))    &trans  &new_macro  &trans  &fancyzone                &trans          &mkp MB4          &mmv MOVE_Y(2000)   &mkp MB5           &trans
+        &kp PRINTSCREEN  &trans  &trans      &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_X(-2000)  &mmv MOVE_Y(-2000)  &mmv MOVE_X(2000)  &msc SCRL_RIGHT
 &trans  &trans           &trans  &trans      &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP      &msc SCRL_DOWN     &mkp MB3           &trans           &trans
                                  &trans      &trans  &trans                    &mkp MB1        &mkp MB2          &mkp MB3
             >;
