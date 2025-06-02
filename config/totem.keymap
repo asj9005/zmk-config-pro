@@ -52,6 +52,13 @@
             label = "NEW_BEHAVIOR";
             #binding-cells = <1>;
         };
+
+        tapdance: tapdance {
+            compatible = "zmk,behavior-tap-dance";
+            label = "TAPDANCE";
+            #binding-cells = <0>;
+            bindings = <&mo 7>, <&kmswitch>;
+        };
     };
 
     combos {
@@ -114,6 +121,19 @@
 
             label = "NEW_MACRO";
         };
+
+        kmswitch: kmswitch {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_tap>,
+                <&kp CAPS &kp SCROLLLOCK &kp KP_NUMLOCK>,
+                <&macro_wait_time 80>,
+                <&macro_tap>,
+                <&kp CAPSLOCK &kp SCROLLLOCK &kp KP_NUMLOCK>;
+
+            label = "kmswitch";
+        };
     };
 
     keymap {
@@ -132,10 +152,10 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &new_macro  &mo 9   &kp LG(LEFT_ARROW)        &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &kp PRINTSCREEN  &trans  &trans      &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &trans      &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
-                                 &trans      &trans  &trans                    &mkp MB1        &mkp MB2        &mkp MB3
+        &kp LC(LS(Q))    &trans  &kmswitch  &mo 9   &kp LG(LEFT_ARROW)        &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp PRINTSCREEN  &trans  &trans     &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans           &trans  &trans     &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
+                                 &trans     &trans  &trans                    &mkp MB1        &mkp MB2        &mkp MB3
             >;
         };
 
@@ -213,20 +233,20 @@
         Fast {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &new_macro  &trans  &kp LG(LEFT_ARROW)        &trans          &mkp MB4          &mmv MOVE_X(600)   &mkp MB5           &trans
-        &kp PRINTSCREEN  &trans  &trans      &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_Y(600)  &mmv MOVE_X(-600)  &mmv MOVE_Y(-600)  &msc SCRL_RIGHT
-&trans  &trans           &trans  &trans      &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP      &msc SCRL_DOWN     &mkp MB3           &trans           &trans
-                                 &trans      &trans  &trans                    &mkp MB1        &mkp MB2          &mkp MB3
+        &kp LC(LS(Q))    &trans  &kmswitch  &trans  &kp LG(LEFT_ARROW)        &trans          &mkp MB4          &mmv MOVE_X(600)   &mkp MB5           &trans
+        &kp PRINTSCREEN  &trans  &trans     &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_Y(600)  &mmv MOVE_X(-600)  &mmv MOVE_Y(-600)  &msc SCRL_RIGHT
+&trans  &trans           &trans  &trans     &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP      &msc SCRL_DOWN     &mkp MB3           &trans           &trans
+                                 &trans     &trans  &trans                    &mkp MB1        &mkp MB2          &mkp MB3
             >;
         };
 
         layer_10 {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &new_macro  &trans  &kp LG(LEFT_ARROW)        &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &kp PRINTSCREEN  &trans  &trans      &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &trans      &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
-                                 &trans      &trans  &trans                    &mkp MB1        &mkp MB2        &mkp MB3
+        &kp LC(LS(Q))    &trans  &kmswitch  &trans  &kp LG(LEFT_ARROW)        &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp PRINTSCREEN  &trans  &trans     &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans           &trans  &trans     &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
+                                 &trans     &trans  &trans                    &mkp MB1        &mkp MB2        &mkp MB3
             >;
         };
     };
