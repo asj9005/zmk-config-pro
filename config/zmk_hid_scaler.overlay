@@ -1,0 +1,19 @@
+#include <input/processors.dtsi>
+
+/* ───────── 레이어별 커서 배율 ───────── */
+&hid_listener {
+    /* Base(0) : 1.5× */
+    input-processors = <&zip_xy_scaler 3 2>;
+
+    /* PREC 레이어(3) : 0.4× */
+    prec_layer_override {
+        layers = <3>;
+        input-processors = <&zip_xy_scaler 2 5>;
+    };
+
+    /* FAST 레이어(9) : 4× */
+    fast_layer_override {
+        layers = <9>;
+        input-processors = <&zip_xy_scaler 4 1>;
+    };
+};
