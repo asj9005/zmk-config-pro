@@ -285,7 +285,6 @@
             >;
         };
     };
-};
 
 #include <input/processors.dtsi>
 
@@ -307,4 +306,5 @@ hid_listener: listener {                       /* ← “:” 으로 새 라벨 
         layers = <9>;
         input-processors = <&zip_xy_scaler 4 1>;
     };
+};
 };
