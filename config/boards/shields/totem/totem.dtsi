@@ -6,7 +6,6 @@
 
 #include <dt-bindings/zmk/matrix_transform.h>
 #include <physical_layouts.dtsi>
-#include <input/processors.dtsi>       /* ← 새로 추가 *
 
 / {
     chosen {
@@ -80,22 +79,5 @@
             , <&key_physical_attrs 105 100  886  387 (-1500)  939  437>
             , <&key_physical_attrs 105 100 1003  371       0    0    0>
             ;
-    };
-};
-
-/* ---------- 커서 배율 스케일러 ---------- */
-&hid_listener {
-    input-processors = <&zip_xy_scaler 3 2>;     /* 기본 : 1.5× */
-
-    /* 레이어 3 : 정밀 0.4× */
-    prec_layer_override {
-        layers = <3>;                             /* PREC */
-        input-processors = <&zip_xy_scaler 2 5>;  /* 0.4× */
-    };
-
-    /* 레이어 9 : 초고속 4× */
-    fast_layer_override {
-        layers = <9>;                             /* FAST */
-        input-processors = <&zip_xy_scaler 4 1>;  /* 4× */
     };
 };
