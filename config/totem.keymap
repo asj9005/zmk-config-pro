@@ -286,7 +286,6 @@
             >;
         };
     };
-    };
 
 /* ───── 새 커서-리스너 정의 + 레이어별 배율 ───── */
 hid_listener: listener {                       /* ← “:” 으로 새 라벨 선언 */
@@ -307,4 +306,5 @@ hid_listener: listener {                       /* ← “:” 으로 새 라벨 
         input-processors = <&zip_xy_scaler 4 1>;
     };
 };
+
 };
