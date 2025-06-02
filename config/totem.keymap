@@ -290,6 +290,7 @@
 /* ───── 새 커서-리스너 정의 + 레이어별 배율 ───── */
 hid_listener: listener {                       /* ← “:” 으로 새 라벨 선언 */
     compatible = "zmk,input-listener";
+    device = <&hid>;                 /* ★ 추가: 꼭 필요 */
 
     /* 기본(Base 0) : 1.5 × */
     input-processors = <&zip_xy_scaler 3 2>;
