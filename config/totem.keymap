@@ -63,6 +63,13 @@
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
         };
+
+        jum: jum {
+            compatible = "zmk,behavior-tap-dance";
+            label = "JUM";
+            #binding-cells = <0>;
+            bindings = <&kp PERIOD>, <&kp COMMA>;
+        };
     };
 
     combos {
@@ -175,10 +182,10 @@
         Base {
             display-name = "Base";
             bindings = <
-           &kp Q       &kp W       &kp E        &kp R         &kp T           &kp Y         &kp U        &kp I               &kp O           &kp P
-           &hm LGUI A  &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G    &holdtap 0 H  &hm RSHFT J  &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI SEMICOLON
-&tapdance  &kp Z       &kp X       &kp C        &kp V         &kp B           &kp N         &kp M        &kp COMMA           &kp DOT         &kp SLASH               &kp LC(LS(LA(LG(Z))))
-                                   &lt 6 ESC    &lt 2 SPACE   &lt 1 TAB       &lt 3 ENTER   &lt 4 LC(M)  &lt 5 DELETE
+       &kp Q       &kp W       &kp E        &kp R         &kp T           &kp Y         &kp U        &kp I               &kp O           &kp SEMICOLON
+       &hm LGUI A  &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G    &holdtap 0 H  &hm RSHFT J  &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
+&sl 7  &kp Z       &kp Z       &kp X        &kp C         &kp V           &kp B         &kp N        &kp M               &jum            &kp SLASH       &kp LC(LS(LA(LG(Z))))
+                               &lt 6 ESC    &lt 2 SPACE   &lt 1 TAB       &lt 3 ENTER   &lt 4 LC(M)  &lt 5 DELETE
             >;
         };
 
@@ -247,10 +254,10 @@
 
         Asj {
             bindings = <
-        &trans  &kp F23  &kp F24  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
-                         &trans   &trans  &kp F24           &trans  &trans  &trans
+        &trans  &kp F23  &new_macro  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
+        &trans  &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
+                         &trans      &trans  &kp F24           &trans  &trans  &trans
             >;
         };
 
