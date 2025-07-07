@@ -60,31 +60,8 @@
             bindings = <&lang_temp>, <&kp>;
 
             #binding-cells = <2>;
-            tapping-term-ms = <180>;
+            tapping-term-ms = <200>;
             flavor = "tap-preferred";
-        };
-
-        jum: jum {
-            compatible = "zmk,behavior-tap-dance";
-            label = "JUM";
-            #binding-cells = <0>;
-            bindings = <&kp PERIOD>, <&kp COMMA>;
-        };
-
-        shift1: shift1 {
-            compatible = "zmk,behavior-tap-dance";
-            label = "SHIFT1";
-            #binding-cells = <0>;
-            bindings = <&sk LEFT_SHIFT>, <&kp CAPSLOCK>;
-        };
-
-        shift2: shift2 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "SHIFT2";
-            bindings = <&kp>, <&shift1>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <150>;
         };
 
         jum2: jum2 {
@@ -103,6 +80,34 @@
 
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
+        };
+
+        shiftsk: shiftsk {
+            compatible = "zmk,behavior-sticky-key";
+            label = "SHIFTSK";
+            bindings = <&kp>;
+            #binding-cells = <1>;
+            release-after-ms = <1000>;
+            quick-release;
+        };
+
+        shiftmodmorph: shiftmodmorph {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SHIFTMODMORPH";
+            bindings = <&shiftsk LEFT_SHIFT>, <&caps_word>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LSFT)>;
+        };
+
+        shiftht: shiftht {
+            compatible = "zmk,behavior-hold-tap";
+            label = "SHIFTHT";
+            bindings = <&kp>, <&shiftmodmorph>;
+
+            #binding-cells = <2>;
+            flavor = "balanced";
+            tapping-term-ms = <200>;
         };
     };
 
@@ -216,10 +221,10 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp Q        &kp W       &kp E        &kp R         &kp T           &kp Y         &kp U                 &kp I               &kp O           &kp SEMICOLON
-       &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G    &holdtap 0 H  &hm RSHFT J           &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
-&sl 7  &key_repeat  &kp Z       &kp X        &kp C         &kp V           &kp B         &kp N                 &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
-                                &sys_reset   &lt 2 SPACE   &lt 1 TAB       &lt 4 ENTER   &shift2 LEFT_SHIFT 0  &kp LC(M)
+       &kp Q        &kp W       &kp E        &kp R         &kp T           &kp Y         &kp U                  &kp I               &kp O           &kp SEMICOLON
+       &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G    &holdtap 0 H  &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
+&sl 7  &key_repeat  &kp Z       &kp X        &kp C         &kp V           &kp B         &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
+                                &sys_reset   &lt 2 SPACE   &lt 1 TAB       &lt 4 ENTER   &shiftht LEFT_SHIFT 0  &kp LC(M)
             >;
         };
 
