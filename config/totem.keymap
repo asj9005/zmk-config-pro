@@ -240,10 +240,10 @@
 
         Nav {
             bindings = <
-        &trans    &kp LG(N4)  &kp LG(N5)  &kp LG(N6)  &fancyzone                &trans     &trans               &mt LC(HOME) UP_ARROW   &trans               &trans
-        &kp LGUI  &kp LALT    &kp LCTRL   &kp LSHFT   &kp LG(UP_ARROW)          &kp HOME   &mt HOME LEFT_ARROW  &mt LC(END) DOWN_ARROW  &mt END RIGHT_ARROW  &kp END
-&trans  &trans    &kp LG(N1)  &kp LG(N2)  &kp LG(N3)  &kp LS(LG(LEFT_ARROW))    &trans     &kp PAGE_UP          &kp PAGE_DOWN           &trans               &trans   &trans
-                              &trans      &trans      &trans                    &kp ENTER  &trans               &trans
+        &trans    &kp LG(N4)  &kp LG(N5)  &kp LG(N6)  &fancyzone                &trans     &kp BACKSPACE   &kp UP_ARROW   &kp DELETE       &trans
+        &kp LGUI  &kp LALT    &kp LCTRL   &kp LSHFT   &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW  &kp DOWN       &kp RIGHT_ARROW  &kp END
+&trans  &trans    &kp LG(N1)  &kp LG(N2)  &kp LG(N3)  &kp LS(LG(LEFT_ARROW))    &trans     &kp PAGE_UP     &kp PAGE_DOWN  &trans           &trans   &trans
+                              &trans      &trans      &trans                    &kp ENTER  &trans          &trans
             >;
 
             label = "Nav";
