@@ -296,7 +296,7 @@
         &trans  &kp F23  &new_macro  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
         &trans  &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans
 &trans  &trans  &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
-                         &trans      &trans  &kp F24           &trans  &trans  &trans
+                         &trans      &trans  &kmswitch         &trans  &trans  &trans
             >;
         };
 
