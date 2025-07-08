@@ -51,7 +51,7 @@
             compatible = "zmk,behavior-tap-dance";
             label = "TAPDANCE";
             #binding-cells = <0>;
-            bindings = <&mo 7>, <&kmswitch>;
+            bindings = <&mo 6>, <&kmswitch>;
         };
 
         holdtap: holdtap {
@@ -251,15 +251,15 @@
             bindings = <
        &kp Q        &kp W       &kp E        &kp R         &kp T           &kp Y             &kp U                  &kp I               &kp O           &kp SEMICOLON
        &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G    &holdtap 0 H      &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
-&sl 7  &key_repeat  &kp Z       &kp X        &kp C         &kp V           &kp B             &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
-                                &sys_reset   &lt 2 SPACE   &lt 1 TAB       &numsym2 0 ENTER  &shiftht LEFT_SHIFT 0  &kp LC(M)
+&sl 6  &key_repeat  &kp Z       &kp X        &kp C         &kp V           &kp B             &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
+                                &sl 8        &lt 2 SPACE   &lt 1 TAB       &numsym2 0 ENTER  &shiftht LEFT_SHIFT 0  &lt 5 LC(M)
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &mo 9   &kp ENTER  &fancyzone                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp LC(LS(Q))    &trans  &mo 7   &kp ENTER  &fancyzone                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
         &kp PRINTSCREEN  &trans  &trans  &trans     &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
 &trans  &trans           &trans  &trans  &trans     &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &new_macro
                                  &trans  &trans     &mousealttab              &mkp MB1        &mkp MB2        &mkp MB3
@@ -268,10 +268,10 @@
 
         Nav {
             bindings = <
-        &trans    &kp LG(N4)  &kp LG(N5)  &kp LG(N6)  &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
-        &kp LGUI  &kp LALT    &kp LCTRL   &kp LSHFT   &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
-&trans  &trans    &kp LG(N1)  &kp LG(N2)  &kp LG(N3)  &kp LS(LG(LEFT_ARROW))    &trans     &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
-                              &trans      &trans      &trans                    &kp ENTER  &trans                       &trans
+        &trans    &kp LC(INSERT)  &kp LC(KP_PLUS)  &kp LC(KP_MINUS)  &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
+        &kp LGUI  &kp LALT        &kp LCTRL        &kp LSHFT         &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
+&trans  &trans    &trans          &trans           &trans            &kp LS(LG(LEFT_ARROW))    &trans     &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
+                                  &trans           &trans            &trans                    &kp ENTER  &trans                       &trans
             >;
 
             label = "Nav";
@@ -310,30 +310,12 @@
             label = "Fun";
         };
 
-        Media {
-            bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
-            >;
-        };
-
         Asj {
             bindings = <
-        &trans  &kp F23  &new_macro  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
-                         &trans      &trans  &kmswitch         &trans  &trans  &trans
-            >;
-        };
-
-        layer_8 {
-            bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
+        &sys_reset  &kp F23  &new_macro  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
+        &trans      &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans
+&trans  &trans      &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
+                             &trans      &trans  &kmswitch         &trans  &trans  &trans
             >;
         };
 
@@ -349,13 +331,21 @@
             label = "Fast";
         };
 
-        layer_10 {
-            display-name = "Mouse";
+        Start {
             bindings = <
-        &kp LC(LS(Q))    &trans  &kmswitch  &trans  &kp LG(LEFT_ARROW)        &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &kp PRINTSCREEN  &trans  &trans     &trans  &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &trans     &trans  &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
-                                 &trans     &trans  &trans                    &mkp MB1        &mkp MB2        &mkp MB3
+        &trans  &kp LG(LS(N1))  &kp LG(LS(N2))  &kp LG(LS(N3))  &kp LG(LS(N4))    &kp LG(LS(N5))  &kp LG(LS(N6))  &kp LG(LS(N7))  &kp LG(LS(N8))  &kp LG(LS(N9))
+        &trans  &trans          &trans          &trans          &trans            &trans          &trans          &trans          &trans          &trans
+&trans  &trans  &trans          &trans          &trans          &trans            &trans          &trans          &trans          &trans          &trans          &trans
+                                &trans          &trans          &trans            &trans          &trans          &trans
+            >;
+        };
+
+        Media {
+            bindings = <
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                        &trans  &trans  &trans    &trans  &trans  &trans
             >;
         };
     };
