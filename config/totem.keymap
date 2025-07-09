@@ -282,7 +282,7 @@
             #binding-cells = <0>;
             bindings = <&macro_tap>, <&trans &to 0>;
 
-            label = "NEW_MACRO";
+            label = "automouse";
         };
     };
 
