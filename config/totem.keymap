@@ -147,6 +147,16 @@
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
         };
+
+        mou2: mou2 {
+            compatible = "zmk,behavior-hold-tap";
+            label = "MOU2";
+            bindings = <&xxxxxxx>, <&at>;
+
+            #binding-cells = <2>;
+            flavor = "tap-preferred";
+            tapping-term-ms = <180>;
+        };
     };
 
     combos {
@@ -326,10 +336,10 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &at Q            &at W   &automouse  &automouse  &fancyzone                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &kp PRINTSCREEN  &trans  &trans      &trans      &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &trans      &trans      &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &automouse       &trans
-                                 &trans      &trans      &mousealttab              &mkp MB1        &mkp MB2        &mkp MB3
+        &at Q            &at W      &automouse  &automouse  &fancyzone                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp PRINTSCREEN  &mou2 0 S  &trans      &trans      &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans           &trans     &trans      &trans      &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &automouse       &trans
+                                    &trans      &trans      &mousealttab              &mkp MB1        &mkp MB2        &mkp MB3
             >;
         };
 
