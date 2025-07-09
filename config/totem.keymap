@@ -113,7 +113,7 @@
         numsym: numsym {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYM";
-            bindings = <&mo 4>, <&mo 3>;
+            bindings = <&mo 4>, <&mo 4>;
 
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
@@ -276,6 +276,14 @@
 
             label = "BRACKET2";
         };
+
+        automouse: automouse {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&trans &to 0>;
+
+            label = "NEW_MACRO";
+        };
     };
 
     keymap {
@@ -287,17 +295,17 @@
        &kp Q        &kp W       &kp E        &kp R         &kp T           &kp Y             &kp U                  &kp I               &kp O           &kp SEMICOLON
        &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G    &holdtap 0 H      &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
 &sl 6  &key_repeat  &kp Z       &kp X        &kp C         &kp V           &kp B             &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
-                                &sl 8        &lt 2 SPACE   &lt 1 TAB       &numsym2 0 ENTER  &shiftht LEFT_SHIFT 0  &lt 5 LC(M)
+                                &sl 8        &lt 3 SPACE   &lt 1 TAB       &numsym2 0 ENTER  &shiftht LEFT_SHIFT 0  &lt 5 LC(M)
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &mo 7   &kp ENTER  &fancyzone                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &kp PRINTSCREEN  &trans  &trans  &trans     &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &trans  &trans     &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
-                                 &trans  &trans     &mousealttab              &mkp MB1        &mkp MB2        &mkp MB3
+        &automouse       &automouse  &automouse  &automouse  &fancyzone                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp PRINTSCREEN  &trans      &trans      &trans      &kp LG(UP_ARROW)          &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans           &trans      &trans      &trans      &kp LG(LS(LEFT_ARROW))    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &automouse       &trans
+                                     &trans      &trans      &mousealttab              &mkp MB1        &mkp MB2        &mkp MB3
             >;
         };
 
@@ -347,7 +355,7 @@
 
         Asj {
             bindings = <
-        &sys_reset  &kp F23  &new_macro  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
+        &sys_reset  &kp F23  &automouse  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
         &trans      &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans
 &trans  &trans      &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
                              &trans      &trans  &kmswitch         &trans  &trans  &trans
@@ -357,7 +365,7 @@
         Fast {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &new_macro  &trans  &fancyzone                &trans            &mkp MB4            &mmv MOVE_Y(-3000)  &mkp MB5           &trans
+        &kp LC(LS(Q))    &trans  &automouse  &trans  &fancyzone                &trans            &mkp MB4            &mmv MOVE_Y(-3000)  &mkp MB5           &trans
         &kp PRINTSCREEN  &trans  &trans      &trans  &kp LG(UP_ARROW)          &msc MOVE_X(-50)  &mmv MOVE_X(-3000)  &mmv MOVE_Y(3000)   &mmv MOVE_X(2300)  &msc MOVE_X(50)
 &trans  &trans           &trans  &trans      &trans  &kp LG(LS(LEFT_ARROW))    &trans            &msc MOVE_Y(50)     &msc MOVE_Y(-50)    &mkp MB3           &trans           &trans
                                  &trans      &trans  &trans                    &mkp MB1          &mkp MB2            &mkp MB3
