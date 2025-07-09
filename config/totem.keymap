@@ -294,6 +294,20 @@
 
             label = "AT";
         };
+
+        xxxxxxx: xxxxxxx {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&to 0>,
+                <&macro_press>,
+                <&kp LCTRL>,
+                <&macro_pause_for_release>,
+                <&macro_release>,
+                <&kp LCTRL>;
+
+            label = "XXXXXXX";
+        };
     };
 
     keymap {
