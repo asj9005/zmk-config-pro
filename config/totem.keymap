@@ -148,10 +148,10 @@
             mods = <(MOD_LSFT)>;
         };
 
-        mou2: mou2 {
+        atlayerhmbe: atlayerhmbe {
             compatible = "zmk,behavior-hold-tap";
-            label = "MOU2";
-            bindings = <&xxxxxxx>, <&at>;
+            label = "ATLAYERHMBE";
+            bindings = <&atlayerhm>, <&atlayertab>;
 
             #binding-cells = <2>;
             flavor = "tap-preferred";
@@ -290,22 +290,22 @@
         automouse: automouse {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
-            bindings = <&macro_tap>, <&trans &to 0>;
+            bindings = <&macro_tap>, <&to 0 &trans>;
 
             label = "automouse";
         };
 
-        at: at {
+        atlayertab: at {
             compatible = "zmk,behavior-macro-one-param";
             #binding-cells = <1>;
             bindings =
                 <&macro_tap>,
-                <&macro_param_1to1 &kp MACRO_PLACEHOLDER &to 0>;
+                <&to 0 &macro_param_1to1 &kp MACRO_PLACEHOLDER>;
 
             label = "AT";
         };
 
-        xxxxxxx: xxxxxxx {
+        atlayerhm: xxxxxxx {
             compatible = "zmk,behavior-macro-one-param";
             #binding-cells = <1>;
             bindings =
@@ -330,17 +330,17 @@
        &kp Q        &kp W       &kp E        &kp R         &kp T           &kp Y             &kp U                  &kp I               &kp O           &kp SEMICOLON
        &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G    &holdtap 0 H      &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
 &sl 6  &key_repeat  &kp Z       &kp X        &kp C         &kp V           &kp B             &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
-                                &sl 8        &lt 3 SPACE   &lt 1 TAB       &numsym2 0 ENTER  &shiftht LEFT_SHIFT 0  &lt 5 LC(M)
+                                &sl 8        &lt 2 SPACE   &lt 1 TAB       &numsym2 0 ENTER  &shiftht LEFT_SHIFT 0  &lt 5 LC(M)
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &at Q             &at W             &at E          &kp F           &kp T           &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &mou2 LEFT_GUI A  &mou2 LEFT_ALT S  &mou2 LCTRL D  &mou2 LSHIFT F  &at G           &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans            &at Z             &at X          &at C           &at V           &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &automouse       &trans
-                                            &trans         &trans          &mousealttab    &mkp MB1        &mkp MB2        &mkp MB3
+        &atlayertab Q            &atlayertab W            &atlayertab E         &kp F                  &kp T            &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayertab G    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans                   &atlayertab Z            &atlayertab X         &atlayertab C          &atlayertab V    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &automouse       &trans
+                                                          &trans                &trans                 &mousealttab     &mkp MB1        &mkp MB2        &mkp MB3
             >;
         };
 
