@@ -113,7 +113,7 @@
         numsym: numsym {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYM";
-            bindings = <&mo 4>, <&mo 4>;
+            bindings = <&mo 4>, <&mo 3>;
 
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
@@ -398,10 +398,10 @@
 
         Num {
             bindings = <
-        &kp LBKT  &kp N7  &kp N8     &kp N9  &kp RBKT    &kp COLON  &kp TILDE  &trans        &trans     &trans
-        &trans    &kp N4  &kp N5     &kp N6  &kp N0      &kp PLUS   &kp MINUS  &kp ASTERISK  &kp SLASH  &trans
-&trans  &trans    &kp N1  &kp N2     &kp N3  &kp DOT     &trans     &trans     &trans        &trans     &trans  &trans
-                          &kp EQUAL  &trans  &trans      &trans     &trans     &trans
+        &atlayertab Q            &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
+        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5  &kp N6  &kp EQUAL
+&trans  &trans                   &atlayertab Z            &atlayertab X         &atlayertab C              &atlayertab V    &kp DOT    &kp N1  &kp N2  &kp N3  &trans     &trans
+                                                          &trans                &trans                     &trans           &trans     &trans  &trans
             >;
 
             label = "Num";
@@ -445,15 +445,6 @@
         &trans  &trans          &trans          &trans          &trans            &trans          &trans          &trans          &trans          &trans
 &trans  &trans  &trans          &trans          &trans          &trans            &trans          &trans          &trans          &trans          &trans          &trans
                                 &trans          &trans          &trans            &trans          &trans          &trans
-            >;
-        };
-
-        Media {
-            bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
             >;
         };
     };
