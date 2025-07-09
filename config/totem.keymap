@@ -138,6 +138,15 @@
             mods = <(MOD_LALT)>;
             keep-mods = <(MOD_LALT)>;
         };
+
+        bracketmod: bracketmod {
+            compatible = "zmk,behavior-mod-morph";
+            label = "BRACKETMOD";
+            bindings = <&bracket>, <&bracket2>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LSFT)>;
+        };
     };
 
     combos {
@@ -187,6 +196,11 @@
             bindings = <&tog 1>;
             key-positions = <2 3>;
             layers = <1 0>;
+        };
+
+        bracketcombo {
+            bindings = <&bracketmod>;
+            key-positions = <27 28>;
         };
     };
 
@@ -242,6 +256,26 @@
 
             label = "LANG_TEMP";
         };
+
+        bracket: bracket {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_tap>,
+                <&kp LEFT_PARENTHESIS &kp RIGHT_PARENTHESIS &kp LEFT_ARROW>;
+
+            label = "BRACKET";
+        };
+
+        bracket2: bracket2 {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_tap>,
+                <&kp LEFT_BRACKET &kp RIGHT_BRACKET &kp LEFT>;
+
+            label = "BRACKET2";
+        };
     };
 
     keymap {
@@ -291,10 +325,10 @@
 
         Num {
             bindings = <
-        &kp LBKT  &kp N7  &kp N8  &kp N9     &kp RBKT    &kp COLON  &kp TILDE  &trans        &trans     &trans
-        &trans    &kp N4  &kp N5  &kp N6     &kp N0      &kp PLUS   &kp MINUS  &kp ASTERISK  &kp SLASH  &trans
-&trans  &trans    &kp N1  &kp N2  &kp N3     &kp DOT     &trans     &trans     &trans        &trans     &trans  &trans
-                          &trans  &kp EQUAL  &trans      &trans     &trans     &trans
+        &kp LBKT  &kp N7  &kp N8     &kp N9  &kp RBKT    &kp COLON  &kp TILDE  &trans        &trans     &trans
+        &trans    &kp N4  &kp N5     &kp N6  &kp N0      &kp PLUS   &kp MINUS  &kp ASTERISK  &kp SLASH  &trans
+&trans  &trans    &kp N1  &kp N2     &kp N3  &kp DOT     &trans     &trans     &trans        &trans     &trans  &trans
+                          &kp EQUAL  &trans  &trans      &trans     &trans     &trans
             >;
 
             label = "Num";
