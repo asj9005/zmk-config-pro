@@ -317,20 +317,12 @@
             label = "BRACKET2";
         };
 
-        automouse: automouse {
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings = <&macro_tap>, <&to 0 &trans>;
-
-            label = "automouse";
-        };
-
         atlayertab: at {
             compatible = "zmk,behavior-macro-one-param";
             #binding-cells = <1>;
             bindings =
                 <&macro_tap>,
-                <&to 0 &macro_param_1to1 &kp MACRO_PLACEHOLDER>;
+                <&macro_param_1to1 &kp MACRO_PLACEHOLDER &to 0>;
 
             label = "AT";
         };
@@ -339,10 +331,10 @@
             compatible = "zmk,behavior-macro-one-param";
             #binding-cells = <1>;
             bindings =
-                <&macro_tap>,
-                <&to 0>,
                 <&macro_press>,
                 <&macro_param_1to1 &kp MACRO_PLACEHOLDER>,
+                <&macro_tap>,
+                <&to 0>,
                 <&macro_pause_for_release>,
                 <&macro_release>,
                 <&macro_param_1to1 &kp MACRO_PLACEHOLDER>;
@@ -420,20 +412,20 @@
 
         Asj {
             bindings = <
-        &sys_reset  &kp F23  &automouse  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
-        &trans      &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans
-&trans  &trans      &trans   &trans      &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
-                             &trans      &trans  &kmswitch         &trans  &trans  &trans
+        &sys_reset  &kp F23  &kp F24  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
+        &trans      &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans
+&trans  &trans      &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
+                             &trans   &trans  &kmswitch         &trans  &trans  &trans
             >;
         };
 
         Fast {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &automouse  &trans  &fancyzone                &trans            &mkp MB4            &mmv MOVE_Y(-3000)  &mkp MB5           &trans
-        &kp PRINTSCREEN  &trans  &trans      &trans  &kp LG(UP_ARROW)          &msc MOVE_X(-50)  &mmv MOVE_X(-3000)  &mmv MOVE_Y(3000)   &mmv MOVE_X(2300)  &msc MOVE_X(50)
-&trans  &trans           &trans  &trans      &trans  &kp LG(LS(LEFT_ARROW))    &trans            &msc MOVE_Y(50)     &msc MOVE_Y(-50)    &mkp MB3           &trans           &trans
-                                 &trans      &trans  &trans                    &mkp MB1          &mkp MB2            &mkp MB3
+        &kp LC(LS(Q))    &trans  &mo 7   &trans  &fancyzone                &trans            &mkp MB4            &mmv MOVE_Y(-3000)  &mkp MB5           &trans
+        &kp PRINTSCREEN  &trans  &trans  &trans  &kp LG(UP_ARROW)          &msc MOVE_X(-50)  &mmv MOVE_X(-3000)  &mmv MOVE_Y(3000)   &mmv MOVE_X(2300)  &msc MOVE_X(50)
+&trans  &trans           &trans  &trans  &trans  &kp LG(LS(LEFT_ARROW))    &trans            &msc MOVE_Y(50)     &msc MOVE_Y(-50)    &mkp MB3           &trans           &trans
+                                 &trans  &trans  &trans                    &mkp MB1          &mkp MB2            &mkp MB3
             >;
 
             label = "Fast";
