@@ -196,6 +196,16 @@
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
         };
+
+        nummmm: nummmm {
+            compatible = "zmk,behavior-hold-tap";
+            label = "NUMMMM";
+            bindings = <&mo>, <&to>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
     };
 
     combos {
@@ -255,6 +265,11 @@
         tab {
             bindings = <&kp TAB>;
             key-positions = <12 13>;
+        };
+
+        numlayercom {
+            bindings = <&to 3>;
+            key-positions = <2 1>;
         };
     };
 
@@ -380,7 +395,7 @@
         &atlayertab Q            &atlayertab W            &atlayerspeed 6 E     &atlayertab R          &atlayerdo T T                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayerdo2 LG(UP_ARROW) G    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
 &trans  &trans                   &atlayertab Z            &atlayertab X         &atlayertab C          &atlayerdo2 LS(LG(LEFT)) V    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
-                                                          &trans                &trans                 &mousealttab                  &mkp MB1        &mkp MB2        &mkp MB3
+                                                          &trans                &trans                 &mousealttab                  &mkp MB1        &mkp MB2        &kp LC(M)
             >;
         };
 
@@ -400,7 +415,7 @@
         &atlayertab Q            &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5  &kp N6  &kp EQUAL
 &trans  &trans                   &atlayertab Z            &atlayertab X         &atlayertab C              &atlayertab V    &kp DOT    &kp N1  &kp N2  &kp N3  &trans     &trans
-                                                          &trans                &trans                     &trans           &trans     &trans  &trans
+                                                          &trans                &trans                     &nummmm 1 0      &trans     &trans  &trans
             >;
 
             label = "Num";
