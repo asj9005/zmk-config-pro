@@ -216,6 +216,16 @@
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
         };
+
+        mousecombo: mousecombo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "MOUSECOMBO";
+            bindings = <&mo>, <&to>;
+
+            #binding-cells = <2>;
+            flavor = "hold-preferred";
+            tapping-term-ms = <180>;
+        };
     };
 
     combos {
@@ -257,12 +267,12 @@
         };
 
         end {
-            bindings = <&kp ESCAPE>;
+            bindings = <&esccombo>;
             key-positions = <1 2 3>;
         };
 
         mousehold {
-            bindings = <&tog 1>;
+            bindings = <&mousecombo 1 1>;
             key-positions = <2 3>;
             layers = <1 0>;
         };
@@ -414,6 +424,14 @@
             wait-ms = <0>;
             tap-ms = <0>;
         };
+
+        esccombo: esccombo {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &kp ESCAPE>;
+
+            label = "ESCCOMBO";
+        };
     };
 
     keymap {
@@ -422,9 +440,9 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp Q        &kp W       &kp E        &kp R              &kp T           &kp Y           &kp U                  &kp I               &kp O           &kp SEMICOLON
+       &key_repeat  &kp W       &kp E        &kp R              &kp T           &kp Y           &kp U                  &kp I               &kp O           &kp SEMICOLON
        &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F       &holdtap 0 G    &holdtap 0 H    &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
-&sl 5  &key_repeat  &kp Z       &kp X        &kp C              &kp V           &kp B           &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
+&sl 5  &kp Z        &kp X       &kp C        &kp V              &kp Q           &kp B           &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
                                 &sl 7        &navlayer 0 SPACE  &lt 1 ENTER     &numsymbtn 0 0  &shiftht LEFT_SHIFT 0  &lt 4 LC(M)
             >;
         };
