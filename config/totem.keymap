@@ -226,6 +226,15 @@
             flavor = "hold-preferred";
             tapping-term-ms = <180>;
         };
+
+        deletemodmorph: deletemodmorph {
+            compatible = "zmk,behavior-mod-morph";
+            label = "DELETEMODMORPH";
+            bindings = <&kp BACKSPACE>, <&kp DELETE>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LSFT)>;
+        };
     };
 
     combos {
@@ -443,7 +452,7 @@
        &key_repeat  &kp W       &kp E        &lt 1 R            &kp T              &kp Y         &kp U                  &kp I               &kp O           &kp SEMICOLON
        &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F       &holdtap 0 G       &holdtap 0 H  &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
 &sl 5  &kp Z        &kp X       &kp C        &kp V              &kp Q              &kp B         &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
-                                &sl 7        &navlayer 0 SPACE  &lt 1 BACKSPACE    &kp ENTER     &shiftht LEFT_SHIFT 0  &lt 4 LC(M)
+                                &sl 7        &navlayer 0 SPACE  &deletemodmorph    &kp ENTER     &shiftht LEFT_SHIFT 0  &lt 4 LC(M)
             >;
         };
 
@@ -529,6 +538,15 @@
             >;
 
             label = "Nav";
+        };
+
+        layer_9 {
+            bindings = <
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                        &trans  &trans  &trans    &trans  &trans  &trans
+            >;
         };
     };
 };
