@@ -217,16 +217,6 @@
             flavor = "tap-preferred";
         };
 
-        mousecombo: mousecombo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "MOUSECOMBO";
-            bindings = <&mo>, <&to>;
-
-            #binding-cells = <2>;
-            flavor = "hold-preferred";
-            tapping-term-ms = <180>;
-        };
-
         deletemodmorph: deletemodmorph {
             compatible = "zmk,behavior-mod-morph";
             label = "DELETEMODMORPH";
@@ -234,6 +224,16 @@
 
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
+        };
+
+        mousealt: mousealt {
+            compatible = "zmk,behavior-hold-tap";
+            label = "MOUSEALT";
+            bindings = <&lt>, <&deletemodmorph>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
         };
     };
 
@@ -281,7 +281,7 @@
         };
 
         mousehold {
-            bindings = <&mousecombo 1 1>;
+            bindings = <&to 1>;
             key-positions = <2 3>;
             layers = <1 0>;
         };
@@ -449,10 +449,10 @@
         Base {
             display-name = "Base";
             bindings = <
-       &key_repeat  &kp W       &kp E        &lt 1 R            &kp T              &kp Y         &kp U                  &kp I               &kp O           &kp SEMICOLON
-       &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F       &holdtap 0 G       &holdtap 0 H  &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
-&sl 5  &kp Z        &kp X       &kp C        &kp V              &kp Q              &kp B         &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
-                                &sl 7        &navlayer 0 SPACE  &deletemodmorph    &kp ENTER     &shiftht LEFT_SHIFT 0  &lt 4 LC(M)
+       &key_repeat  &lt 3 W     &kp E        &lt 1 R            &kp T            &kp Y         &kp U                  &kp I               &kp O           &kp SEMICOLON
+       &hm LGUI A   &hm LALT S  &hm LCTRL D  &hm LSHIFT F       &holdtap 0 G     &holdtap 0 H  &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
+&sl 5  &kp Z        &kp X       &kp C        &kp V              &kp Q            &kp B         &kp N                  &kp M               &jum2           &question       &kp LC(LS(LA(LG(Z))))
+                                &sl 7        &navlayer 0 SPACE  &mousealt 9 0    &kp ENTER     &shiftht LEFT_SHIFT 0  &lt 4 LC(M)
             >;
         };
 
@@ -542,10 +542,10 @@
 
         layer_9 {
             bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
+        &trans  &trans  &kp LS(LA(TAB))  &kp LA(TAB)  &fancyzone          &trans     &trans  &trans  &trans  &trans
+        &trans  &trans  &kp LC(LS(TAB))  &kp LC(TAB)  &kp LG(UP_ARROW)    &trans     &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &trans           &trans       &kp LG(LS(LEFT))    &kp LC(Z)  &trans  &trans  &trans  &trans  &trans
+                        &trans           &trans       &trans              &trans     &trans  &trans
             >;
         };
     };
