@@ -300,6 +300,11 @@
             bindings = <&tog 3>;
             key-positions = <2 1>;
         };
+
+        fluent {
+            bindings = <&kp LC(M)>;
+            key-positions = <17 18>;
+        };
     };
 
     macros {
@@ -533,19 +538,19 @@
             bindings = <
         &trans    &kp LC(INSERT)  &kp LC(KP_PLUS)  &alttab    &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
         &kp LGUI  &kp LALT        &kp LCTRL        &kp LSHFT  &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
-&trans  &trans    &trans          &trans           &trans     &kp LS(LG(LEFT_ARROW))    &trans     &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
+&trans  &trans    &trans          &trans           &trans     &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
                                   &trans           &trans     &trans                    &kp ENTER  &trans                       &trans
             >;
 
             label = "Nav";
         };
 
-        layer_9 {
+        mshold {
             bindings = <
-        &trans  &trans  &kp LS(LA(TAB))  &kp LA(TAB)  &fancyzone          &trans     &trans  &trans  &trans  &trans
-        &trans  &trans  &kp LC(LS(TAB))  &kp LC(TAB)  &kp LG(UP_ARROW)    &trans     &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans           &trans       &kp LG(LS(LEFT))    &kp LC(Z)  &trans  &trans  &trans  &trans  &trans
-                        &trans           &trans       &trans              &trans     &trans  &trans
+        &trans  &trans  &kp LS(LA(TAB))  &kp LA(TAB)  &fancyzone          &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &trans  &trans  &kp LC(LS(TAB))  &kp LC(TAB)  &kp LG(UP_ARROW)    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans  &trans  &trans           &trans       &kp LG(LS(LEFT))    &kp LC(Z)       &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
+                        &trans           &trans       &trans              &mkp MB1        &mkp MB2        &trans
             >;
         };
     };
