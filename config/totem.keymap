@@ -229,7 +229,7 @@
         mousealt: mousealt {
             compatible = "zmk,behavior-hold-tap";
             label = "MOUSEALT";
-            bindings = <&lt>, <&deletemodmorph>;
+            bindings = <&lt>, <&deletemod>;
 
             #binding-cells = <2>;
             tapping-term-ms = <180>;
