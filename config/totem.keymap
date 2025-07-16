@@ -244,6 +244,15 @@
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
         };
+
+        timemod: timemod {
+            compatible = "zmk,behavior-mod-morph";
+            label = "TIMEMOD";
+            bindings = <&kp TILDE>, <&kp COLON>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LSFT)>;
+        };
     };
 
     combos {
@@ -306,7 +315,7 @@
         };
 
         numlayercom {
-            bindings = <&tog 2>;
+            bindings = <&kp LC(M)>;
             key-positions = <2 1>;
         };
 
@@ -482,9 +491,9 @@
 
         Num {
             bindings = <
-        &atlayertab Q            &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8  &kp N9  &kp TILDE
+        &atlayertab Q            &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8  &kp N9  &timemod
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5  &kp N6  &kp EQUAL
-&trans  &trans                   &atlayertab Z            &atlayertab X         &atlayertab C              &atlayertab V    &kp DOT    &kp N1  &kp N2  &kp N3  &trans     &trans
+&trans  &trans                   &atlayertab Z            &atlayertab X         &atlayertab C              &atlayertab V    &jum2      &kp N1  &kp N2  &kp N3  &kp SLASH  &trans
                                                           &trans                &trans                     &nummmm 8 0      &trans     &trans  &trans
             >;
 
@@ -493,10 +502,10 @@
 
         Fun {
             bindings = <
-        &kp F12  &kp F7  &kp F8  &kp F9  &kp LC(F10)    &trans  &trans     &trans     &trans    &trans
-        &kp F11  &kp F4  &kp F5  &kp F6  &trans         &trans  &kp LSHFT  &kp LCTRL  &kp LALT  &kp LGUI
-&trans  &kp F10  &kp F1  &kp F2  &kp F3  &trans         &trans  &trans     &trans     &trans    &trans    &trans
-                         &trans  &trans  &trans         &trans  &trans     &trans
+        &kp F12  &kp F7  &kp F8  &kp F9  &kp LC(F10)       &trans  &trans     &trans     &trans    &trans
+        &kp F11  &kp F4  &kp F5  &kp F6  &trans            &trans  &kp LSHFT  &kp LCTRL  &kp LALT  &kp LGUI
+&trans  &kp F10  &kp F1  &kp F2  &kp F3  &kp LANGUAGE_2    &trans  &trans     &trans     &trans    &trans    &trans
+                         &trans  &trans  &trans            &trans  &trans     &trans
             >;
 
             label = "Fun";
@@ -545,10 +554,10 @@
 
         mshold {
             bindings = <
-        &trans  &trans  &kp LS(LA(TAB))  &kp LA(TAB)  &fancyzone          &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &trans  &trans  &kp LC(LS(TAB))  &kp LC(TAB)  &kp LG(UP_ARROW)    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans  &trans  &trans           &trans       &kp LG(LS(LEFT))    &kp LC(Z)       &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
-                        &trans           &trans       &trans              &mkp MB1        &mkp MB2        &trans
+        &kp LC(LS(Q))    &trans  &mo 5            &kp LA(TAB)  &fancyzone          &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp PRINTSCREEN  &trans  &kp LC(LS(TAB))  &kp LC(TAB)  &kp LG(UP_ARROW)    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans           &trans  &trans           &trans       &kp LG(LS(LEFT))    &kp LC(Z)       &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
+                                 &trans           &trans       &trans              &mkp MB1        &mkp MB2        &trans
             >;
 
             label = "mshold";
