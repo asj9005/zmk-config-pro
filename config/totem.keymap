@@ -277,7 +277,7 @@
 
         combo_ctrl_x {
             bindings = <&kp LC(X)>;
-            key-positions = <21 22>;
+            key-positions = <22 24>;
         };
 
         combo_ctrl_c {
@@ -315,24 +315,19 @@
             key-positions = <1 2 3>;
         };
 
-        mousehold {
-            bindings = <&tog 1>;
-            key-positions = <2 3>;
-        };
-
         bracketcombo {
             bindings = <&bracketmod>;
             key-positions = <27 28>;
         };
 
-        tab {
-            bindings = <&kp TAB>;
+        enter {
+            bindings = <&kp ENTER>;
             key-positions = <12 13>;
         };
 
         layerexit {
             bindings = <&to 0>;
-            key-positions = <2 1>;
+            key-positions = <2 3>;
         };
 
         fluent {
@@ -340,14 +335,24 @@
             key-positions = <17 18>;
         };
 
-        enter {
-            bindings = <&kp ENTER>;
+        tab {
+            bindings = <&kp TAB>;
             key-positions = <12 11>;
         };
 
-        shiftcom2 {
-            bindings = <&sk LEFT_SHIFT>;
-            key-positions = <29 28>;
+        esc {
+            bindings = <&kp ESCAPE>;
+            key-positions = <1 2>;
+        };
+
+        rawpaste {
+            bindings = <&kp LC(LS(V))>;
+            key-positions = <23 24 22>;
+        };
+
+        undo {
+            bindings = <&kp LC(Z)>;
+            key-positions = <21 22>;
         };
     };
 
@@ -475,6 +480,18 @@
 
             label = "ESCCOMBO";
         };
+
+        mousefind: mousefind {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_tap>,
+                <&kp RIGHT_CONTROL>,
+                <&macro_wait_time 10>,
+                <&kp RIGHT_CONTROL>;
+
+            label = "MOUSEFIND";
+        };
     };
 
     keymap {
@@ -483,29 +500,29 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp SINGLE_QUOTE  &lt 2 W     &kp E        &kp R           &kp T             &kp Y                  &kp U        &kp I               &kp O           &kp SEMICOLON
-       &hm LGUI A        &hm LALT S  &hm LCTRL D  &hm LSHIFT F    &holdtap 0 G      &holdtap 0 H           &hm RSHFT J  &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
-&sl 4  &kp Z             &kp X       &kp C        &kp V           &kp Q             &kp B                  &kp N        &kp M               &jum2           &question       &shiftdance
-                                     &sl 6        &tomolayer 7 2  &tomolayer 8 1    &shiftht LEFT_SHIFT 0  &kp SPACE    &lt 3 LC(M)
+       &kp SINGLE_QUOTE  &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U                  &kp I               &kp O           &kp SEMICOLON
+       &hm LGUI A        &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G      &holdtap 0 H    &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI P
+&sl 4  &kp Z             &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N                  &kp M               &jum2           &question       &shiftdance
+                                     &sl 6        &lt 7 SPACE   &tomolayer 8 1    &tomolayer 2 2  &shiftht LEFT_SHIFT 0  &lt 3 LC(M)
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab SQT          &atlayertab W            &atlayerspeed 5 E     &atlayertab R          &atlayerdo T T                &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &atlayertab SQT          &atlayerspeed 5 W        &atlayertab E         &atlayertab R          &atlayerdo T T                &mousefind      &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayerdo2 LG(UP_ARROW) G    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &trans          &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
-                                                          &trans                &trans                 &tomolayer 8 0                &mkp MB1        &mkp MB2        &kp LC(M)
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2        &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
+                                                          &trans                &trans                 &tomolayer 8 0                &trans          &mkp MB1        &trans
             >;
         };
 
         Num {
             bindings = <
-        &atlayertab SQT          &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8  &kp N9  &timemod
-        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5  &kp N6  &kp EQUAL
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &jum2      &kp N1  &kp N2  &kp N3  &kp SLASH  &trans
-                                                          &trans                &tomolayer 7 0             &trans           &trans     &trans  &trans
+        &atlayertab SQT          &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS       &kp N7  &kp N8     &kp N9  &timemod
+        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0          &kp N4  &kp N5     &kp N6  &kp EQUAL
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &jum2           &kp N1  &kp N2     &kp N3  &kp SLASH  &trans
+                                                          &trans                &trans                     &trans           &tomolayer 2 0  &trans  &kp ENTER
             >;
 
             label = "Num";
@@ -513,10 +530,10 @@
 
         Fun {
             bindings = <
-        &kp F12  &kp F7  &kp F8  &kp F9  &kp LC(F10)       &trans  &trans     &trans     &trans    &trans
-        &kp F11  &kp F4  &kp F5  &kp F6  &trans            &trans  &kp LSHFT  &kp LCTRL  &kp LALT  &kp LGUI
-&trans  &kp F10  &kp F1  &kp F2  &kp F3  &kp LANGUAGE_2    &trans  &trans     &trans     &trans    &trans    &trans
-                         &trans  &trans  &trans            &trans  &trans     &trans
+        &kp F12  &kp F7  &kp F8  &kp F9  &kp LC(F10)       &trans  &kp LS(COMMA)  &kp LS(PERIOD)  &trans    &trans
+        &kp F11  &kp F4  &kp F5  &kp F6  &trans            &trans  &kp LSHFT      &kp LCTRL       &kp LALT  &kp LGUI
+&trans  &kp F10  &kp F1  &kp F2  &kp F3  &kp LANGUAGE_2    &trans  &trans         &trans          &trans    &trans    &trans
+                         &trans  &trans  &trans            &trans  &trans         &trans
             >;
 
             label = "Fun";
@@ -534,10 +551,10 @@
         Fast {
             display-name = "Mouse";
             bindings = <
-        &kp LC(LS(Q))    &trans  &trans  &trans  &fancyzone                &trans            &mkp MB4            &mmv MOVE_Y(-3000)  &mkp MB5           &trans
+        &kp LC(LS(Q))    &trans  &trans  &trans  &fancyzone                &mousefind        &mkp MB4            &mmv MOVE_Y(-3000)  &mkp MB5           &trans
         &kp PRINTSCREEN  &trans  &trans  &trans  &kp LG(UP_ARROW)          &msc MOVE_X(-50)  &mmv MOVE_X(-3000)  &mmv MOVE_Y(3000)   &mmv MOVE_X(2300)  &msc MOVE_X(50)
-&trans  &trans           &trans  &trans  &trans  &kp LG(LS(LEFT_ARROW))    &trans            &msc MOVE_Y(50)     &msc MOVE_Y(-50)    &mkp MB3           &trans           &trans
-                                 &trans  &trans  &trans                    &mkp MB1          &mkp MB2            &mkp MB3
+&trans  &trans           &trans  &trans  &trans  &kp LG(LS(LEFT_ARROW))    &mkp MB2          &msc MOVE_Y(50)     &msc MOVE_Y(-50)    &mkp MB3           &new_macro       &trans
+                                 &trans  &trans  &trans                    &trans            &mkp MB1            &trans
             >;
 
             label = "Fast";
@@ -554,10 +571,10 @@
 
         Nav {
             bindings = <
-        &kp LC(INS)  &kp LC(MINUS)  &kp LC(KP_PLUS)  &alttab    &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
-        &kp LGUI     &kp LALT       &kp LCTRL        &kp LSHFT  &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
-&trans  &trans       &trans         &trans           &trans     &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
-                                    &trans           &trans     &trans                    &kp ENTER  &trans                       &trans
+        &kp LC(INS)  &kp LC(MINUS)  &kp LC(PLUS)   &alttab            &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
+        &kp LGUI     &kp LALT       &kp LCTRL      &kp LSHFT          &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
+&trans  &trans       &kp LC(SPACE)  &kp LC(LS(Q))  &kp LA(LG(SPACE))  &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
+                                    &trans         &trans             &trans                    &kp ENTER  &trans                       &trans
             >;
 
             label = "Nav";
@@ -565,10 +582,10 @@
 
         mshold {
             bindings = <
-        &kp LC(LS(Q))    &trans  &mo 5            &kp LA(TAB)  &fancyzone          &trans          &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &kp PRINTSCREEN  &trans  &kp LC(LS(TAB))  &kp LC(TAB)  &kp LG(UP_ARROW)    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &trans           &trans       &kp LG(LS(LEFT))    &kp LC(Z)       &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
-                                 &trans           &trans       &trans              &mkp MB1        &mkp MB2        &trans
+        &kp LC(LS(Q))    &mo 5   &kp LC(LS(TAB))    &kp LC(TAB)    &fancyzone          &mousefind      &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp PRINTSCREEN  &trans  &trans             &trans         &kp LG(UP_ARROW)    &msc SCRL_LEFT  &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &mkp MB2        &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
+                                 &trans             &trans         &trans              &trans          &mkp MB1        &trans
             >;
 
             label = "mshold";
