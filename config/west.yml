@@ -4,6 +4,8 @@ manifest:
       url-base: https://github.com/zmkfirmware
     - name: carrefinho
       url-base: https://github.com/carrefinho
+    - name: urob
+      url-base: https://github.com/urob
   projects:
     - name: zmk
       remote: zmkfirmware
@@ -12,5 +14,7 @@ manifest:
     - name: prospector-zmk-module
       remote: carrefinho
       revision: main
+    - name: zmk-tri-state
+      path: modules/zmk/tri-state
   self:
     path: config
