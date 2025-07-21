@@ -494,6 +494,10 @@
         };
     };
 
+ZMK_TRI_STATE(swapper, bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
+              ignored-key-positions = <LT2 RT2 RM1 RM2 RM3>;)
+
+
     keymap {
         compatible = "zmk,keymap";
 
@@ -571,7 +575,7 @@
 
         Nav {
             bindings = <
-        &kp LC(INS)  &kp LC(MINUS)  &kp LC(PLUS)   &alttab            &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
+        &kp LC(INS)  &kp LC(MINUS)  &kp LS(TAB)   &swapper            &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
         &kp LGUI     &kp LALT       &kp LCTRL      &kp LSHFT          &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
 &trans  &trans       &kp LC(SPACE)  &kp LC(LS(Q))  &kp LA(LG(SPACE))  &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
                                     &trans         &trans             &trans                    &kp ENTER  &trans                       &trans
