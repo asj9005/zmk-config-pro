@@ -44,7 +44,7 @@
             tapping-term-ms = <200>;
             quick-tap-ms = <125>;
             global-quick-tap;
-            bindings = <&kp>, <&kp>;
+            bindings = <&sk>, <&kp>;
         };
 
         tapdance: tapdance {
@@ -276,6 +276,7 @@
             label = "SWAPPER";
             #binding-cells = <0>;
             bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
+
             ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
         };
     };
@@ -579,7 +580,7 @@
 
         Nav {
             bindings = <
-        &kp LC(INS)  &kp LC(MINUS)  &kp LS(TAB)    &swapper            &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
+        &kp LC(INS)  &kp LC(MINUS)  &kp LS(TAB)    &swapper           &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
         &kp LGUI     &kp LALT       &kp LCTRL      &kp LSHFT          &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
 &trans  &trans       &kp LC(SPACE)  &kp LC(LS(Q))  &kp LA(LG(SPACE))  &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
                                     &trans         &trans             &trans                    &kp ENTER  &trans                       &trans
