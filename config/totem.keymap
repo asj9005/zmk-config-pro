@@ -528,10 +528,10 @@
 
         Num {
             bindings = <
-        &atlayertab SQT          &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8     &kp N9  &timemod
-        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5     &kp N6  &kp EQUAL
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &jum2      &kp N1  &kp N2     &kp N3  &kp SLASH  &trans
-                                                          &trans                &trans                     &trans           &trans     &trans  &kp ENTER
+        &atlayertab SQT          &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
+        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &kp EQUAL
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &jum2      &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
+                                                          &trans                &trans                     &trans           &trans     &trans  &lt 3 ENTER
             >;
 
             label = "Num";
