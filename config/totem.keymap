@@ -299,6 +299,35 @@
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
         };
+
+        shift_lang1: shift_lang1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SHIFT_LANG1";
+            bindings = <&shiftsk LEFT_SHIFT>, <&kp LANG_HANGEUL>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LSFT)>;
+        };
+
+        shift_lang2: shift_lang2 {
+            compatible = "zmk,behavior-hold-tap";
+            label = "SHIFT_LANG2";
+            bindings = <&lang_temp>, <&shift_lang1>;
+
+            #binding-cells = <2>;
+            flavor = "tap-preferred";
+            tapping-term-ms = <180>;
+        };
+
+        mo_caps: mo_caps {
+            compatible = "zmk,behavior-hold-tap";
+            label = "MO_CAPS";
+            bindings = <&mo>, <&caps_word>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "balanced";
+        };
     };
 
     combos {
@@ -389,6 +418,12 @@
             bindings = <&lang>;
             key-positions = <17 16>;
             layers = <1>;
+        };
+
+        reset_combo {
+            bindings = <&sys_reset>;
+            key-positions = <2 3>;
+            layers = <5>;
         };
     };
 
@@ -576,10 +611,10 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp SINGLE_QUOTE  &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U                  &kp I               &kp O           &kp SEMICOLON
-       &hm LGUI A        &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G      &holdtap 0 H    &hm RSHFT J            &hm LEFT_CONTROL K  &hm LEFT_ALT L  &jum3 LEFT_GUI 0
-&sl 5  &kp Z             &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N                  &kp M               &kp P           &question         &shiftdance
-                                     &sl 7        &lt 8 SPACE   &tomolayer 9 2    &tomolayer 3 3  &shiftht LEFT_SHIFT 0  &lt 4 LC(M)
+       &kp SINGLE_QUOTE  &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &kp SEMICOLON
+       &hm LGUI A        &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &holdtap 0 G      &holdtap 0 H    &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &jum3 LEFT_GUI 0
+&sl 5  &kp Z             &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &question         &shiftdance
+                                     &sl 7        &lt 8 SPACE   &tomolayer 9 2    &tomolayer 3 3  &shift_lang2 0 0  &mo_caps 4 0
             >;
         };
 
