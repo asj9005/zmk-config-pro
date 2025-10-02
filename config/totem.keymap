@@ -60,7 +60,7 @@
             bindings = <&kp PERIOD>, <&kp COMMA>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         question: question {
@@ -69,7 +69,7 @@
             bindings = <&kp EXCLAMATION>, <&kp QUESTION>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         shiftsk: shiftsk {
@@ -79,15 +79,16 @@
             #binding-cells = <1>;
             release-after-ms = <1000>;
             quick-release;
+            ignore-modifiers;
         };
 
         shiftmodmorph: shiftmodmorph {
             compatible = "zmk,behavior-mod-morph";
             label = "SHIFTMODMORPH";
-            bindings = <&shiftsk LEFT_SHIFT>, <&caps_word>;
+            bindings = <&shiftsk RIGHT_SHIFT>, <&caps_word>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         shiftht: shiftht {
@@ -100,23 +101,13 @@
             tapping-term-ms = <200>;
         };
 
-        mousealttab: mousealttab {
-            compatible = "zmk,behavior-mod-morph";
-            label = "MOUSEALTTAB";
-            bindings = <&to 0>, <&kp TAB>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_LALT)>;
-            keep-mods = <(MOD_LALT)>;
-        };
-
         bracketmod: bracketmod {
             compatible = "zmk,behavior-mod-morph";
             label = "BRACKETMOD";
             bindings = <&bracket>, <&bracket2>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         atlayerhmbe: atlayerhmbe {
@@ -162,19 +153,19 @@
         numsymtog: numsymtog {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYMTOG";
-            bindings = <&to 2>, <&to 0>;
+            bindings = <&to 3>, <&to 0>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         numsymtog2: numsymtog2 {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYMTOG2";
-            bindings = <&mo 2>, <&mo 0>;
+            bindings = <&mo 3>, <&mo 0>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         numsymbtn: numsymbtn {
@@ -197,41 +188,13 @@
             flavor = "tap-preferred";
         };
 
-        deletemodmorph: deletemodmorph {
-            compatible = "zmk,behavior-mod-morph";
-            label = "DELETEMODMORPH";
-            bindings = <&kp BACKSPACE>, <&kp DELETE>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
-        };
-
-        mousealt: mousealt {
-            compatible = "zmk,behavior-hold-tap";
-            label = "MOUSEALT";
-            bindings = <&lt>, <&deletemod>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        deletemod: deletemod {
-            compatible = "zmk,behavior-mod-morph";
-            label = "DELETEMOD";
-            bindings = <&kp BACKSPACE>, <&kp DELETE>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
-        };
-
         timemod: timemod {
             compatible = "zmk,behavior-mod-morph";
             label = "TIMEMOD";
             bindings = <&kp TILDE>, <&kp COLON>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         tomolayer: tomolayer {
@@ -276,7 +239,7 @@
             bindings = <&shiftsk LEFT_SHIFT>, <&lang>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         shift_lang2: shift_lang2 {
@@ -305,7 +268,7 @@
             bindings = <&di>, <&ps>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         bs_del1: bs_del1 {
@@ -314,7 +277,7 @@
             bindings = <&kp BACKSPACE>, <&kp DELETE>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         bs_del2: bs_del2 {
@@ -323,7 +286,7 @@
             bindings = <&kp LC(BACKSPACE)>, <&kp LC(DELETE)>;
 
             #binding-cells = <0>;
-            mods = <(MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
 
         bs_del3: bs_del3 {
@@ -609,7 +572,7 @@
        &kp LC(M)   &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &bs_del3 0 0
        &hm LGUI A  &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &kp G             &kp H           &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI SEMICOLON
 &sl 4  &kp Z       &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &question               &shiftdance
-                               &sl 6        &lt 7 SPACE   &tomolayer 8 1    &tomolayer 2 2  &shift_lang2 0 0  &mo_caps 3 0
+                               &sl 6        &lt 7 SPACE   &tomolayer 8 2    &tomolayer 3 3  &shift_lang2 0 0  &mo_caps 3 0
             >;
         };
 
@@ -625,8 +588,8 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
-        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &jum2
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
+        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &timemod
 &trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
                                                           &trans                &trans                     &trans           &trans     &trans  &lt 3 ENTER
             >;
