@@ -51,7 +51,7 @@
             compatible = "zmk,behavior-tap-dance";
             label = "TAPDANCE";
             #binding-cells = <0>;
-            bindings = <&mo 5>, <&kmswitch>;
+            bindings = <&mo 4>, <&kmswitch>;
         };
 
         jum2: jum2 {
@@ -162,7 +162,7 @@
         numsymtog: numsymtog {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYMTOG";
-            bindings = <&to 3>, <&to 0>;
+            bindings = <&to 2>, <&to 0>;
 
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
@@ -171,7 +171,7 @@
         numsymtog2: numsymtog2 {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYMTOG2";
-            bindings = <&mo 3>, <&mo 0>;
+            bindings = <&mo 2>, <&mo 0>;
 
             #binding-cells = <0>;
             mods = <(MOD_LSFT)>;
@@ -244,21 +244,11 @@
             flavor = "tap-preferred";
         };
 
-        tomomouse_eng: tomomouse_eng {
-            compatible = "zmk,behavior-hold-tap";
-            label = "TOMOMOUSE_ENG";
-            bindings = <&mo>, <&lang_mouse>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
         shiftdance: shiftdance {
             compatible = "zmk,behavior-tap-dance";
             label = "SHIFTDANCE";
             #binding-cells = <0>;
-            bindings = <&sk LEFT_SHIFT>, <&kp LC(LS(LA(LG(M))))>;
+            bindings = <&kp LC(LS(LA(LG(M))))>, <&caps_word>;
         };
 
         swapper: swapper {
@@ -268,16 +258,6 @@
             bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
 
             ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
-        };
-
-        tomonum_eng: tomonum_eng {
-            compatible = "zmk,behavior-hold-tap";
-            label = "TOMONUM_ENG";
-            bindings = <&mo>, <&lang_num>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
         };
 
         jum3: jum3 {
@@ -356,7 +336,7 @@
         hangul_lay1 {
             bindings = <&lang1>;
             key-positions = <17 16>;
-            layers = <0 2 3 4 5 6 7 8 9>;
+            layers = <0 1 2 3 4 5 6 7 8>;
         };
 
         end {
@@ -407,18 +387,32 @@
         hangul_lay {
             bindings = <&lang>;
             key-positions = <17 16>;
-            layers = <1>;
         };
 
         reset_combo {
             bindings = <&sys_reset>;
             key-positions = <2 3>;
-            layers = <5>;
+            layers = <4>;
         };
 
         jum_combo {
-            bindings = <&jum2>;
+            bindings = <&kp PERIOD>;
             key-positions = <28 29>;
+        };
+
+        comma_combo {
+            bindings = <&kp COMMA>;
+            key-positions = <27 29>;
+        };
+
+        kmswitch_combo {
+            bindings = <&kmswitch>;
+            key-positions = <11 12 13>;
+        };
+
+        quote_combo {
+            bindings = <&kp SQT>;
+            key-positions = <0 1>;
         };
     };
 
@@ -568,36 +562,6 @@
             wait-ms = <0>;
             tap-ms = <0>;
         };
-
-        lang_mouse: lang_mouse {
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings = <&macro_tap>, <&kp LANGUAGE_1 &to 2>;
-
-            label = "LANG_MOUSE";
-            wait-ms = <0>;
-            tap-ms = <0>;
-        };
-
-        lang_num: lang_num {
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings = <&macro_tap>, <&kp LANGUAGE_1 &to 3>;
-
-            label = "LANG_NUM";
-            wait-ms = <0>;
-            tap-ms = <0>;
-        };
-
-        lang1: lang1 {
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings = <&macro_tap>, <&kp LANGUAGE_1 &to 1>;
-
-            label = "LANG1";
-            wait-ms = <0>;
-            tap-ms = <0>;
-        };
     };
 
     keymap {
@@ -606,28 +570,17 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp SINGLE_QUOTE  &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &kp SEMICOLON
-       &hm LGUI A        &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &kp G             &kp H           &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &jum3 LEFT_GUI 0
-&sl 5  &kp Z             &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &question         &shiftdance
-                                     &sl 7        &lt 8 SPACE   &tomolayer 9 2    &tomolayer 3 3  &shift_lang2 0 0  &mo_caps 4 0
+       &kp LC(M)   &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &kp BACKSPACE
+       &hm LGUI A  &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &kp G             &kp H           &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI SEMICOLON
+&sl 4  &kp Z       &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &question               &shiftdance
+                               &sl 6        &lt 7 SPACE   &tomolayer 8 1    &tomolayer 2 2  &shift_lang2 0 0  &mo_caps 3 0
             >;
-        };
-
-        Eng {
-            bindings = <
-        &trans  &trans  &trans  &trans  &trans                &trans            &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans                &trans            &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans                &trans            &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &tomomouse_eng 9 0    &tomonum_eng 3 0  &trans  &trans
-            >;
-
-            label = "Eng";
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab SQT          &atlayerspeed 6 W        &atlayertab E         &atlayertab R          &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &atlayertab SQT          &atlayerspeed 5 W        &atlayertab E         &atlayertab R          &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayerdo2 LG(UP_ARROW) G    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
 &trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
                                                           &trans                &trans                 &mkp MB1                      &trans                 &trans          &trans
@@ -639,7 +592,7 @@
         &atlayertab SQT          &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &jum2
 &trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
-                                                          &trans                &trans                     &trans           &trans     &trans  &lt 4 ENTER
+                                                          &trans                &trans                     &trans           &trans     &trans  &lt 3 ENTER
             >;
 
             label = "Num";
@@ -699,7 +652,7 @@
 
         mshold {
             bindings = <
-        &kp LC(LS(Q))    &mo 6   &kp LC(LS(TAB))    &kp LC(TAB)    &fancyzone          &kp LS(LA(LG(LC(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &kp LC(LS(Q))    &mo 5   &kp LC(LS(TAB))    &kp LC(TAB)    &fancyzone          &kp LS(LA(LG(LC(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
         &kp PRINTSCREEN  &trans  &trans             &trans         &kp LG(UP_ARROW)    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
 &trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
                                  &trans             &trans         &mkp MB1            &trans                 &trans          &trans
