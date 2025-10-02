@@ -298,6 +298,15 @@
             tapping-term-ms = <180>;
             flavor = "balanced";
         };
+
+        ps_di_mop: ps_di_mop {
+            compatible = "zmk,behavior-mod-morph";
+            label = "PS_DI_MOP";
+            bindings = <&ps>, <&di>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LSFT)>;
+        };
     };
 
     combos {
@@ -406,7 +415,7 @@
     };
 
     macros {
-        new_macro: new_macro {
+        ps: new_macro {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
             bindings =
@@ -551,6 +560,16 @@
             wait-ms = <0>;
             tap-ms = <0>;
         };
+
+        di: di {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_tap>,
+                <&kp A &kp S &kp J &kp N9 &kp N0 &kp N0 &kp N5>;
+
+            label = "DI";
+        };
     };
 
     keymap {
@@ -569,16 +588,16 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab SQT          &atlayerspeed 5 W        &atlayertab E         &atlayertab R          &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &atlayertab LC(SQT)      &atlayerspeed 5 W        &atlayertab E         &atlayertab R          &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &di
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayerdo2 LG(UP_ARROW) G    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop       &trans
                                                           &trans                &trans                 &mkp MB1                      &trans                 &trans          &trans
             >;
         };
 
         Num {
             bindings = <
-        &atlayertab SQT          &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &jum2
 &trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
                                                           &trans                &trans                     &trans           &trans     &trans  &lt 3 ENTER
@@ -612,7 +631,7 @@
             bindings = <
         &kp LC(LS(Q))    &trans  &trans  &trans  &fancyzone                &kp LS(LG(LA(LC(F))))  &mkp MB4            &mmv MOVE_Y(-3000)  &mkp MB5           &trans
         &kp PRINTSCREEN  &trans  &trans  &trans  &kp LG(UP_ARROW)          &msc MOVE_X(-50)       &mmv MOVE_X(-3000)  &mmv MOVE_Y(3000)   &mmv MOVE_X(2300)  &msc MOVE_X(50)
-&trans  &trans           &trans  &trans  &trans  &kp LG(LS(LEFT_ARROW))    &mkp MB2               &msc MOVE_Y(50)     &msc MOVE_Y(-50)    &mkp MB3           &new_macro       &trans
+&trans  &trans           &trans  &trans  &trans  &kp LG(LS(LEFT_ARROW))    &mkp MB2               &msc MOVE_Y(50)     &msc MOVE_Y(-50)    &mkp MB3           &ps              &trans
                                  &trans  &trans  &mkp MB1                  &trans                 &trans              &trans
             >;
 
@@ -643,7 +662,7 @@
             bindings = <
         &kp LC(LS(Q))    &mo 5   &kp LC(LS(TAB))    &kp LC(TAB)    &fancyzone          &kp LS(LA(LG(LC(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
         &kp PRINTSCREEN  &trans  &trans             &trans         &kp LG(UP_ARROW)    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &new_macro       &trans
+&trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps              &trans
                                  &trans             &trans         &mkp MB1            &trans                 &trans          &trans
             >;
 
