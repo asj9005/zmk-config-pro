@@ -236,7 +236,7 @@
         shift_lang1: shift_lang1 {
             compatible = "zmk,behavior-mod-morph";
             label = "SHIFT_LANG1";
-            bindings = <&shiftsk LEFT_SHIFT>, <&lang>;
+            bindings = <&shiftsk RIGHT_SHIFT>, <&lang>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
