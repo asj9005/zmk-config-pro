@@ -569,28 +569,28 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)   &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &bs_del3 0 0
+       &kp LC(M)   &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &question
        &hm LGUI A  &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &kp G             &kp H           &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &hm LEFT_GUI SEMICOLON
-&sl 4  &kp Z       &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &question               &shiftdance
-                               &sl 6        &lt 7 SPACE   &tomolayer 8 2    &tomolayer 3 3  &shift_lang2 0 0  &mo_caps 3 0
+&sl 4  &kp Z       &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &bs_del3 0 0            &shiftdance
+                               &sl 6        &lt 7 SPACE   &tomolayer 8 1    &tomolayer 2 2  &shift_lang2 0 0  &mo_caps 3 0
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)        &atlayerspeed 5 W        &atlayertab E         &atlayertab R          &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &atlayertab LC(M)        &atlayerspeed 5 W        &atlayertab E         &atlayertab R          &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &ps_di_mop
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayerdo2 LG(UP_ARROW) G    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop       &trans
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
                                                           &trans                &trans                 &mkp MB1                      &trans                 &trans          &trans
             >;
         };
 
         Num {
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &kp SLASH
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &timemod
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans     &trans
                                                           &trans                &trans                     &trans           &trans     &trans  &lt 3 ENTER
             >;
 
