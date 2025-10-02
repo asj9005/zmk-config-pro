@@ -31,7 +31,7 @@
 &mmv_input_listener {
     /* default 1x */
 
-    input-processors = <&zip_xy_scaler 3 1>;
+    input-processors = <&zip_xy_scaler 2 1>;
 
     fast {
         layers = <Acc>;
