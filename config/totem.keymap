@@ -347,13 +347,13 @@
             key-positions = <23 24>;
         };
 
-        delete {
-            bindings = <&kp BACKSPACE>;
+        Undo_combo {
+            bindings = <&kp LC(Z)>;
             key-positions = <6 7>;
         };
 
-        backspace {
-            bindings = <&kp DELETE>;
+        Redo_combo {
+            bindings = <&kp K_REDO>;
             key-positions = <7 8>;
         };
 
@@ -377,8 +377,8 @@
             key-positions = <12 13>;
         };
 
-        layerexit {
-            bindings = <&to 0>;
+        enter2 {
+            bindings = <&kp ENTER>;
             key-positions = <2 3>;
         };
 
@@ -392,8 +392,8 @@
             key-positions = <12 11>;
         };
 
-        esc {
-            bindings = <&kp ESCAPE>;
+        tab2 {
+            bindings = <&kp TAB>;
             key-positions = <1 2>;
         };
 
@@ -409,7 +409,7 @@
 
         reset_combo {
             bindings = <&sys_reset>;
-            key-positions = <2 3>;
+            key-positions = <13 12>;
             layers = <7>;
         };
 
@@ -431,6 +431,26 @@
         quote_combo {
             bindings = <&kp SQT>;
             key-positions = <0 1>;
+        };
+
+        Ctrl_A_Combo {
+            bindings = <&kp LC(A)>;
+            key-positions = <22 23 24>;
+        };
+
+        Toback_Combo {
+            bindings = <&kp LG(A)>;
+            key-positions = <11 13>;
+        };
+
+        Leftwin_Combo {
+            bindings = <&sk LEFT_WIN>;
+            key-positions = <10 11>;
+        };
+
+        Rightwin_Combo {
+            bindings = <&sk LEFT_WIN>;
+            key-positions = <18 19>;
         };
     };
 
@@ -598,10 +618,10 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)         &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &question
-       &Hm_Pinky LGUI A  &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &kp G             &kp H           &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &Hm_Pinky LEFT_GUI SEMICOLON
-&sl 7  &kp Z             &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &bs_del3 0 0                  &shiftdance
-                                     &sl 8        &lt 9 SPACE   &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
+       &kp LC(M)  &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &question
+       &kp A      &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &kp G             &kp H           &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &bs_del3 0 0
+&sl 7  &kp Z      &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &kp SEMICOLON  &shiftdance
+                              &sl 8        &lt 9 SPACE   &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
             >;
         };
 
