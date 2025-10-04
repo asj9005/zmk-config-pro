@@ -317,15 +317,13 @@
             flavor = "tap-preferred";
         };
 
-        Hm_Pinky: Hm_Pinky {
-            compatible = "zmk,behavior-hold-tap";
-            label = "HM_PINKY";
-            #binding-cells = <2>;
-            flavor = "tap-preferred";
-            tapping-term-ms = <250>;
-            quick-tap-ms = <125>;
-            global-quick-tap;
-            bindings = <&sk>, <&kp>;
+        Jum: Jum {
+            compatible = "zmk,behavior-mod-morph";
+            label = "JUM";
+            bindings = <&kp PERIOD>, <&kp COMMA>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
         };
     };
 
@@ -347,13 +345,13 @@
             key-positions = <23 24>;
         };
 
-        Undo_combo {
-            bindings = <&kp LC(Z)>;
+        Enter_combo {
+            bindings = <&kp ENTER>;
             key-positions = <6 7>;
         };
 
-        Redo_combo {
-            bindings = <&kp K_REDO>;
+        Tab_combo {
+            bindings = <&kp TAB>;
             key-positions = <7 8>;
         };
 
@@ -372,34 +370,14 @@
             key-positions = <27 29>;
         };
 
-        enter {
-            bindings = <&kp ENTER>;
-            key-positions = <12 13>;
-        };
-
         enter2 {
             bindings = <&kp ENTER>;
             key-positions = <2 3>;
         };
 
-        fluent {
-            bindings = <&kp LC(M)>;
-            key-positions = <17 18>;
-        };
-
-        tab {
-            bindings = <&kp TAB>;
-            key-positions = <12 11>;
-        };
-
         tab2 {
             bindings = <&kp TAB>;
             key-positions = <1 2>;
-        };
-
-        rawpaste {
-            bindings = <&kp LC(LS(V))>;
-            key-positions = <23 24 22>;
         };
 
         undo {
@@ -409,7 +387,7 @@
 
         reset_combo {
             bindings = <&sys_reset>;
-            key-positions = <13 12>;
+            key-positions = <13 11 2>;
             layers = <7>;
         };
 
@@ -425,7 +403,7 @@
 
         kmswitch_combo {
             bindings = <&kmswitch>;
-            key-positions = <11 12 13>;
+            key-positions = <2 11>;
         };
 
         quote_combo {
@@ -438,19 +416,44 @@
             key-positions = <22 23 24>;
         };
 
-        Toback_Combo {
-            bindings = <&kp LG(A)>;
-            key-positions = <11 13>;
-        };
-
-        Leftwin_Combo {
+        LG_Combo {
             bindings = <&sk LEFT_WIN>;
             key-positions = <10 11>;
         };
 
-        Rightwin_Combo {
+        LS_Combo {
+            bindings = <&sk LEFT_SHIFT>;
+            key-positions = <11 12>;
+        };
+
+        LC_Combo {
+            bindings = <&sk LCTRL>;
+            key-positions = <12 13>;
+        };
+
+        LA_Combo {
+            bindings = <&sk LEFT_ALT>;
+            key-positions = <13 11>;
+        };
+
+        RG_Combo {
             bindings = <&sk LEFT_WIN>;
             key-positions = <18 19>;
+        };
+
+        RS_Combo {
+            bindings = <&sk LEFT_SHIFT>;
+            key-positions = <18 17>;
+        };
+
+        RC_Combo {
+            bindings = <&sk LCTRL>;
+            key-positions = <17 16>;
+        };
+
+        RA_Combo {
+            bindings = <&sk LEFT_ALT>;
+            key-positions = <18 16>;
         };
     };
 
@@ -618,19 +621,19 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W       &kp E        &kp R         &kp T             &kp Y           &kp U             &kp I               &kp O           &question
-       &kp A      &hm LALT S  &hm LCTRL D  &hm LSHIFT F  &kp G             &kp H           &hm RSHFT J       &hm LEFT_CONTROL K  &hm LEFT_ALT L  &bs_del3 0 0
-&sl 7  &kp Z      &kp X       &kp C        &kp V         &kp Q             &kp B           &kp N             &kp M               &kp P           &kp SEMICOLON  &shiftdance
-                              &sl 8        &lt 9 SPACE   &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
+       &kp LC(M)  &kp W  &kp E  &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &bs_del3 0 0
+       &kp A      &kp S  &kp D  &kp F        &kp G             &kp H           &kp J             &kp K         &kp L  &Jum
+&sl 7  &kp Z      &kp X  &kp C  &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &kp SEMICOLON  &shiftdance
+                         &sl 8  &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayerspeed 3 E     &atlayerspeed 4 R      &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &ps_di_mop
+        &atlayertab LC(M)        &atlayertab W            &atlayerspeed 3 E     &atlayerspeed 4 R      &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayerdo2 LG(UP_ARROW) G    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans           &trans
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop       &trans
                                                           &trans                &trans                 &mkp MB1                      &trans                 &trans          &trans
             >;
         };
@@ -670,9 +673,9 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &kp SLASH
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
         &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &timemod
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans     &trans
+&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
                                                           &trans                &trans                     &trans           &trans     &trans  &lt 6 ENTER
             >;
 
