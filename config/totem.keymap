@@ -71,6 +71,8 @@
     quick-tap-ms = <150>;
 };
 
+&sk { quick-release; };
+
 / {
     behaviors {
         hm: homerow_mods {
@@ -152,26 +154,6 @@
             compatible = "zmk,behavior-hold-tap";
             label = "ATLAYERSPEED";
             bindings = <&mo>, <&atlayertab>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        atlayerdo: atlayerdo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "ATLAYERDO";
-            bindings = <&fancyzone>, <&atlayertab>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        atlayerdo2: atlayerdo2 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "ATLAYERDO2";
-            bindings = <&kp>, <&atlayertab>;
 
             #binding-cells = <2>;
             tapping-term-ms = <180>;
@@ -548,8 +530,6 @@
             bindings =
                 <&macro_press>,
                 <&macro_param_1to1 &kp MACRO_PLACEHOLDER>,
-                <&macro_tap>,
-                <&to 0>,
                 <&macro_pause_for_release>,
                 <&macro_release>,
                 <&macro_param_1to1 &kp MACRO_PLACEHOLDER>;
@@ -631,10 +611,10 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayerspeed 3 E     &atlayerspeed 4 R      &atlayerdo T T                &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LSHIFT F  &atlayerdo2 LG(UP_ARROW) G    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V          &atlayerdo2 LS(LG(LEFT)) Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop       &trans
-                                                          &trans                &trans                 &mkp MB1                      &trans                 &trans          &trans
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
+        &atlayertab A            &atlayertab S            &atlayerspeed 3 D          &atlayerspeed 4 F     &atlayertab G    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
+&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LEFT_SHIFT C  &atlayerhmbe LCTRL V  &atlayertab Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop       &trans
+                                                          &trans                     &trans                &mkp MB1         &trans                 &trans          &trans
             >;
         };
 
@@ -673,10 +653,10 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
-        &atlayerhmbe LEFT_GUI A  &atlayerhmbe LEFT_ALT S  &atlayerhmbe LCTRL D  &atlayerhmbe LEFT_SHIFT F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &timemod
-&trans  &atlayertab Z            &atlayertab X            &atlayertab C         &atlayertab V              &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
-                                                          &trans                &trans                     &trans           &trans     &trans  &lt 6 ENTER
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
+        &atlayertab A            &atlayertab S            &atlayertab D              &atlayertab F         &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &timemod
+&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LEFT_SHIFT C  &atlayerhmbe LCTRL V  &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
+                                                          &trans                     &trans                &trans           &trans     &trans  &lt 6 ENTER
             >;
 
             label = "Num";
