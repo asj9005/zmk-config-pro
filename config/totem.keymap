@@ -601,9 +601,9 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W  &kp E  &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &bs_del3 0 0
-       &kp A      &kp S  &kp D  &kp F        &kp G             &kp H           &kp J             &kp K         &kp L  &Jum
-&sl 7  &kp Z      &kp X  &kp C  &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &kp SEMICOLON  &shiftdance
+       &kp LC(M)  &kp W  &kp E  &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &kp PRINTSCREEN
+       &kp A      &kp S  &kp D  &kp F        &kp G             &kp H           &kp J             &kp K         &kp L  &bs_del3 0 0
+&sl 7  &kp Z      &kp X  &kp C  &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &Jum             &shiftdance
                          &sl 8  &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
             >;
         };
@@ -611,19 +611,19 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &kp LS(LA(LC(LG(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &atlayertab A            &atlayertab S            &atlayerspeed 3 D          &atlayerspeed 4 F     &atlayertab G    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LEFT_SHIFT C  &atlayerhmbe LCTRL V  &atlayertab Q    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop       &trans
-                                                          &trans                     &trans                &mkp MB1         &trans                 &trans          &trans
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
+        &atlayertab A            &atlayertab S            &atlayerspeed 3 D          &atlayerspeed 4 F     &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LEFT_SHIFT C  &atlayerhmbe LCTRL V  &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop             &trans
+                                                          &trans                     &trans                &mkp MB1         &trans           &trans          &trans
             >;
         };
 
         Hold {
             bindings = <
-        &kp LC(LS(Q))    &trans  &mo 3              &kp LC(TAB)    &fancyzone          &kp LS(LA(LG(LC(F))))  &mkp MB4        &mmv MOVE_UP    &mkp MB5         &trans
-        &kp PRINTSCREEN  &trans  &trans             &trans         &kp LG(UP_ARROW)    &msc SCRL_LEFT         &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &msc SCRL_RIGHT
-&trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &mkp MB2               &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop       &trans
-                                 &trans             &trans         &mkp MB1            &trans                 &trans          &trans
+        &kp LC(LS(Q))    &trans  &mo 3              &kp LC(TAB)    &fancyzone          &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
+        &kp PRINTSCREEN  &trans  &trans             &trans         &kp LG(UP_ARROW)    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+&trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop             &trans
+                                 &trans             &trans         &mkp MB1            &trans           &trans          &trans
             >;
 
             label = "Hold";
@@ -653,8 +653,8 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
-        &atlayertab A            &atlayertab S            &atlayertab D              &atlayertab F         &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &timemod
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
+        &atlayertab A            &atlayertab S            &atlayertab D              &atlayertab F         &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
 &trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LEFT_SHIFT C  &atlayerhmbe LCTRL V  &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
                                                           &trans                     &trans                &trans           &trans     &trans  &lt 6 ENTER
             >;
@@ -693,10 +693,10 @@
 
         Nav {
             bindings = <
-        &kp LC(INS)   &kp LC(MINUS)  &kp LS(LC(Q))   &swapper           &fancyzone                &trans     &mt LC(BACKSPACE) BACKSPACE  &kp UP_ARROW   &mt LC(DELETE) DELETE  &trans
-        &kp LGUI      &kp LC(SPACE)  &kp LC(LS(Q))   &kp LA(LG(SPACE))  &kp LG(UP_ARROW)          &kp HOME   &kp LEFT_ARROW               &kp DOWN       &kp RIGHT_ARROW        &kp END
-&trans  &kp LEFT_WIN  &kp LEFT_ALT   &kp LEFT_SHIFT  &kp LCTRL          &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP                  &kp PAGE_DOWN  &trans                 &trans   &trans
-                                     &trans          &trans             &trans                    &kp ENTER  &trans                       &trans
+        &kp LC(INS)   &kp LC(MINUS)  &kp LS(LC(Q))   &swapper           &fancyzone                &trans     &kp HOME        &kp UP_ARROW   &kp END          &trans
+        &kp LGUI      &kp LC(SPACE)  &kp LC(LS(Q))   &kp LA(LG(SPACE))  &kp LG(UP_ARROW)          &trans     &kp LEFT_ARROW  &kp DOWN       &kp RIGHT_ARROW  &trans
+&trans  &kp LEFT_WIN  &kp LEFT_ALT   &kp LEFT_SHIFT  &kp LCTRL          &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP     &kp PAGE_DOWN  &trans           &trans  &trans
+                                     &trans          &trans             &trans                    &kp ENTER  &trans          &trans
             >;
 
             label = "Nav";
