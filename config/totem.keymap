@@ -354,16 +354,6 @@
             key-positions = <23 24>;
         };
 
-        Enter_combo {
-            bindings = <&kp ENTER>;
-            key-positions = <13 12>;
-        };
-
-        Tab_combo {
-            bindings = <&kp TAB>;
-            key-positions = <11 12>;
-        };
-
         altf4 {
             bindings = <&kp LA(F4)>;
             key-positions = <34 0>;
@@ -371,7 +361,7 @@
 
         end {
             bindings = <&esccombo>;
-            key-positions = <11 13>;
+            key-positions = <3 1 2>;
         };
 
         bracketcombo {
@@ -402,7 +392,7 @@
 
         kmswitch_combo {
             bindings = <&kmswitch>;
-            key-positions = <11 12 13>;
+            key-positions = <3 1>;
         };
 
         Ctrl_A_Combo {
@@ -412,42 +402,67 @@
 
         LG_Combo {
             bindings = <&Skcb_Gui>;
-            key-positions = <1 0>;
+            key-positions = <11 10>;
         };
 
         LS_Combo {
             bindings = <&Skcb_Shift>;
-            key-positions = <2 3>;
+            key-positions = <12 13>;
         };
 
         LC_Combo {
             bindings = <&Skcb_Ctrl>;
-            key-positions = <2 1>;
+            key-positions = <12 11>;
         };
 
         LA_Combo {
             bindings = <&Skcb_Alt>;
-            key-positions = <3 1>;
+            key-positions = <13 11>;
         };
 
         RG_Combo {
             bindings = <&Skcb_Gui>;
-            key-positions = <8 9>;
+            key-positions = <18 19>;
         };
 
         RS_Combo {
             bindings = <&Skcb_Shift>;
-            key-positions = <7 6>;
+            key-positions = <17 16>;
         };
 
         RC_Combo {
             bindings = <&Skcb_Ctrl>;
-            key-positions = <7 8>;
+            key-positions = <17 18>;
         };
 
         RA_Combo {
             bindings = <&Skcb_Alt>;
-            key-positions = <6 8>;
+            key-positions = <18 16>;
+        };
+
+        LE_Combo {
+            bindings = <&kp ENTER>;
+            key-positions = <2 3>;
+        };
+
+        LT_Combo {
+            bindings = <&kp TAB>;
+            key-positions = <2 1>;
+        };
+
+        RE_Combo {
+            bindings = <&kp ENTER>;
+            key-positions = <6 7>;
+        };
+
+        RT_Combo {
+            bindings = <&kp TAB>;
+            key-positions = <7 8>;
+        };
+
+        layer0 {
+            bindings = <&to 0>;
+            key-positions = <6 8 7>;
         };
     };
 
@@ -653,9 +668,9 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &kp PRINTSCREEN
+       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &kp BACKSLASH
        &kp A      &kp S  &lt 3 D  &lt 4 F      &kp G             &kp H           &kp J             &kp K         &kp L  &bs_del3 0 0
-&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &Jum             &shiftdance
+&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &Jum           &shiftdance
                          &sl 8    &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
             >;
         };
@@ -683,10 +698,10 @@
 
         Acc {
             bindings = <
-        &trans  &kp LC(W)  &trans  &kp LC(N)      &kp LC(T)    &trans  &trans  &trans  &trans  &trans
-        &trans  &kp LC(S)  &trans  &kp LC(ENTER)  &trans       &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans     &trans  &kp LC(TAB)    &trans       &trans  &trans  &trans  &trans  &trans  &trans
-                           &trans  &trans         &trans       &trans  &trans  &trans
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                        &trans  &trans  &trans    &trans  &trans  &trans
             >;
 
             label = "Acc";
@@ -694,10 +709,10 @@
 
         Prec {
             bindings = <
-        &trans  &trans  &trans         &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &kp LS(ENTER)  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &kp LS(TAB)    &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans         &trans  &trans    &trans  &trans  &trans
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                        &trans  &trans  &trans    &trans  &trans  &trans
             >;
 
             label = "Prec";
