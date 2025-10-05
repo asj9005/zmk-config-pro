@@ -307,6 +307,33 @@
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
+
+        Home1: Home1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "HOME1";
+            bindings = <&kp HOME>, <&kp HOME>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LCTL)>;
+        };
+
+        End1: End1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "END1";
+            bindings = <&kp END>, <&kp END>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_LCTL)>;
+        };
+
+        HomeEnd1: HomeEnd1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "HOMEEND1";
+            bindings = <&kp LC(HOME)>, <&kp LC(END)>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
+        };
     };
 
     combos {
@@ -329,37 +356,27 @@
 
         Enter_combo {
             bindings = <&kp ENTER>;
-            key-positions = <6 7>;
+            key-positions = <13 12>;
         };
 
         Tab_combo {
             bindings = <&kp TAB>;
-            key-positions = <7 8>;
+            key-positions = <11 12>;
         };
 
         altf4 {
             bindings = <&kp LA(F4)>;
-            key-positions = <0 34>;
+            key-positions = <34 0>;
         };
 
         end {
             bindings = <&esccombo>;
-            key-positions = <1 2 3>;
+            key-positions = <11 13>;
         };
 
         bracketcombo {
             bindings = <&bracketmod>;
             key-positions = <27 29>;
-        };
-
-        enter2 {
-            bindings = <&kp ENTER>;
-            key-positions = <2 3>;
-        };
-
-        tab2 {
-            bindings = <&kp TAB>;
-            key-positions = <1 2>;
         };
 
         undo {
@@ -385,12 +402,7 @@
 
         kmswitch_combo {
             bindings = <&kmswitch>;
-            key-positions = <2 11>;
-        };
-
-        quote_combo {
-            bindings = <&kp SQT>;
-            key-positions = <0 1>;
+            key-positions = <11 12 13>;
         };
 
         Ctrl_A_Combo {
@@ -399,43 +411,43 @@
         };
 
         LG_Combo {
-            bindings = <&sk LEFT_WIN>;
-            key-positions = <10 11>;
+            bindings = <&Skcb_Gui>;
+            key-positions = <1 0>;
         };
 
         LS_Combo {
-            bindings = <&sk LEFT_SHIFT>;
-            key-positions = <11 12>;
+            bindings = <&Skcb_Shift>;
+            key-positions = <2 3>;
         };
 
         LC_Combo {
-            bindings = <&sk LCTRL>;
-            key-positions = <12 13>;
+            bindings = <&Skcb_Ctrl>;
+            key-positions = <2 1>;
         };
 
         LA_Combo {
-            bindings = <&sk LEFT_ALT>;
-            key-positions = <13 11>;
+            bindings = <&Skcb_Alt>;
+            key-positions = <3 1>;
         };
 
         RG_Combo {
-            bindings = <&sk LEFT_WIN>;
-            key-positions = <18 19>;
+            bindings = <&Skcb_Gui>;
+            key-positions = <8 9>;
         };
 
         RS_Combo {
-            bindings = <&sk LEFT_SHIFT>;
-            key-positions = <18 17>;
+            bindings = <&Skcb_Shift>;
+            key-positions = <7 6>;
         };
 
         RC_Combo {
-            bindings = <&sk LCTRL>;
-            key-positions = <17 16>;
+            bindings = <&Skcb_Ctrl>;
+            key-positions = <7 8>;
         };
 
         RA_Combo {
-            bindings = <&sk LEFT_ALT>;
-            key-positions = <18 16>;
+            bindings = <&Skcb_Alt>;
+            key-positions = <6 8>;
         };
     };
 
@@ -593,6 +605,46 @@
 
             label = "DI";
         };
+
+        Skcb_Ctrl: Skcb_Ctrl {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &sk LCTRL>;
+
+            label = "SKCB_CTRL";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_Shift: Skcb_Shift {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &sk LEFT_SHIFT>;
+
+            label = "SKCB_SHIFT";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_Alt: Skcb_Alt {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &sk LEFT_ALT>;
+
+            label = "SKCB_ALT";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_Gui: Skcb_Gui {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &sk LEFT_GUI>;
+
+            label = "SKCB_GUI";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
     };
 
     keymap {
@@ -601,20 +653,20 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W  &kp E  &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &kp PRINTSCREEN
-       &kp A      &kp S  &kp D  &kp F        &kp G             &kp H           &kp J             &kp K         &kp L  &bs_del3 0 0
-&sl 7  &kp Z      &kp X  &kp C  &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &Jum             &shiftdance
-                         &sl 8  &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
+       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &kp PRINTSCREEN
+       &kp A      &kp S  &lt 3 D  &lt 4 F      &kp G             &kp H           &kp J             &kp K         &kp L  &bs_del3 0 0
+&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &Jum             &shiftdance
+                         &sl 8    &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
-        &atlayertab A            &atlayertab S            &atlayerspeed 3 D          &atlayerspeed 4 F     &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LEFT_SHIFT C  &atlayerhmbe LCTRL V  &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop             &trans
-                                                          &trans                     &trans                &mkp MB1         &trans           &trans          &trans
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
+        &atlayertab A            &atlayertab S            &atlayerspeed 3 D     &atlayerspeed 4 F          &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LCTRL C  &atlayerhmbe LEFT_SHIFT V  &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop             &trans
+                                                          &trans                &trans                     &mkp MB1         &trans           &trans          &trans
             >;
         };
 
@@ -631,10 +683,10 @@
 
         Acc {
             bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
+        &trans  &kp LC(W)  &trans  &kp LC(N)      &kp LC(T)    &trans  &trans  &trans  &trans  &trans
+        &trans  &kp LC(S)  &trans  &kp LC(ENTER)  &trans       &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans     &trans  &kp LC(TAB)    &trans       &trans  &trans  &trans  &trans  &trans  &trans
+                           &trans  &trans         &trans       &trans  &trans  &trans
             >;
 
             label = "Acc";
@@ -642,10 +694,10 @@
 
         Prec {
             bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
+        &trans  &trans  &trans         &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &trans  &kp LS(ENTER)  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &kp LS(TAB)    &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                        &trans         &trans  &trans    &trans  &trans  &trans
             >;
 
             label = "Prec";
@@ -653,10 +705,10 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E              &atlayertab R         &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
-        &atlayertab A            &atlayertab S            &atlayertab D              &atlayertab F         &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
-&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LEFT_SHIFT C  &atlayerhmbe LCTRL V  &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &kp SLASH  &trans
-                                                          &trans                     &trans                &trans           &trans     &trans  &lt 6 ENTER
+        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
+        &atlayertab A            &atlayertab S            &atlayerspeed 3 D     &atlayerspeed 4 F          &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
+&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LCTRL C  &atlayerhmbe LEFT_SHIFT V  &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans    &trans
+                                                          &trans                &trans                     &trans           &trans     &trans  &lt 6 ENTER
             >;
 
             label = "Num";
@@ -693,10 +745,10 @@
 
         Nav {
             bindings = <
-        &kp LC(INS)   &kp LC(MINUS)  &kp LS(LC(Q))   &swapper           &fancyzone                &trans     &kp HOME        &kp UP_ARROW   &kp END          &trans
-        &kp LGUI      &kp LC(SPACE)  &kp LC(LS(Q))   &kp LA(LG(SPACE))  &kp LG(UP_ARROW)          &trans     &kp LEFT_ARROW  &kp DOWN       &kp RIGHT_ARROW  &trans
-&trans  &kp LEFT_WIN  &kp LEFT_ALT   &kp LEFT_SHIFT  &kp LCTRL          &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP     &kp PAGE_DOWN  &trans           &trans  &trans
-                                     &trans          &trans             &trans                    &kp ENTER  &trans          &trans
+        &kp LC(INS)   &kp LC(MINUS)  &kp LS(LC(Q))  &swapper           &fancyzone                &trans     &Home1          &kp UP_ARROW   &End1            &trans
+        &kp LGUI      &kp LC(SPACE)  &kp LC(LS(Q))  &kp LA(LG(SPACE))  &kp LG(UP_ARROW)          &trans     &kp LEFT_ARROW  &kp DOWN       &kp RIGHT_ARROW  &trans
+&trans  &kp LEFT_WIN  &kp LEFT_ALT   &kp LCTRL      &kp LSHIFT         &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP     &kp PAGE_DOWN  &HomeEnd1        &trans  &trans
+                                     &trans         &trans             &trans                    &kp ENTER  &trans          &trans
             >;
 
             label = "Nav";
