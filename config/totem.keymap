@@ -276,14 +276,14 @@
             bindings = <&bs_del2>, <&bs_del1>;
 
             #binding-cells = <2>;
-            tapping-term-ms = <180>;
+            tapping-term-ms = <250>;
             flavor = "tap-preferred";
         };
 
         Jum: Jum {
             compatible = "zmk,behavior-mod-morph";
             label = "JUM";
-            bindings = <&kp PERIOD>, <&kp COMMA>;
+            bindings = <&kp PERIOD>, <&kp COLON>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
@@ -320,6 +320,15 @@
             compatible = "zmk,behavior-mod-morph";
             label = "ARROW_MOD";
             bindings = <&Arrow_Right>, <&Arrow_Left>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
+        };
+
+        Comma1: Comma1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "COMMA1";
+            bindings = <&kp COMMA>, <&kp SEMI>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
@@ -372,12 +381,12 @@
 
         jum_combo {
             bindings = <&Arrow_Mod>;
-            key-positions = <28 29>;
+            key-positions = <30 27>;
         };
 
         comma_combo {
             bindings = <&question>;
-            key-positions = <27 28>;
+            key-positions = <28 29>;
         };
 
         kmswitch_combo {
@@ -453,6 +462,11 @@
         layer0 {
             bindings = <&to 0>;
             key-positions = <6 8 7>;
+        };
+
+        Comma_Combo {
+            bindings = <&Comma1>;
+            key-positions = <27 28>;
         };
     };
 
