@@ -214,25 +214,6 @@
             ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
         };
 
-        shift_lang1: shift_lang1 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SHIFT_LANG1";
-            bindings = <&shiftsk RIGHT_SHIFT>, <&lang>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        shift_lang2: shift_lang2 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "SHIFT_LANG2";
-            bindings = <&lang_temp>, <&shift_lang1>;
-
-            #binding-cells = <2>;
-            flavor = "tap-preferred";
-            tapping-term-ms = <180>;
-        };
-
         mo_caps: mo_caps {
             compatible = "zmk,behavior-hold-tap";
             label = "MO_CAPS";
@@ -276,7 +257,7 @@
             bindings = <&bs_del2>, <&bs_del1>;
 
             #binding-cells = <2>;
-            tapping-term-ms = <250>;
+            tapping-term-ms = <220>;
             flavor = "tap-preferred";
         };
 
@@ -325,13 +306,105 @@
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        Comma1: Comma1 {
+        Gui_Combo: Gui_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "GUI_COMBO";
+            bindings = <&kp>, <&Skcb_Gui>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        Alt_Combo: Alt_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "ALT_COMBO";
+            bindings = <&kp>, <&Skcb_Alt>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        Ctrl_Combo: Ctrl_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "CTRL_COMBO";
+            bindings = <&kp>, <&Skcb_Ctrl>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        Shift_Combo: Shift_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "SHIFT_COMBO";
+            bindings = <&kp>, <&Skcb_Shift>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        CS_Combo: CS_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "CS_COMBO";
+            bindings = <&Skcb_CSH>, <&Skcb_CS>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        CA_Combo: CA_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "CA_COMBO";
+            bindings = <&Skcb_CAH>, <&Skcb_CA>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        SA_Combo: SA_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "SA_COMBO";
+            bindings = <&Skcb_SAH>, <&Skcb_SA>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        lang_shift1: lang_shift1 {
+            compatible = "zmk,behavior-hold-tap";
+            label = "LANG_SHIFT1";
+            bindings = <&kp>, <&sk>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        lang_shift2: lang_shift2 {
+            compatible = "zmk,behavior-hold-tap";
+            label = "LANG_SHIFT2";
+            bindings = <&lang_temp>, <&lang>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        lang_shift3: lang_shift3 {
             compatible = "zmk,behavior-mod-morph";
-            label = "COMMA1";
-            bindings = <&kp COMMA>, <&kp SEMI>;
+            label = "LANG_SHIFT3";
+            bindings =
+                <&lang_shift1 RIGHT_SHIFT RIGHT_SHIFT>,
+                <&lang_shift2 0 0>;
 
             #binding-cells = <0>;
-            mods = <(MOD_RSFT|MOD_LSFT)>;
+            mods = <(MOD_RSFT)>;
         };
     };
 
@@ -400,43 +473,46 @@
         };
 
         LG_Combo {
-            bindings = <&Skcb_Gui>;
+            bindings = <&Gui_Combo LEFT_GUI 0>;
             key-positions = <11 10>;
         };
 
         LS_Combo {
-            bindings = <&Skcb_Shift>;
+            bindings = <&Shift_Combo LEFT_SHIFT 0>;
             key-positions = <12 13>;
         };
 
         LC_Combo {
-            bindings = <&Skcb_Ctrl>;
+            bindings = <&Ctrl_Combo LCTRL 0>;
             key-positions = <12 11>;
         };
 
         LA_Combo {
-            bindings = <&Skcb_Alt>;
+            bindings = <&Alt_Combo LEFT_ALT 0>;
             key-positions = <13 11>;
         };
 
         RG_Combo {
-            bindings = <&Skcb_Gui>;
+            bindings = <&Gui_Combo LEFT_GUI 0>;
             key-positions = <18 19>;
         };
 
         RS_Combo {
-            bindings = <&Skcb_Shift>;
+            bindings = <&Shift_Combo LEFT_SHIFT 0>;
             key-positions = <17 16>;
+            layers = <0 6 7 8 5>;
         };
 
         RC_Combo {
-            bindings = <&Skcb_Ctrl>;
+            bindings = <&Ctrl_Combo LCTRL 0>;
             key-positions = <17 18>;
+            layers = <0 5 6 7 8>;
         };
 
         RA_Combo {
-            bindings = <&Skcb_Alt>;
+            bindings = <&Alt_Combo LEFT_ALT 0>;
             key-positions = <18 16>;
+            layers = <0 6 7 8 5>;
         };
 
         LE_Combo {
@@ -464,9 +540,34 @@
             key-positions = <6 8 7>;
         };
 
-        Comma_Combo {
-            bindings = <&Comma1>;
-            key-positions = <27 28>;
+        LCS_Combo {
+            bindings = <&CS_Combo 0 0>;
+            key-positions = <11 12 13>;
+        };
+
+        LCA_Combo {
+            bindings = <&CA_Combo 0 0>;
+            key-positions = <11 12 10>;
+        };
+
+        LSA_Combo {
+            bindings = <&SA_Combo 0 0>;
+            key-positions = <11 10 13>;
+        };
+
+        RCS_Combo {
+            bindings = <&CS_Combo 0 0>;
+            key-positions = <16 17 18>;
+        };
+
+        RCA_Combo {
+            bindings = <&CA_Combo 0 0>;
+            key-positions = <17 18 19>;
+        };
+
+        RSA_Combo {
+            bindings = <&SA_Combo 0 0>;
+            key-positions = <19 16 18>;
         };
     };
 
@@ -680,6 +781,66 @@
 
             label = "ARROW_RIGHT";
         };
+
+        Skcb_CS: Skcb_CS {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &sk LCTRL &sk LEFT_SHIFT>;
+
+            label = "SKCB_CS";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_CSH: Skcb_CSH {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&kp LCTRL &kp LEFT_SHIFT>;
+
+            label = "SKCB_CSH";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_CA: Skcb_CA {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &sk LCTRL &sk LEFT_ALT>;
+
+            label = "SKCB_CA";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_CAH: Skcb_CAH {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&kp LCTRL &kp LEFT_ALT>;
+
+            label = "SKCB_CAH";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_SA: Skcb_SA {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&to 0 &sk LEFT_SHIFT &sk LEFT_ALT>;
+
+            label = "SKCB_SA";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
+
+        Skcb_SAH: Skcb_SAH {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&kp LEFT_SHIFT &kp LEFT_ALT>;
+
+            label = "SKCB_SAH";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
     };
 
     keymap {
@@ -688,10 +849,10 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U             &kp I         &kp O  &kp BACKSLASH
-       &kp A      &kp S  &lt 3 D  &lt 4 F      &kp G             &kp H           &kp J             &kp K         &kp L  &bs_del3 0 0
-&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N             &kp M         &kp P  &Jum           &shiftdance
-                         &sl 8    &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &shift_lang2 0 0  &mo_caps 6 0
+       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U         &kp I         &kp O  &kp BACKSLASH
+       &kp A      &kp S  &lt 3 D  &lt 4 F      &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del3 0 0
+&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum           &shiftdance
+                         &sl 8    &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &lang_shift3  &mo_caps 6 0
             >;
         };
 
@@ -700,7 +861,7 @@
             bindings = <
         &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
         &atlayertab A            &atlayertab S            &atlayerspeed 3 D     &atlayerspeed 4 F          &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LCTRL C  &atlayerhmbe LEFT_SHIFT V  &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop             &trans
+&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LCTRL C  &atlayerhmbe LEFT_SHIFT V  &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans                 &trans
                                                           &trans                &trans                     &mkp MB1         &trans           &trans          &trans
             >;
         };
@@ -709,7 +870,7 @@
             bindings = <
         &kp LC(LS(Q))    &trans  &mo 3              &kp LC(TAB)    &fancyzone          &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
         &kp PRINTSCREEN  &trans  &trans             &trans         &kp LG(UP_ARROW)    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &ps_di_mop             &trans
+&trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans                 &trans
                                  &trans             &trans         &mkp MB1            &trans           &trans          &trans
             >;
 
@@ -718,10 +879,10 @@
 
         Acc {
             bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
+        &trans  &trans  &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &trans  &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                        &trans  &trans      &trans    &trans  &trans  &trans
             >;
 
             label = "Acc";
