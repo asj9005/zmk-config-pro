@@ -488,12 +488,12 @@
 
         LS_Combo {
             bindings = <&Shift_Combo LEFT_SHIFT 0>;
-            key-positions = <12 13>;
+            key-positions = <12 11>;
         };
 
         LC_Combo {
             bindings = <&Ctrl_Combo LCTRL 0>;
-            key-positions = <12 11>;
+            key-positions = <12 13>;
         };
 
         LA_Combo {
@@ -508,13 +508,13 @@
 
         RS_Combo {
             bindings = <&Shift_Combo LEFT_SHIFT 0>;
-            key-positions = <17 16>;
+            key-positions = <17 18>;
             layers = <0 6 7 8 5>;
         };
 
         RC_Combo {
             bindings = <&Ctrl_Combo LCTRL 0>;
-            key-positions = <17 18>;
+            key-positions = <17 16>;
             layers = <0 5 6 7 8>;
         };
 
@@ -556,12 +556,12 @@
 
         LCA_Combo {
             bindings = <&CA_Combo 0 0>;
-            key-positions = <11 12 10>;
+            key-positions = <12 10 13>;
         };
 
         LSA_Combo {
             bindings = <&SA_Combo 0 0>;
-            key-positions = <11 10 13>;
+            key-positions = <11 10 12>;
         };
 
         RCS_Combo {
@@ -571,12 +571,12 @@
 
         RCA_Combo {
             bindings = <&CA_Combo 0 0>;
-            key-positions = <17 18 19>;
+            key-positions = <17 19 16>;
         };
 
         RSA_Combo {
             bindings = <&SA_Combo 0 0>;
-            key-positions = <19 16 18>;
+            key-positions = <19 18 17>;
         };
 
         Comma2 {
@@ -875,17 +875,17 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
-        &atlayertab A            &atlayertab S            &atlayerspeed 3 D     &atlayerspeed 4 F          &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LCTRL C  &atlayerhmbe LEFT_SHIFT V  &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans                 &trans
-                                                          &trans                &trans                     &mkp MB1         &trans           &trans          &trans
+        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
+        &atlayertab A      &atlayertab S  &atlayerspeed 3 D  &atlayerspeed 4 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+&trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans                 &trans
+                                          &trans             &trans             &mkp MB1         &trans           &trans          &trans
             >;
         };
 
         Hold {
             bindings = <
-        &kp LC(LS(Q))    &trans  &mo 3              &kp LC(TAB)    &fancyzone          &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
-        &kp PRINTSCREEN  &trans  &trans             &trans         &kp LG(UP_ARROW)    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+        &kp LC(LS(Q))    &trans  &trans             &kp LC(TAB)    &fancyzone          &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
+        &kp PRINTSCREEN  &trans  &mo 3              &mo 4          &kp LG(UP_ARROW)    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
 &trans  &trans           &trans  &kp LC(LS(LG(T)))  &kp LS(LG(S))  &kp LG(LS(LEFT))    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &mkp MB3         &trans                 &trans
                                  &trans             &trans         &mkp MB1            &trans           &trans          &trans
             >;
@@ -917,10 +917,10 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)        &atlayertab W            &atlayertab E         &atlayertab R              &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
-        &atlayertab A            &atlayertab S            &atlayerspeed 3 D     &atlayerspeed 4 F          &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
-&trans  &atlayerhmbe LEFT_GUI Z  &atlayerhmbe LEFT_ALT X  &atlayerhmbe LCTRL C  &atlayerhmbe LEFT_SHIFT V  &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans    &trans
-                                                          &trans                &trans                     &trans           &trans     &trans  &lt 6 ENTER
+        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
+        &atlayertab A      &atlayertab S  &atlayerspeed 3 D  &atlayerspeed 4 F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
+&trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans    &trans
+                                          &trans             &trans             &trans           &trans     &trans  &lt 6 ENTER
             >;
 
             label = "Num";
