@@ -406,6 +406,15 @@
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
+
+        Comma1: Comma1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "COMMA1";
+            bindings = <&kp COMMA>, <&kp SEMI>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
+        };
     };
 
     combos {
@@ -569,6 +578,11 @@
             bindings = <&SA_Combo 0 0>;
             key-positions = <19 16 18>;
         };
+
+        Comma2 {
+            bindings = <&Comma1>;
+            key-positions = <27 28>;
+        };
     };
 
     macros {
@@ -622,6 +636,8 @@
                 <&kp LANGUAGE_1>;
 
             label = "LANG_TEMP";
+            wait-ms = <0>;
+            tap-ms = <0>;
         };
 
         bracket: bracket {
@@ -849,9 +865,9 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U         &kp I         &kp O  &kp BACKSLASH
+       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U         &kp I         &kp O  &kp SINGLE_QUOTE
        &kp A      &kp S  &lt 3 D  &lt 4 F      &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del3 0 0
-&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum           &shiftdance
+&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum              &shiftdance
                          &sl 8    &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &lang_shift3  &mo_caps 6 0
             >;
         };
