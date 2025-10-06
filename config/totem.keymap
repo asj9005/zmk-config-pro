@@ -93,10 +93,10 @@
             bindings = <&mo 7>, <&kmswitch>;
         };
 
-        question: question {
+        Colon1: Colon1 {
             compatible = "zmk,behavior-mod-morph";
-            label = "QUESTION";
-            bindings = <&kp EXCLAMATION>, <&kp QUESTION>;
+            label = "COLON1";
+            bindings = <&kp COLON>, <&kp SEMI>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
@@ -264,7 +264,7 @@
         Jum: Jum {
             compatible = "zmk,behavior-mod-morph";
             label = "JUM";
-            bindings = <&kp PERIOD>, <&kp COLON>;
+            bindings = <&kp PERIOD>, <&kp EXCLAMATION>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
@@ -410,7 +410,7 @@
         Comma1: Comma1 {
             compatible = "zmk,behavior-mod-morph";
             label = "COMMA1";
-            bindings = <&kp COMMA>, <&kp SEMI>;
+            bindings = <&kp COMMA>, <&kp QUESTION>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
@@ -461,13 +461,13 @@
             layers = <7>;
         };
 
-        jum_combo {
+        Arrow_combo {
             bindings = <&Arrow_Mod>;
             key-positions = <30 27>;
         };
 
-        comma_combo {
-            bindings = <&question>;
+        Colon_combo {
+            bindings = <&Colon1>;
             key-positions = <28 29>;
         };
 
@@ -582,6 +582,26 @@
         Comma2 {
             bindings = <&Comma1>;
             key-positions = <27 28>;
+        };
+
+        Plus_Combo {
+            bindings = <&kp PLUS>;
+            key-positions = <7 16>;
+        };
+
+        Minus_Combo {
+            bindings = <&kp MINUS>;
+            key-positions = <7 18>;
+        };
+
+        Multiply_Combo {
+            bindings = <&kp KP_MULTIPLY>;
+            key-positions = <17 27>;
+        };
+
+        Divide_Combo {
+            bindings = <&kp KP_DIVIDE>;
+            key-positions = <17 29>;
         };
     };
 
@@ -895,10 +915,10 @@
 
         Acc {
             bindings = <
-        &trans  &trans  &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans      &trans    &trans  &trans  &trans
+        &trans  &trans     &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &kp LG(D)  &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &kp LG(E)  &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                           &trans  &trans      &trans    &trans  &trans  &trans
             >;
 
             label = "Acc";
