@@ -90,7 +90,7 @@
             compatible = "zmk,behavior-tap-dance";
             label = "TAPDANCE";
             #binding-cells = <0>;
-            bindings = <&mo 7>, <&kmswitch>;
+            bindings = <&mo 6>, <&kmswitch>;
         };
 
         Colon1: Colon1 {
@@ -144,7 +144,7 @@
         numsymtog: numsymtog {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYMTOG";
-            bindings = <&to 6>, <&to 0>;
+            bindings = <&to 5>, <&to 0>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -153,7 +153,7 @@
         numsymtog2: numsymtog2 {
             compatible = "zmk,behavior-mod-morph";
             label = "NUMSYMTOG2";
-            bindings = <&mo 6>, <&mo 0>;
+            bindings = <&mo 5>, <&mo 0>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -437,7 +437,7 @@
         Sign_Mod2: Sign_Mod2 {
             compatible = "zmk,behavior-mod-morph";
             label = "SIGN_MOD2";
-            bindings = <&kp HASH>, <&kp TILDE>;
+            bindings = <&kp HASH>, <&kp CARET>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -455,7 +455,7 @@
         Sign_Mod4: Sign_Mod4 {
             compatible = "zmk,behavior-mod-morph";
             label = "SIGN_MOD4";
-            bindings = <&kp CARET>, <&kp PIPE>;
+            bindings = <&kp TILDE>, <&kp PIPE>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -474,6 +474,24 @@
             compatible = "zmk,behavior-mod-morph";
             label = "SIGN_MOD6";
             bindings = <&kp SLASH>, <&kp NON_US_BACKSLASH>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Ps_Mod: Ps_Mod {
+            compatible = "zmk,behavior-mod-morph";
+            label = "PS_MOD";
+            bindings = <&kp PRINTSCREEN>, <&kp LC(LS(LG(T)))>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Sign_Mod7: Sign_Mod7 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SIGN_MOD7";
+            bindings = <&kp PLUS>, <&kp EQUAL>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -521,7 +539,7 @@
         reset_combo {
             bindings = <&sys_reset>;
             key-positions = <13 11 2>;
-            layers = <7>;
+            layers = <6>;
         };
 
         Arrow_combo {
@@ -572,19 +590,19 @@
         RS_Combo {
             bindings = <&Shift_Combo LEFT_SHIFT 0>;
             key-positions = <17 18>;
-            layers = <0 6 7 8 5>;
+            layers = <0 5 6 7 4>;
         };
 
         RC_Combo {
             bindings = <&Ctrl_Combo LCTRL 0>;
             key-positions = <17 16>;
-            layers = <0 5 6 7 8>;
+            layers = <0 4 5 6 7>;
         };
 
         RA_Combo {
             bindings = <&Alt_Combo LEFT_ALT 0>;
             key-positions = <18 16>;
-            layers = <0 6 7 8 5>;
+            layers = <0 5 6 7 4>;
         };
 
         LE_Combo {
@@ -648,7 +666,7 @@
         };
 
         Plus_Combo {
-            bindings = <&kp PLUS>;
+            bindings = <&Sign_Mod7>;
             key-positions = <7 16>;
         };
 
@@ -668,7 +686,7 @@
         };
 
         Printscreen_Combo {
-            bindings = <&kp PRINTSCREEN>;
+            bindings = <&Ps_Mod>;
             key-positions = <16 7 18>;
         };
 
@@ -694,14 +712,14 @@
     };
 
     macros {
-        ps: new_macro {
+        ps: ps {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
             bindings =
                 <&macro_tap>,
                 <&kp EXCL &kp T &kp J &kp D &kp W &kp N &kp S &kp N9 &kp N0 &kp N0 &kp N5>;
 
-            label = "NEW_MACRO";
+            label = "ps";
         };
 
         kmswitch: kmswitch {
@@ -974,9 +992,9 @@
             display-name = "Base";
             bindings = <
        &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U         &kp I         &kp O  &kp SINGLE_QUOTE
-       &kp A      &kp S  &lt 3 D  &lt 4 F      &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del3 0 0
-&sl 7  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum              &shiftdance
-                         &sl 8    &lt 9 SPACE  &tomolayer 2 1    &tomolayer 5 5  &lang_shift3  &mo_caps 6 0
+       &kp A      &kp S  &lt 2 D  &lt 3 F      &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del3 0 0
+&sl 6  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum              &shiftdance
+                         &sl 7    &lt 8 SPACE  &tomolayer 1 1    &tomolayer 4 4  &lang_shift3  &mo_caps 5 0
             >;
         };
 
@@ -984,21 +1002,10 @@
             display-name = "Mouse";
             bindings = <
         &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
-        &atlayertab A      &atlayertab S  &atlayerspeed 3 D  &atlayerspeed 4 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+        &atlayertab A      &atlayertab S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
 &trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &MBK_Mod         &trans                 &trans
                                           &trans             &trans             &mkp MB1         &trans           &trans          &trans
             >;
-        };
-
-        Hold {
-            bindings = <
-        &trans  &trans  &trans             &kp LC(TAB)  &fancyzone          &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
-        &trans  &trans  &mo 3              &mo 4        &kp LG(UP_ARROW)    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &trans  &trans  &kp LC(LS(LG(T)))  &trans       &kp LG(LS(LEFT))    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &MBK_Mod         &trans                 &trans
-                        &trans             &trans       &mkp MB1            &trans           &trans          &trans
-            >;
-
-            label = "Hold";
         };
 
         Acc {
@@ -1014,10 +1021,10 @@
 
         Prec {
             bindings = <
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans  &trans  &trans    &trans  &trans  &trans
+        &trans  &trans          &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &kp LC(F10)     &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &kp LANGUAGE_2  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                                &trans  &trans  &trans    &trans  &trans  &trans
             >;
 
             label = "Prec";
@@ -1025,10 +1032,10 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &timemod
-        &atlayertab A      &atlayertab S  &atlayerspeed 3 D  &atlayerspeed 4 F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
-&trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans    &trans
-                                          &trans             &trans             &trans           &trans     &trans  &lt 6 ENTER
+        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
+        &atlayertab A      &atlayertab S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
+&trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans  &trans
+                                          &trans             &trans             &trans           &trans     &trans  &lt 5 ENTER
             >;
 
             label = "Num";
@@ -1065,10 +1072,10 @@
 
         Nav {
             bindings = <
-        &kp LC(INS)   &kp LC(MINUS)  &kp LS(LC(Q))  &swapper           &fancyzone                &trans     &Home1          &kp UP_ARROW   &End1            &trans
-        &kp LGUI      &kp LC(SPACE)  &kp LC(LS(Q))  &kp LA(LG(SPACE))  &kp LG(UP_ARROW)          &trans     &kp LEFT_ARROW  &kp DOWN       &kp RIGHT_ARROW  &trans
-&trans  &kp LEFT_WIN  &kp LC(SPACE)  &kp LS(LC(Q))  &kp LA(LG(SPACE))  &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP     &kp PAGE_DOWN  &HomeEnd1        &trans  &trans
-                                     &trans         &trans             &trans                    &kp ENTER  &trans          &trans
+        &trans        &kp LC(LS(TAB))  &kp LC(TAB)    &swapper           &fancyzone                &trans     &Home1          &kp UP_ARROW   &End1            &trans
+        &trans        &kp LC(SPACE)    &kp LC(LS(Q))  &kp LA(LG(SPACE))  &kp LG(UP_ARROW)          &trans     &kp LEFT_ARROW  &kp DOWN       &kp RIGHT_ARROW  &trans
+&trans  &kp LEFT_WIN  &kp LC(INS)      &kp LC(MINUS)  &kp LC(EQUAL)      &kp LS(LG(LEFT_ARROW))    &kp LC(Z)  &kp PAGE_UP     &kp PAGE_DOWN  &HomeEnd1        &trans  &trans
+                                       &trans         &trans             &trans                    &kp ENTER  &trans          &trans
             >;
 
             label = "Nav";
