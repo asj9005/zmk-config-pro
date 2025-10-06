@@ -424,6 +424,60 @@
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
+
+        Sign_Mod1: Sign_Mod1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SIGN_MOD1";
+            bindings = <&kp AMPERSAND>, <&kp AT_SIGN>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Sign_Mod2: Sign_Mod2 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SIGN_MOD2";
+            bindings = <&kp HASH>, <&kp TILDE>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Sign_Mod3: Sign_Mod3 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SIGN_MOD3";
+            bindings = <&kp PERCENT>, <&kp DOLLAR>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Sign_Mod4: Sign_Mod4 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SIGN_MOD4";
+            bindings = <&kp CARET>, <&kp PIPE>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Sign_Mod5: Sign_Mod5 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SIGN_MOD5";
+            bindings = <&kp ASTERISK>, <&kp GRAVE>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Sign_Mod6: Sign_Mod6 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "SIGN_MOD6";
+            bindings = <&kp SLASH>, <&kp NON_US_BACKSLASH>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
     };
 
     combos {
@@ -604,18 +658,38 @@
         };
 
         Multiply_Combo {
-            bindings = <&kp KP_MULTIPLY>;
+            bindings = <&Sign_Mod5>;
             key-positions = <17 27>;
         };
 
         Divide_Combo {
-            bindings = <&kp KP_DIVIDE>;
+            bindings = <&Sign_Mod6>;
             key-positions = <17 29>;
         };
 
         Printscreen_Combo {
             bindings = <&kp PRINTSCREEN>;
             key-positions = <16 7 18>;
+        };
+
+        Sign_Combo1 {
+            bindings = <&Sign_Mod1>;
+            key-positions = <2 11>;
+        };
+
+        Sign_Combo2 {
+            bindings = <&Sign_Mod2>;
+            key-positions = <13 2>;
+        };
+
+        Sign_Combo3 {
+            bindings = <&Sign_Mod3>;
+            key-positions = <12 22>;
+        };
+
+        Sign_Combo4 {
+            bindings = <&Sign_Mod4>;
+            key-positions = <12 24>;
         };
     };
 
