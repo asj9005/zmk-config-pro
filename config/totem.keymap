@@ -683,26 +683,6 @@
             key-positions = <27 28>;
         };
 
-        Plus_Combo {
-            bindings = <&Sign_Mod7>;
-            key-positions = <7 16>;
-        };
-
-        Minus_Combo {
-            bindings = <&kp MINUS>;
-            key-positions = <7 18>;
-        };
-
-        Multiply_Combo {
-            bindings = <&Sign_Mod5>;
-            key-positions = <17 27>;
-        };
-
-        Divide_Combo {
-            bindings = <&Sign_Mod6>;
-            key-positions = <17 29>;
-        };
-
         Printscreen_Combo {
             bindings = <&Ps_Mod>;
             key-positions = <16 7 18>;
@@ -1027,10 +1007,10 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &MBK_Mod1       &mmv MOVE_UP    &MBK_Mod2        &kp LS(LA(LC(LG(F))))
-        &atlayertab A      &atlayertab S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &MBK_Mod         &trans                 &trans
-                                          &trans             &trans             &mkp MB1         &trans           &trans          &trans
+        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &MBK_Mod1       &mmv MOVE_UP    &MBK_Mod2        &trans
+        &atlayertab A      &atlayerspeed 9 S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &MBK_Mod         &trans  &trans
+                                              &trans             &trans             &mkp MB1         &trans           &trans          &trans
             >;
         };
 
@@ -1058,10 +1038,10 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
-        &atlayertab A      &atlayertab S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
-&trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans  &trans
-                                          &trans             &trans             &trans           &trans     &trans  &lt 5 ENTER
+        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
+        &atlayertab A      &atlayerspeed 9 S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
+&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans  &trans
+                                              &trans             &trans             &trans           &trans     &trans  &lt 5 ENTER
             >;
 
             label = "Num";
@@ -1109,10 +1089,10 @@
 
         Han {
             bindings = <
-        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &trans           &trans  &trans  &trans  &trans  &trans
-        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &hangul_table    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &trans           &trans  &trans  &trans  &trans  &trans  &trans
-                        &trans         &trans         &trans           &trans  &trans  &trans
+        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &trans           &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
+        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &hangul_table    &kp UNDERSCORE  &kp MINUS     &kp TILDE      &kp PERCENT  &kp DOLLAR
+&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &trans           &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
+                        &trans         &trans         &trans           &trans          &trans        &trans
             >;
         };
     };
