@@ -496,6 +496,24 @@
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
+
+        MBK_Mod1: MBK_Mod1 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MBK_MOD1";
+            bindings = <&mkp MB4>, <&kp LA(UP_ARROW)>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        MBK_Mod2: MBK_Mod2 {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MBK_MOD2";
+            bindings = <&mkp MB5>, <&kp LA(LC(LG(LS(F))))>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
     };
 
     combos {
@@ -983,6 +1001,14 @@
             wait-ms = <0>;
             tap-ms = <0>;
         };
+
+        hangul_table: hangul_table {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_press>, <&kp LCTRL>, <&macro_tap>, <&kp N &kp T>;
+
+            label = "HANGUL_TABLE";
+        };
     };
 
     keymap {
@@ -991,17 +1017,17 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W  &kp E    &kp R        &kp T             &kp Y           &kp U         &kp I         &kp O  &kp SINGLE_QUOTE
-       &kp A      &kp S  &lt 2 D  &lt 3 F      &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del3 0 0
-&sl 6  &kp Z      &kp X  &kp C    &kp V        &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum              &shiftdance
-                         &sl 7    &lt 8 SPACE  &tomolayer 1 1    &tomolayer 4 4  &lang_shift3  &mo_caps 5 0
+       &kp LC(M)  &kp W    &kp E    &kp R        &kp T             &kp Y           &kp U         &kp I         &kp O  &kp SINGLE_QUOTE
+       &kp A      &lt 9 S  &lt 2 D  &lt 3 F      &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del3 0 0
+&sl 6  &kp Z      &kp X    &kp C    &kp V        &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum              &shiftdance
+                           &sl 7    &lt 8 SPACE  &tomolayer 1 1    &tomolayer 4 4  &lang_shift3  &mo_caps 5 0
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &mkp MB4        &mmv MOVE_UP    &mkp MB5         &kp LS(LA(LC(LG(F))))
+        &atlayertab LC(M)  &atlayertab W  &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &MBK_Mod1       &mmv MOVE_UP    &MBK_Mod2        &kp LS(LA(LC(LG(F))))
         &atlayertab A      &atlayertab S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
 &trans  &atlayertab Z      &atlayertab X  &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &MBK_Mod         &trans                 &trans
                                           &trans             &trans             &mkp MB1         &trans           &trans          &trans
@@ -1010,10 +1036,10 @@
 
         Acc {
             bindings = <
-        &trans  &trans     &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &kp LG(D)  &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &kp LG(E)  &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                           &trans  &trans      &trans    &trans  &trans  &trans
+        &trans       &kp LG(E)    &trans  &di         &kp LA(F21)    &trans  &trans  &trans  &trans  &trans
+        &kp LC(F21)  &kp LG(D)    &trans  &trans      &kp LA(F22)    &trans  &trans  &trans  &trans  &trans
+&trans  &trans       &key_repeat  &trans  &ps_di_mop  &kp LA(F23)    &trans  &trans  &trans  &trans  &trans  &trans
+                                  &trans  &trans      &trans         &trans  &trans  &trans
             >;
 
             label = "Acc";
@@ -1021,10 +1047,10 @@
 
         Prec {
             bindings = <
-        &trans  &trans          &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &kp LC(F10)     &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &kp LANGUAGE_2  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                                &trans  &trans  &trans    &trans  &trans  &trans
+        &trans  &kp LC(F22)     &kp LC(F23)  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans  &kp LC(F10)     &trans       &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &kp LANGUAGE_2  &trans       &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                                &trans       &trans  &trans    &trans  &trans  &trans
             >;
 
             label = "Prec";
@@ -1055,7 +1081,7 @@
         Asj {
             bindings = <
         &sys_reset  &kp F23  &kp F24  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
-        &trans      &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans
+        &trans      &kp F21  &kp F22  &trans  &trans            &trans  &trans  &trans  &trans  &trans
 &trans  &trans      &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans  &trans
                              &trans   &trans  &kmswitch         &trans  &trans  &trans
             >;
@@ -1079,6 +1105,15 @@
             >;
 
             label = "Nav";
+        };
+
+        Han {
+            bindings = <
+        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &trans           &trans  &trans  &trans  &trans  &trans
+        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &hangul_table    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &trans           &trans  &trans  &trans  &trans  &trans  &trans
+                        &trans         &trans         &trans           &trans  &trans  &trans
+            >;
         };
     };
 };
