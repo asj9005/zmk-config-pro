@@ -17,14 +17,14 @@
 
 #define Base        0
 #define Mouse       1
-#define Hold        2
-#define Acc         3
-#define Prec        4
-#define Num         5
-#define Fun         6
-#define Asj         7
-#define Start       8
-#define Nav         9
+#define Acc         2
+#define Prec        3
+#define Num         4
+#define Fun         5
+#define Asj         6
+#define Start       7
+#define Nav         8
+#define Han         9
 
 /* --- Mouse speed scalers (instant ACC / PREC) --- */
 
