@@ -1066,10 +1066,10 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8       &kp N9  &trans
-        &atlayertab A      &atlayerspeed 9 S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &kp N0     &kp N4  &kp N5       &kp N6  &trans
-&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2       &kp N3  &trans  &trans
-                                              &trans             &trans             &trans           &trans     &trans  &lt 5 ENTER
+        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
+        &atlayertab A      &atlayerspeed 9 S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &kp N0     &kp N4  &kp N5  &kp N6  &trans
+&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2  &kp N3  &trans  &trans
+                                              &trans             &trans             &trans           &trans     &trans  &trans
             >;
 
             label = "Num";
@@ -1106,10 +1106,10 @@
 
         Nav {
             bindings = <
-        &trans        &kp LC(LS(TAB))  &kp LC(TAB)       &swapper           &fancyzone                &trans            &Home1                         &Arrow_Ht LC(UP_ARROW) UP_ARROW  &End1                                  &trans
-        &kp LS(HOME)  &kp LC(SPACE)    &kp LC(LS(Q))     &kp LA(LG(SPACE))  &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &Arrow_Ht LC(LEFT_ARROW) LEFT  &Arrow_Ht LC(DOWN) DOWN          &Arrow_Ht LC(RIGHT_ARROW) RIGHT_ARROW  &trans
-&trans  &kp LS(END)   &kp LC(INS)      &kp LC(KP_MINUS)  &kp LC(KP_PLUS)    &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &kp PAGE_UP                    &kp PAGE_DOWN                    &HomeEnd1                              &trans  &trans
-                                       &trans            &trans             &trans                    &kp ENTER         &trans                         &trans
+        &trans        &kp LC(LS(TAB))  &kp LC(TAB)        &swapper         &fancyzone                &trans            &Home1                         &Arrow_Ht LC(UP_ARROW) UP_ARROW  &End1                                  &trans
+        &kp LS(HOME)  &kp LC(SPACE)    &kp LA(LG(SPACE))  &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &Arrow_Ht LC(LEFT_ARROW) LEFT  &Arrow_Ht LC(DOWN) DOWN          &Arrow_Ht LC(RIGHT_ARROW) RIGHT_ARROW  &trans
+&trans  &kp LS(END)   &kp LC(INS)      &kp LC(KP_MINUS)   &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &kp PAGE_UP                    &kp PAGE_DOWN                    &HomeEnd1                              &trans  &trans
+                                       &trans             &trans           &trans                    &kp ENTER         &trans                         &trans
             >;
 
             label = "Nav";
