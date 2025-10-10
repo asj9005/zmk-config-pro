@@ -423,73 +423,10 @@
             mods = <(MOD_RSFT)>;
         };
 
-        Sign_Mod1: Sign_Mod1 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SIGN_MOD1";
-            bindings = <&kp AMPERSAND>, <&kp AT_SIGN>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        Sign_Mod2: Sign_Mod2 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SIGN_MOD2";
-            bindings = <&kp HASH>, <&kp CARET>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        Sign_Mod3: Sign_Mod3 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SIGN_MOD3";
-            bindings = <&kp PERCENT>, <&kp DOLLAR>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        Sign_Mod4: Sign_Mod4 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SIGN_MOD4";
-            bindings = <&kp TILDE>, <&kp PIPE>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        Sign_Mod5: Sign_Mod5 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SIGN_MOD5";
-            bindings = <&kp ASTERISK>, <&kp GRAVE>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        Sign_Mod6: Sign_Mod6 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SIGN_MOD6";
-            bindings = <&kp SLASH>, <&kp NON_US_BACKSLASH>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
         Ps_Mod: Ps_Mod {
             compatible = "zmk,behavior-mod-morph";
             label = "PS_MOD";
             bindings = <&kp PRINTSCREEN>, <&kp LC(LS(LG(T)))>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        Sign_Mod7: Sign_Mod7 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "SIGN_MOD7";
-            bindings = <&kp PLUS>, <&kp EQUAL>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -663,7 +600,7 @@
 
         layer0 {
             bindings = <&to 0>;
-            key-positions = <6 8 7>;
+            key-positions = <6 8>;
         };
 
         LCS_Combo {
@@ -709,6 +646,66 @@
         Sign_Combo2 {
             bindings = <&key_repeat>;
             key-positions = <24 12>;
+        };
+
+        F1_Combo {
+            bindings = <&kp F1>;
+            key-positions = <34 22>;
+        };
+
+        F2_Combo {
+            bindings = <&kp F2>;
+            key-positions = <34 23>;
+        };
+
+        F3_Combo {
+            bindings = <&kp F3>;
+            key-positions = <34 24>;
+        };
+
+        F4_Combo {
+            bindings = <&kp F4>;
+            key-positions = <34 11>;
+        };
+
+        F5_Combo {
+            bindings = <&kp F5>;
+            key-positions = <34 12>;
+        };
+
+        F6_Combo {
+            bindings = <&kp F6>;
+            key-positions = <34 13>;
+        };
+
+        F7_Combo {
+            bindings = <&kp F7>;
+            key-positions = <34 1>;
+        };
+
+        F8_Combo {
+            bindings = <&kp F8>;
+            key-positions = <34 2>;
+        };
+
+        F9_Combo {
+            bindings = <&kp F9>;
+            key-positions = <34 3>;
+        };
+
+        F10_Combo {
+            bindings = <&kp F10>;
+            key-positions = <34 25>;
+        };
+
+        F11_Combo {
+            bindings = <&kp F11>;
+            key-positions = <34 14>;
+        };
+
+        F12_Combo {
+            bindings = <&kp F12>;
+            key-positions = <34 4>;
         };
     };
 
@@ -1043,10 +1040,10 @@
 
         Acc {
             bindings = <
-        &trans  &none      &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
-        &none   &kp LG(D)  &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &kp LG(E)  &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                           &trans  &trans      &trans    &trans  &trans  &trans
+        &trans           &kp LC(LS(F13))  &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
+        &kp LC(LS(F14))  &kp LG(D)        &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans           &kp LG(E)        &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                                          &trans  &trans      &trans    &trans  &trans  &trans
             >;
 
             label = "Acc";
@@ -1054,10 +1051,10 @@
 
         Prec {
             bindings = <
-        &trans  &none  &none   &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &none   &none  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &none  &none   &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                       &trans  &trans  &trans    &trans  &trans  &trans
+        &trans           &kp LC(LS(F17))  &kp LC(LS(F18))  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &kp LC(LS(F19))  &kp LC(LS(F15))  &trans           &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans           &kp LS(LC(F16))  &kp LC(LS(F20))  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                                          &trans           &trans  &trans    &trans  &trans  &trans
             >;
 
             label = "Prec";
@@ -1087,10 +1084,10 @@
 
         Asj {
             bindings = <
-        &sys_reset  &kp F23  &kp F24  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
-        &trans      &kp F21  &kp F22  &trans  &kp LG(L)         &trans  &trans  &trans  &trans  &trans
-&trans  &trans      &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans  &sys_reset
-                             &trans   &trans  &kmswitch         &trans  &trans  &trans
+        &sys_reset  &kp F23          &kp F24          &trans           &studio_unlock    &trans  &trans  &trans  &trans  &trans
+        &trans      &kp LC(LA(F13))  &kp LC(LA(F14))  &kp LC(LA(F16))  &kp LG(L)         &trans  &trans  &trans  &trans  &trans
+&trans  &trans      &trans           &trans           &trans           &trans            &trans  &trans  &trans  &trans  &trans  &sys_reset
+                                     &trans           &trans           &kmswitch         &trans  &trans  &trans
             >;
         };
 
@@ -1116,10 +1113,10 @@
 
         Han {
             bindings = <
-        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &none             &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
-        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &none             &kp UNDERSCORE  &kp MINUS     &kp TILDE      &kp PERCENT  &kp DOLLAR
-&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &none             &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
-                        &trans         &hangul_table  &kp LANGUAGE_2    &kp LC(F10)     &hangul_mail  &trans
+        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &kp LC(LS(F21))    &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
+        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &kp LC(LS(F22))    &kp UNDERSCORE  &kp MINUS     &kp TILDE      &kp PERCENT  &kp DOLLAR
+&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &kp LC(LS(F23))    &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
+                        &trans         &hangul_table  &kp LANGUAGE_2     &kp LC(F10)     &hangul_mail  &trans
             >;
         };
     };
