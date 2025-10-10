@@ -708,24 +708,9 @@
             key-positions = <16 7 18>;
         };
 
-        Sign_Combo1 {
-            bindings = <&Sign_Mod1>;
-            key-positions = <2 11>;
-        };
-
         Sign_Combo2 {
-            bindings = <&Sign_Mod2>;
+            bindings = <&key_repeat>;
             key-positions = <13 2>;
-        };
-
-        Sign_Combo3 {
-            bindings = <&Sign_Mod3>;
-            key-positions = <12 22>;
-        };
-
-        Sign_Combo4 {
-            bindings = <&Sign_Mod4>;
-            key-positions = <12 24>;
         };
     };
 
@@ -1044,10 +1029,10 @@
 
         Acc {
             bindings = <
-        &trans       &kp LG(E)    &trans  &di         &kp LA(F21)    &trans  &trans  &trans  &trans  &trans
-        &kp LC(F21)  &kp LG(D)    &trans  &trans      &kp LA(F22)    &trans  &trans  &trans  &trans  &trans
-&trans  &trans       &key_repeat  &trans  &ps_di_mop  &kp LA(F23)    &trans  &trans  &trans  &trans  &trans  &trans
-                                  &trans  &trans      &trans         &trans  &trans  &trans
+        &trans  &none      &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
+        &none   &kp LG(D)  &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &kp LG(E)  &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                           &trans  &trans      &trans    &trans  &trans  &trans
             >;
 
             label = "Acc";
@@ -1055,10 +1040,10 @@
 
         Prec {
             bindings = <
-        &trans  &kp LC(F22)     &kp LC(F23)  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &trans  &kp LC(F10)     &trans       &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans  &kp LANGUAGE_2  &trans       &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                                &trans       &trans  &trans    &trans  &trans  &trans
+        &trans  &none  &none   &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &none   &none  &trans  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans  &none  &none   &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                       &trans  &trans  &trans    &trans  &trans  &trans
             >;
 
             label = "Prec";
@@ -1117,10 +1102,10 @@
 
         Han {
             bindings = <
-        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &trans           &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
-        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &hangul_table    &kp UNDERSCORE  &kp MINUS     &kp TILDE      &kp PERCENT  &kp DOLLAR
-&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &trans           &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
-                        &trans         &trans         &trans           &trans          &trans        &trans
+        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &none             &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
+        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &none             &kp UNDERSCORE  &kp MINUS     &kp TILDE      &kp PERCENT  &kp DOLLAR
+&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &none             &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
+                        &trans         &hangul_table  &kp LANGUAGE_2    &kp LC(F10)     &trans        &trans
             >;
         };
     };
