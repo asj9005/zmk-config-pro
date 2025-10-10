@@ -71,8 +71,6 @@
     quick-tap-ms = <150>;
 };
 
-&sk { quick-release; };
-
 / {
     behaviors {
         hm: homerow_mods {
@@ -257,7 +255,7 @@
             bindings = <&bs_del2>, <&bs_del1>;
 
             #binding-cells = <2>;
-            tapping-term-ms = <200>;
+            tapping-term-ms = <210>;
             flavor = "tap-preferred";
         };
 
@@ -379,7 +377,7 @@
         lang_shift1: lang_shift1 {
             compatible = "zmk,behavior-hold-tap";
             label = "LANG_SHIFT1";
-            bindings = <&kp>, <&sk>;
+            bindings = <&kp>, <&shiftsk>;
 
             #binding-cells = <2>;
             tapping-term-ms = <180>;
@@ -531,7 +529,7 @@
             bindings = <&kp>, <&kp>;
 
             #binding-cells = <2>;
-            tapping-term-ms = <200>;
+            tapping-term-ms = <210>;
             flavor = "tap-preferred";
         };
     };
@@ -571,7 +569,7 @@
 
         undo {
             bindings = <&kp LC(Z)>;
-            key-positions = <21 22>;
+            key-positions = <22 12>;
         };
 
         reset_combo {
@@ -592,7 +590,7 @@
 
         kmswitch_combo {
             bindings = <&kmswitch>;
-            key-positions = <3 1>;
+            key-positions = <13 2>;
         };
 
         Ctrl_A_Combo {
@@ -710,7 +708,7 @@
 
         Sign_Combo2 {
             bindings = <&key_repeat>;
-            key-positions = <13 2>;
+            key-positions = <24 12>;
         };
     };
 
@@ -1002,6 +1000,22 @@
             wait-ms = <0>;
             tap-ms = <0>;
         };
+
+        hangul_mail: hangul_mail {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_press>,
+                <&kp LCTRL>,
+                <&macro_tap>,
+                <&kp K &kp M>,
+                <&macro_release>,
+                <&kp LCTRL>;
+
+            label = "HANGUL_MAIL";
+            wait-ms = <0>;
+            tap-ms = <0>;
+        };
     };
 
     keymap {
@@ -1074,7 +1088,7 @@
         Asj {
             bindings = <
         &sys_reset  &kp F23  &kp F24  &trans  &studio_unlock    &trans  &trans  &trans  &trans  &trans
-        &trans      &kp F21  &kp F22  &trans  &hangul_table     &trans  &trans  &trans  &trans  &trans
+        &trans      &kp F21  &kp F22  &trans  &kp LG(L)         &trans  &trans  &trans  &trans  &trans
 &trans  &trans      &trans   &trans   &trans  &trans            &trans  &trans  &trans  &trans  &trans  &sys_reset
                              &trans   &trans  &kmswitch         &trans  &trans  &trans
             >;
@@ -1105,7 +1119,7 @@
         &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &none             &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
         &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &none             &kp UNDERSCORE  &kp MINUS     &kp TILDE      &kp PERCENT  &kp DOLLAR
 &trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &none             &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
-                        &trans         &hangul_table  &kp LANGUAGE_2    &kp LC(F10)     &trans        &trans
+                        &trans         &hangul_table  &kp LANGUAGE_2    &kp LC(F10)     &hangul_mail  &trans
             >;
         };
     };
