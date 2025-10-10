@@ -707,6 +707,11 @@
             bindings = <&kp F12>;
             key-positions = <34 4>;
         };
+
+        Clipboard {
+            bindings = <&kp LG(V)>;
+            key-positions = <22 21>;
+        };
     };
 
     macros {
