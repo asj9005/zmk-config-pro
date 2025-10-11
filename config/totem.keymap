@@ -469,6 +469,15 @@
             tapping-term-ms = <210>;
             flavor = "tap-preferred";
         };
+
+        tide_mod: tide_mod {
+            compatible = "zmk,behavior-mod-morph";
+            label = "TIDE_MOD";
+            bindings = <&kp MINUS>, <&kp TILDE>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
+        };
     };
 
     combos {
@@ -711,6 +720,11 @@
         Clipboard {
             bindings = <&kp LG(V)>;
             key-positions = <22 21>;
+        };
+
+        Right_esc {
+            bindings = <&esccombo>;
+            key-positions = <6 7 8>;
         };
     };
 
@@ -1026,9 +1040,9 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y           &kp U         &kp I         &kp O  &kp SINGLE_QUOTE
+       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y           &kp U         &kp I         &kp O  &tide_mod
        &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del3 0 0
-&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum              &shiftdance
+&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum          &shiftdance
                                    &sl 7            &lt 8 SPACE      &tomolayer 1 1    &tomolayer 4 4  &lang_shift3  &mo_caps 5 0
             >;
         };
@@ -1045,10 +1059,10 @@
 
         Acc {
             bindings = <
-        &trans           &kp LC(LS(F13))  &trans  &di         &trans    &trans  &trans  &trans  &trans  &trans
-        &kp LC(LS(F14))  &kp LG(D)        &trans  &trans      &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans           &kp LG(E)        &trans  &ps_di_mop  &trans    &trans  &trans  &trans  &trans  &trans  &trans
-                                          &trans  &trans      &trans    &trans  &trans  &trans
+        &trans           &kp LC(LS(F13))  &trans  &kp LC(LS(F15))  &trans    &trans  &trans  &trans  &trans  &trans
+        &kp LC(LS(F14))  &kp LG(D)        &trans  &trans           &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &trans           &kp LG(E)        &trans  &kp LC(LS(F16))  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+                                          &trans  &trans           &trans    &trans  &trans  &trans
             >;
 
             label = "Acc";
@@ -1057,8 +1071,8 @@
         Prec {
             bindings = <
         &trans           &kp LC(LS(F17))  &kp LC(LS(F18))  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &kp LC(LS(F19))  &kp LC(LS(F15))  &trans           &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &trans           &kp LS(LC(F16))  &kp LC(LS(F20))  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+        &kp LC(LS(F19))  &ps_di_mop       &trans           &trans  &trans    &trans  &trans  &trans  &trans  &trans
+&trans  &kp LC(LS(F21))  &di              &kp LC(LS(F20))  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
                                           &trans           &trans  &trans    &trans  &trans  &trans
             >;
 
@@ -1091,7 +1105,7 @@
             bindings = <
         &sys_reset  &kp F23          &kp F24          &trans           &studio_unlock    &trans  &trans  &trans  &trans  &trans
         &trans      &kp LC(LA(F13))  &kp LC(LA(F14))  &kp LC(LA(F16))  &kp LG(L)         &trans  &trans  &trans  &trans  &trans
-&trans  &trans      &trans           &trans           &trans           &trans            &trans  &trans  &trans  &trans  &trans  &sys_reset
+&trans  &trans      &trans           &kp C_PIP        &kp C_POWER      &kp K_SLEEP       &trans  &trans  &trans  &trans  &trans  &sys_reset
                                      &trans           &trans           &kmswitch         &trans  &trans  &trans
             >;
         };
@@ -1118,9 +1132,9 @@
 
         Han {
             bindings = <
-        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &kp LC(LS(F21))    &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
-        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &kp LC(LS(F22))    &kp UNDERSCORE  &kp MINUS     &kp TILDE      &kp PERCENT  &kp DOLLAR
-&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &kp LC(LS(F23))    &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
+        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &kp LC(LS(F22))    &kp AT_SIGN     &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
+        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &kp LC(LS(F23))    &kp UNDERSCORE  &kp MINUS     &kp SQT        &kp PERCENT  &kp DOLLAR
+&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &kp LC(LS(F24))    &kp EQUAL       &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
                         &trans         &hangul_table  &kp LANGUAGE_2     &kp LC(F10)     &hangul_mail  &trans
             >;
         };
