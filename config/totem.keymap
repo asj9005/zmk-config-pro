@@ -536,7 +536,7 @@
 
         kmswitch_combo {
             bindings = <&kmswitch>;
-            key-positions = <13 2>;
+            key-positions = <3 1>;
         };
 
         Ctrl_A_Combo {
@@ -1070,9 +1070,9 @@
 
         Prec {
             bindings = <
-        &trans           &kp LC(LS(F17))  &kp LC(LS(F18))  &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &trans           &di              &kp LC(LS(F18))  &trans  &trans    &trans  &trans  &trans  &trans  &trans
         &kp LC(LS(F19))  &ps_di_mop       &trans           &trans  &trans    &trans  &trans  &trans  &trans  &trans
-&trans  &kp LC(LS(F21))  &di              &kp LC(LS(F20))  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
+&trans  &kp LC(LS(F21))  &kp LC(LS(F17))  &kp LC(LS(F20))  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
                                           &trans           &trans  &trans    &trans  &trans  &trans
             >;
 
