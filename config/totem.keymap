@@ -563,16 +563,19 @@
         LS_Combo {
             bindings = <&Shift_Combo LEFT_SHIFT 0>;
             key-positions = <12 11>;
+            layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LC_Combo {
             bindings = <&Ctrl_Combo LCTRL 0>;
             key-positions = <12 13>;
+            layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LA_Combo {
             bindings = <&Alt_Combo LEFT_ALT 0>;
             key-positions = <13 11>;
+            layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         RG_Combo {
@@ -626,16 +629,19 @@
         LCS_Combo {
             bindings = <&CS_Combo 0 0>;
             key-positions = <11 12 13>;
+            layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LCA_Combo {
             bindings = <&CA_Combo 0 0>;
             key-positions = <12 10 13>;
+            layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LSA_Combo {
             bindings = <&SA_Combo 0 0>;
             key-positions = <11 10 12>;
+            layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         RCS_Combo {
