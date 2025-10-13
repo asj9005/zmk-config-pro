@@ -488,6 +488,36 @@
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
         };
+
+        NavCS_Combo: NavCS_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "NAVCS_COMBO";
+            bindings = <&Skcb_CSH>, <&Nav_CS>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        NavCA_Combo: NavCA_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "NAVCA_COMBO";
+            bindings = <&Skcb_CAH>, <&Nav_CA>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        NavSA_Combo: NavSA_Combo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "NAVSA_COMBO";
+            bindings = <&Skcb_SAH>, <&Nav_SA>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
     };
 
     combos {
@@ -744,9 +774,45 @@
             key-positions = <6 7 8>;
         };
 
-        Nav_Gui {
+        Navcombo_Gui {
             bindings = <&Nav_Mod LEFT_GUI LEFT_GUI>;
             key-positions = <11 10>;
+            layers = <8>;
+        };
+
+        Navcombo_Shift {
+            bindings = <&Nav_Mod LEFT_SHIFT LEFT_SHIFT>;
+            key-positions = <11 12>;
+            layers = <8>;
+        };
+
+        Navcombo_Ctrl {
+            bindings = <&Nav_Mod LCTRL LCTRL>;
+            key-positions = <12 13>;
+            layers = <8>;
+        };
+
+        Navcombo_Alt {
+            bindings = <&Nav_Mod LEFT_ALT LEFT_ALT>;
+            key-positions = <13 11>;
+            layers = <8>;
+        };
+
+        Navcombo_Cs {
+            bindings = <&NavCS_Combo 0 0>;
+            key-positions = <11 12 13>;
+            layers = <8>;
+        };
+
+        Navcombo_CA {
+            bindings = <&NavCA_Combo 0 0>;
+            key-positions = <12 10 13>;
+            layers = <8>;
+        };
+
+        Navcombo_SA {
+            bindings = <&NavSA_Combo 0 0>;
+            key-positions = <11 10 12>;
             layers = <8>;
         };
     };
@@ -1205,6 +1271,8 @@
 &trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &kp LC(LS(F24))    &kp DOUBLE_QUOTES  &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
                         &trans         &hangul_table  &kp LANGUAGE_2     &kp LC(F10)        &kp LA(C)     &hangul_mail
             >;
+
+            label = "Han";
         };
     };
 };
