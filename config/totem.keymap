@@ -231,32 +231,22 @@
             mods = <(MOD_RSFT)>;
         };
 
-        bs_del1: bs_del1 {
+        backspace1: backspace1 {
             compatible = "zmk,behavior-mod-morph";
-            label = "BS_DEL1";
-            bindings = <&kp BACKSPACE>, <&kp DELETE>;
+            label = "BACKSPACE1";
+            bindings = <&kp BACKSPACE>, <&kp LC(BACKSPACE)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        bs_del2: bs_del2 {
+        delete1: delete1 {
             compatible = "zmk,behavior-mod-morph";
-            label = "BS_DEL2";
-            bindings = <&kp LC(BACKSPACE)>, <&kp LC(DELETE)>;
+            label = "DELETE1";
+            bindings = <&kp DELETE>, <&kp LC(DELETE)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
-        };
-
-        bs_del3: bs_del3 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "BS_DEL3";
-            bindings = <&bs_del2>, <&bs_del1>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <210>;
-            flavor = "tap-preferred";
         };
 
         Jum: Jum {
@@ -1192,9 +1182,9 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y            &kp U         &kp I         &kp O  &tide_mod
-       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H            &kp J         &kp K         &kp L  &bs_del1
-&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B            &kp N         &kp M         &kp P  &Jum       &shiftdance
+       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y            &kp U         &kp I         &kp O  &delete1
+       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H            &kp J         &kp K         &kp L  &backspace1
+&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B            &kp N         &kp M         &kp P  &Jum         &shiftdance
                                    &sl 7            &lt 8 SPACE      &tomolayer 1 1    &tomolayer 10 4  &lang_shift3  &mo_caps 5 0
             >;
         };
