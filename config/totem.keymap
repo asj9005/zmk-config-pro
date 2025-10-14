@@ -268,24 +268,6 @@
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        Home1: Home1 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "HOME1";
-            bindings = <&kp HOME>, <&kp HOME>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_LCTL)>;
-        };
-
-        End1: End1 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "END1";
-            bindings = <&kp END>, <&kp END>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_LCTL)>;
-        };
-
         HomeEnd1: HomeEnd1 {
             compatible = "zmk,behavior-mod-morph";
             label = "HOMEEND1";
@@ -517,6 +499,42 @@
             #binding-cells = <2>;
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
+        };
+
+        LeftHome: LeftHome {
+            compatible = "zmk,behavior-mod-morph";
+            label = "LEFTHOME";
+            bindings = <&kp LEFT>, <&kp HOME>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        RightEnd: RightEnd {
+            compatible = "zmk,behavior-mod-morph";
+            label = "RIGHTEND";
+            bindings = <&kp RIGHT>, <&HomeEnd1>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        TopPgup: TopPgup {
+            compatible = "zmk,behavior-mod-morph";
+            label = "TOPPGUP";
+            bindings = <&kp PG_UP>, <&kp LC(HOME)>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        BottomPgdn: BottomPgdn {
+            compatible = "zmk,behavior-mod-morph";
+            label = "BOTTOMPGDN";
+            bindings = <&kp PG_DN>, <&kp LC(END)>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
         };
     };
 
@@ -1174,10 +1192,10 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y           &kp U         &kp I         &kp O  &tide_mod
-       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H           &kp J         &kp K         &kp L  &bs_del1
-&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B           &kp N         &kp M         &kp P  &Jum       &shiftdance
-                                   &sl 7            &lt 8 SPACE      &tomolayer 1 1    &tomolayer 4 4  &lang_shift3  &mo_caps 5 0
+       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y            &kp U         &kp I         &kp O  &tide_mod
+       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H            &kp J         &kp K         &kp L  &bs_del1
+&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B            &kp N         &kp M         &kp P  &Jum       &shiftdance
+                                   &sl 7            &lt 8 SPACE      &tomolayer 1 1    &tomolayer 10 4  &lang_shift3  &mo_caps 5 0
             >;
         };
 
@@ -1226,10 +1244,10 @@
 
         Fun {
             bindings = <
-        &kp F12  &kp F7  &kp F8  &kp F9  &kp LC(F10)       &trans  &kp LS(COMMA)  &kp LS(PERIOD)  &trans    &trans
-        &kp F11  &kp F4  &kp F5  &kp F6  &trans            &trans  &kp LSHFT      &kp LCTRL       &kp LALT  &kp LGUI
-&trans  &kp F10  &kp F1  &kp F2  &kp F3  &kp LANGUAGE_2    &trans  &trans         &trans          &trans    &trans    &trans
-                         &trans  &trans  &trans            &trans  &trans         &trans
+        &trans  &kp F7  &kp F8  &kp F9  &kp F12    &trans  &kp LS(COMMA)  &kp LS(PERIOD)  &trans    &trans
+        &trans  &kp F4  &kp F5  &kp F6  &kp F11    &trans  &kp LSHFT      &kp LCTRL       &kp LALT  &kp LGUI
+&trans  &trans  &kp F1  &kp F2  &kp F3  &kp F10    &trans  &trans         &trans          &trans    &trans    &trans
+                        &trans  &trans  &trans     &trans  &trans         &trans
             >;
 
             label = "Fun";
@@ -1255,10 +1273,10 @@
 
         Nav {
             bindings = <
-        &trans        &kp LC(LS(TAB))  &kp LC(TAB)        &swapper         &fancyzone                &trans            &Home1       &kp UP         &End1      &trans
-        &kp LS(HOME)  &kp LC(SPACE)    &kp LA(LG(SPACE))  &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &kp LEFT     &kp DOWN       &kp RIGHT  &trans
-&trans  &kp LS(END)   &kp LC(INS)      &kp LC(KP_MINUS)   &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &kp PAGE_UP  &kp PAGE_DOWN  &HomeEnd1  &trans  &trans
-                                       &trans             &trans           &trans                    &kp ENTER         &trans       &trans
+        &trans        &kp LC(LS(TAB))  &kp LC(TAB)        &swapper         &fancyzone                &trans            &MBK_Mod1  &kp UP       &MBK_Mod2  &trans
+        &kp LS(HOME)  &kp LC(SPACE)    &kp LA(LG(SPACE))  &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &LeftHome  &kp DOWN     &RightEnd  &trans
+&trans  &kp LS(END)   &kp LC(INS)      &kp LC(KP_MINUS)   &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &TopPgup   &BottomPgdn  &HomeEnd1  &trans  &trans
+                                       &trans             &trans           &trans                    &kp ENTER         &trans     &trans
             >;
 
             label = "Nav";
@@ -1273,6 +1291,16 @@
             >;
 
             label = "Han";
+        };
+
+        NumHold {
+            label = "NumHold";
+            bindings = <
+        &trans  &trans            &trans      &kp LC(L)         &trans    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
+        &trans  &kp LS(LG(LEFT))  &fancyzone  &kp LG(UP_ARROW)  &trans    &kp N0     &kp N4  &kp N5  &kp N6  &trans
+&trans  &trans  &trans            &kp MINUS   &trans            &trans    &kp EQUAL  &kp N1  &kp N2  &kp N3  &trans  &trans
+                                  &trans      &trans            &trans    &trans     &trans  &trans
+            >;
         };
     };
 };
