@@ -503,7 +503,7 @@
         RightEnd: RightEnd {
             compatible = "zmk,behavior-mod-morph";
             label = "RIGHTEND";
-            bindings = <&kp RIGHT>, <&HomeEnd1>;
+            bindings = <&kp RIGHT>, <&kp END>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -1263,10 +1263,10 @@
 
         Nav {
             bindings = <
-        &trans        &kp LC(LS(TAB))  &kp LC(TAB)        &swapper         &fancyzone                &trans            &MBK_Mod1  &kp UP       &MBK_Mod2  &trans
-        &kp LS(HOME)  &kp LC(SPACE)    &kp LA(LG(SPACE))  &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &LeftHome  &kp DOWN     &RightEnd  &trans
-&trans  &kp LS(END)   &kp LC(INS)      &kp LC(KP_MINUS)   &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &TopPgup   &BottomPgdn  &HomeEnd1  &trans  &trans
-                                       &trans             &trans           &trans                    &kp ENTER         &trans     &trans
+        &kp LC(SPACE)  &kp LC(LS(TAB))    &kp LC(TAB)       &swapper         &fancyzone                &trans            &MBK_Mod1  &kp UP       &MBK_Mod2  &trans
+        &kp LS(HOME)   &kp LA(LG(SPACE))  &swapper          &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &LeftHome  &kp DOWN     &RightEnd  &trans
+&trans  &kp LS(END)    &kp LC(INS)        &kp LC(KP_MINUS)  &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &TopPgup   &BottomPgdn  &HomeEnd1  &trans  &trans
+                                          &trans            &trans           &trans                    &kp ENTER         &trans     &trans
             >;
 
             label = "Nav";
