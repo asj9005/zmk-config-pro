@@ -349,7 +349,7 @@
         lang_shift1: lang_shift1 {
             compatible = "zmk,behavior-hold-tap";
             label = "LANG_SHIFT1";
-            bindings = <&kp>, <&shiftsk>;
+            bindings = <&lang_temp>, <&shiftsk>;
 
             #binding-cells = <2>;
             tapping-term-ms = <180>;
@@ -359,7 +359,7 @@
         lang_shift2: lang_shift2 {
             compatible = "zmk,behavior-hold-tap";
             label = "LANG_SHIFT2";
-            bindings = <&lang_temp>, <&lang>;
+            bindings = <&kp>, <&lang>;
 
             #binding-cells = <2>;
             tapping-term-ms = <180>;
@@ -371,7 +371,7 @@
             label = "LANG_SHIFT3";
             bindings =
                 <&lang_shift1 RIGHT_SHIFT RIGHT_SHIFT>,
-                <&lang_shift2 0 0>;
+                <&lang_shift2 RIGHT_SHIFT 0>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
