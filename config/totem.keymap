@@ -128,20 +128,20 @@
             mods = <(MOD_RSFT)>;
         };
 
-        atlayerhmbe: atlayerhmbe {
+        AutoLayer_3: AutoLayer_3 {
             compatible = "zmk,behavior-hold-tap";
-            label = "ATLAYERHMBE";
-            bindings = <&atlayerhm>, <&atlayertab>;
+            label = "AUTOLAYER_3";
+            bindings = <&atlayerhm>, <&AutoLayer_1>;
 
             #binding-cells = <2>;
             flavor = "tap-preferred";
             tapping-term-ms = <180>;
         };
 
-        atlayerspeed: atlayerspeed {
+        AutoLayer_4: AutoLayer_4 {
             compatible = "zmk,behavior-hold-tap";
-            label = "ATLAYERSPEED";
-            bindings = <&mo>, <&atlayertab>;
+            label = "AUTOLAYER_4";
+            bindings = <&mo>, <&AutoLayer_1>;
 
             #binding-cells = <2>;
             tapping-term-ms = <180>;
@@ -157,9 +157,9 @@
             ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
         };
 
-        mo_caps: mo_caps {
+        HT_MoCaps: HT_MoCaps {
             compatible = "zmk,behavior-hold-tap";
-            label = "MO_CAPS";
+            label = "HT_MOCAPS";
             bindings = <&mo>, <&caps_word>;
 
             #binding-cells = <2>;
@@ -167,56 +167,18 @@
             flavor = "balanced";
         };
 
-        numsymtog: numsymtog {
+        Mod_Time: Mod_Time {
             compatible = "zmk,behavior-mod-morph";
-            label = "NUMSYMTOG";
-            bindings = <&to 5>, <&to 0>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        numsymtog2: numsymtog2 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "NUMSYMTOG2";
-            bindings = <&mo 5>, <&mo 0>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        numsymbtn: numsymbtn {
-            compatible = "zmk,behavior-hold-tap";
-            label = "NUMSYMBTN";
-            bindings = <&numsymtog2>, <&numsymtog>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        nummmm: nummmm {
-            compatible = "zmk,behavior-hold-tap";
-            label = "NUMMMM";
-            bindings = <&mo>, <&to>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        timemod: timemod {
-            compatible = "zmk,behavior-mod-morph";
-            label = "TIMEMOD";
+            label = "MOD_TIME";
             bindings = <&kp TILDE>, <&kp COLON>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        tomolayer: tomolayer {
+        Layter_ToMo: Layter_ToMo {
             compatible = "zmk,behavior-hold-tap";
-            label = "TOMOLAYER";
+            label = "LAYTER_TOMO";
             bindings = <&mo>, <&to>;
 
             #binding-cells = <2>;
@@ -224,9 +186,9 @@
             flavor = "tap-preferred";
         };
 
-        shiftdance: shiftdance {
+        TD_Obsidian: TD_Obsidian {
             compatible = "zmk,behavior-tap-dance";
-            label = "SHIFTDANCE";
+            label = "TD_OBSIDIAN";
             #binding-cells = <0>;
             bindings = <&kp LC(LS(LA(LG(M))))>, <&caps_word>;
         };
@@ -249,9 +211,9 @@
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        ps_di_mop: ps_di_mop {
+        Mod_SpDi: Mod_SpDi {
             compatible = "zmk,behavior-mod-morph";
-            label = "PS_DI_MOP";
+            label = "MOD_SPDI";
             bindings = <&ps>, <&di>;
 
             #binding-cells = <0>;
@@ -776,7 +738,7 @@
             label = "BRACKET2";
         };
 
-        atlayertab: atlayertab {
+        AutoLayer_1: atlayertab {
             compatible = "zmk,behavior-macro-one-param";
             #binding-cells = <1>;
             bindings =
@@ -1058,20 +1020,20 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y            &kp U         &kp I         &kp O  &Mod_Delete
-       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H            &kp J         &kp K         &kp L  &Mod_BackSpace
-&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B            &kp N         &kp M         &kp P  &Mod_Dot        &shiftdance
-                                   &sl 7            &lt 8 SPACE      &tomolayer 1 1    &tomolayer 10 4  &LangShift_4  &mo_caps 5 0
+       &kp LC(M)  &kp W            &kp E            &kp R            &kp T               &kp Y              &kp U         &kp I           &kp O  &Mod_Delete
+       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G               &kp H              &kp J         &kp K           &kp L  &Mod_BackSpace
+&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q               &kp B              &kp N         &kp M           &kp P  &Mod_Dot        &TD_Obsidian
+                                   &sl 7            &lt 8 SPACE      &Layter_ToMo 1 1    &Layter_ToMo 10 4  &LangShift_4  &HT_MoCaps 5 0
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
-        &atlayertab A      &atlayerspeed 9 S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
-                                              &trans             &trans             &mkp MB1         &trans           &trans          &trans
+        &AutoLayer_1 LC(M)  &AutoLayer_1 W    &AutoLayer_1 E    &AutoLayer_1 R    &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
+        &AutoLayer_1 A      &AutoLayer_4 9 S  &AutoLayer_4 2 D  &AutoLayer_4 3 F  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+&trans  &AutoLayer_1 Z      &AutoLayer_1 X    &AutoLayer_1 C    &AutoLayer_1 V    &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
+                                              &trans            &trans            &mkp MB1          &trans           &trans          &trans
             >;
         };
 
@@ -1089,7 +1051,7 @@
         Prec {
             bindings = <
         &trans           &di              &kp LC(LS(F18))  &trans  &trans    &trans  &trans  &trans  &trans  &trans
-        &kp LC(LS(F19))  &ps_di_mop       &trans           &trans  &trans    &trans  &trans  &trans  &trans  &trans
+        &kp LC(LS(F19))  &Mod_SpDi        &trans           &trans  &trans    &trans  &trans  &trans  &trans  &trans
 &trans  &kp LC(LS(F21))  &kp LC(LS(F17))  &kp LC(LS(F20))  &trans  &trans    &trans  &trans  &trans  &trans  &trans  &trans
                                           &trans           &trans  &trans    &trans  &trans  &trans
             >;
@@ -1099,10 +1061,10 @@
 
         Num {
             bindings = <
-        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
-        &atlayertab A      &atlayerspeed 9 S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &kp N0     &kp N4  &kp N5  &kp N6  &trans
-&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &kp EQUAL  &kp N1  &kp N2  &kp N3  &trans  &trans
-                                              &trans             &trans             &trans           &trans     &trans  &trans
+        &AutoLayer_1 LC(M)  &AutoLayer_1 W    &AutoLayer_1 E    &AutoLayer_1 R    &AutoLayer_1 T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
+        &AutoLayer_1 A      &AutoLayer_4 9 S  &AutoLayer_4 2 D  &AutoLayer_4 3 F  &AutoLayer_1 G    &kp N0     &kp N4  &kp N5  &kp N6  &trans
+&trans  &AutoLayer_1 Z      &AutoLayer_1 X    &AutoLayer_1 C    &AutoLayer_1 V    &AutoLayer_1 Q    &kp EQUAL  &kp N1  &kp N2  &kp N3  &trans  &trans
+                                              &trans            &trans            &trans            &trans     &trans  &trans
             >;
 
             label = "Num";
