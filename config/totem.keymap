@@ -369,183 +369,93 @@
     combos {
         compatible = "zmk,combos";
 
-        combo_ctrl_x {
+        CBL_Cut {
             bindings = <&kp LC(X)>;
             key-positions = <22 24>;
         };
 
-        combo_ctrl_c {
+        CBL_Copy {
             bindings = <&kp LC(C)>;
             key-positions = <22 23>;
         };
 
-        combo_ctrl_v {
+        CBL_Paste {
             bindings = <&kp LC(V)>;
             key-positions = <23 24>;
         };
 
-        altf4 {
+        CBL_AltF4 {
             bindings = <&kp LA(F4)>;
-            key-positions = <34 0>;
+            key-positions = <34 10>;
         };
 
-        end {
-            bindings = <&esccombo>;
-            key-positions = <3 1 2>;
+        CBL_Esc {
+            bindings = <&kp ESCAPE>;
+            key-positions = <1 2>;
         };
 
-        bracketcombo {
+        CBR_Bracket {
             bindings = <&Mod_Bracket>;
             key-positions = <27 29>;
         };
 
-        undo {
+        CBL_Undo {
             bindings = <&kp LC(Z)>;
             key-positions = <22 12>;
         };
 
-        reset_combo {
+        CBL_Reset {
             bindings = <&sys_reset>;
             key-positions = <13 11 2>;
             layers = <6>;
         };
 
-        Arrow_combo {
+        CBR_Arrow {
             bindings = <&Mod_Arrow>;
             key-positions = <30 27>;
         };
 
-        Colon_combo {
+        CBR_Colon {
             bindings = <&Mod_Colon>;
             key-positions = <28 29>;
         };
 
-        kmswitch_combo {
+        CBL_KmSwitch {
             bindings = <&kmswitch>;
             key-positions = <3 1>;
         };
 
-        Ctrl_A_Combo {
+        CBL_SelectAll {
             bindings = <&kp LC(A)>;
             key-positions = <22 23 24>;
         };
 
-        LG_Combo {
-            bindings = <&none>;
-            key-positions = <11 10>;
-            layers = <0 1 2 3 4 5 6 7 9>;
-        };
-
-        LS_Combo {
-            bindings = <&none>;
-            key-positions = <12 11>;
-            layers = <0 1 2 3 4 5 6 7 9>;
-        };
-
-        LC_Combo {
-            bindings = <&none>;
+        CBL_Enter {
+            bindings = <&kp ENTER>;
             key-positions = <12 13>;
-            layers = <0 1 2 3 4 5 6 7 9>;
         };
 
-        LA_Combo {
-            bindings = <&none>;
-            key-positions = <13 11>;
-            layers = <0 1 2 3 4 5 6 7 9>;
-        };
-
-        RG_Combo {
-            bindings = <&none>;
-            key-positions = <18 19>;
-        };
-
-        RS_Combo {
-            bindings = <&none>;
-            key-positions = <17 18>;
-            layers = <0 5 6 7 4>;
-        };
-
-        RC_Combo {
-            bindings = <&none>;
-            key-positions = <17 16>;
-            layers = <0 4 5 6 7>;
-        };
-
-        RA_Combo {
-            bindings = <&none>;
-            key-positions = <18 16>;
-            layers = <0 5 6 7 4>;
-        };
-
-        LE_Combo {
-            bindings = <&kp ENTER>;
-            key-positions = <2 3>;
-        };
-
-        LT_Combo {
+        CBL_Tab {
             bindings = <&kp TAB>;
-            key-positions = <2 1>;
-        };
-
-        RE_Combo {
-            bindings = <&kp ENTER>;
-            key-positions = <6 7>;
-        };
-
-        RT_Combo {
-            bindings = <&kp TAB>;
-            key-positions = <7 8>;
+            key-positions = <12 11>;
         };
 
         layer0 {
             bindings = <&to 0>;
-            key-positions = <6 8>;
+            key-positions = <6 7>;
         };
 
-        LCS_Combo {
-            bindings = <&none>;
-            key-positions = <11 12 13>;
-            layers = <0 1 2 3 4 5 6 7 9>;
-        };
-
-        LCA_Combo {
-            bindings = <&none>;
-            key-positions = <12 10 13>;
-            layers = <0 1 2 3 4 5 6 7 9>;
-        };
-
-        LSA_Combo {
-            bindings = <&none>;
-            key-positions = <11 10 12>;
-            layers = <0 1 2 3 4 5 6 7 9>;
-        };
-
-        RCS_Combo {
-            bindings = <&none>;
-            key-positions = <16 17 18>;
-        };
-
-        RCA_Combo {
-            bindings = <&none>;
-            key-positions = <17 19 16>;
-        };
-
-        RSA_Combo {
-            bindings = <&none>;
-            key-positions = <19 18 17>;
-        };
-
-        Comma2 {
+        CBR_Comma {
             bindings = <&Mod_Comma>;
             key-positions = <27 28>;
         };
 
-        Printscreen_Combo {
+        CBR_PrintScreen {
             bindings = <&Mod_PrintScreen>;
             key-positions = <16 7 18>;
         };
 
-        Sign_Combo2 {
+        CBL_Repeat {
             bindings = <&key_repeat>;
             key-positions = <24 12>;
         };
@@ -610,56 +520,14 @@
             key-positions = <34 4>;
         };
 
-        Clipboard {
+        CBL_Clipboard {
             bindings = <&kp LG(V)>;
             key-positions = <22 21>;
         };
 
-        Right_esc {
+        CBR_Esclayer {
             bindings = <&esccombo>;
             key-positions = <6 7 8>;
-        };
-
-        Navcombo_Gui {
-            bindings = <&none>;
-            key-positions = <11 10>;
-            layers = <8>;
-        };
-
-        Navcombo_Shift {
-            bindings = <&none>;
-            key-positions = <11 12>;
-            layers = <8>;
-        };
-
-        Navcombo_Ctrl {
-            bindings = <&none>;
-            key-positions = <12 13>;
-            layers = <8>;
-        };
-
-        Navcombo_Alt {
-            bindings = <&none>;
-            key-positions = <13 11>;
-            layers = <8>;
-        };
-
-        Navcombo_Cs {
-            bindings = <&none>;
-            key-positions = <11 12 13>;
-            layers = <8>;
-        };
-
-        Navcombo_CA {
-            bindings = <&none>;
-            key-positions = <12 10 13>;
-            layers = <8>;
-        };
-
-        Navcombo_SA {
-            bindings = <&none>;
-            key-positions = <11 10 12>;
-            layers = <8>;
         };
     };
 
