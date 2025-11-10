@@ -87,6 +87,15 @@
             bindings = <&sk>, <&kp>;
         };
 
+        swapper: swapper {
+            compatible = "zmk,behavior-tri-state";
+            label = "SWAPPER";
+            #binding-cells = <0>;
+            bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
+
+            ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
+        };
+
         LangShift_1: LangShift_1 {
             compatible = "zmk,behavior-sticky-key";
             label = "LANGSHIFT_1";
@@ -128,6 +137,16 @@
             mods = <(MOD_RSFT)>;
         };
 
+        Layter_ToMo: Layter_ToMo {
+            compatible = "zmk,behavior-hold-tap";
+            label = "LAYTER_TOMO";
+            bindings = <&mo>, <&to>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
         AutoLayer_3: AutoLayer_3 {
             compatible = "zmk,behavior-hold-tap";
             label = "AUTOLAYER_3";
@@ -148,15 +167,6 @@
             flavor = "tap-preferred";
         };
 
-        swapper: swapper {
-            compatible = "zmk,behavior-tri-state";
-            label = "SWAPPER";
-            #binding-cells = <0>;
-            bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
-
-            ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
-        };
-
         HT_MoCaps: HT_MoCaps {
             compatible = "zmk,behavior-hold-tap";
             label = "HT_MOCAPS";
@@ -167,30 +177,21 @@
             flavor = "balanced";
         };
 
-        Mod_Time: Mod_Time {
-            compatible = "zmk,behavior-mod-morph";
-            label = "MOD_TIME";
-            bindings = <&kp TILDE>, <&kp COLON>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT|MOD_LSFT)>;
-        };
-
-        Layter_ToMo: Layter_ToMo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "LAYTER_TOMO";
-            bindings = <&mo>, <&to>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
         TD_Obsidian: TD_Obsidian {
             compatible = "zmk,behavior-tap-dance";
             label = "TD_OBSIDIAN";
             #binding-cells = <0>;
             bindings = <&kp LC(LS(LA(LG(M))))>, <&caps_word>;
+        };
+
+        Sign_layer: Sign_layer {
+            compatible = "zmk,behavior-hold-tap";
+            label = "SIGN_LAYER";
+            bindings = <&mo>, <&kp>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <200>;
+            flavor = "tap-preferred";
         };
 
         Mod_Bracket: Mod_Bracket {
@@ -209,15 +210,6 @@
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
-        };
-
-        Mod_SpDi: Mod_SpDi {
-            compatible = "zmk,behavior-mod-morph";
-            label = "MOD_SPDI";
-            bindings = <&ps>, <&di>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
         };
 
         Mod_BackSpace: Mod_BackSpace {
@@ -247,6 +239,15 @@
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
+        Mod_Comma: Mod_Comma {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_COMMA";
+            bindings = <&kp COMMA>, <&kp QUESTION>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
+        };
+
         Mod_HomeEnd: Mod_HomeEnd {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_HOMEEND";
@@ -265,28 +266,10 @@
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        Mod_Comma: Mod_Comma {
-            compatible = "zmk,behavior-mod-morph";
-            label = "MOD_COMMA";
-            bindings = <&kp COMMA>, <&kp QUESTION>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT|MOD_LSFT)>;
-        };
-
         Mod_MKP3: Mod_MKP3 {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_MKP3";
             bindings = <&mkp MB3>, <&mkp MB2>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
-        };
-
-        Mod_PrintScreen: Mod_PrintScreen {
-            compatible = "zmk,behavior-mod-morph";
-            label = "MOD_PRINTSCREEN";
-            bindings = <&kp PRINTSCREEN>, <&kp LC(LS(LG(T)))>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -308,25 +291,6 @@
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
-        };
-
-        Sign_layer: Sign_layer {
-            compatible = "zmk,behavior-hold-tap";
-            label = "SIGN_LAYER";
-            bindings = <&mo>, <&kp>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <200>;
-            flavor = "tap-preferred";
-        };
-
-        Mod_tide: Mod_tide {
-            compatible = "zmk,behavior-mod-morph";
-            label = "MOD_TIDE";
-            bindings = <&kp MINUS>, <&kp TILDE>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
         Mod_NavLeft: Mod_NavLeft {
@@ -363,6 +327,42 @@
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
+        };
+
+        Mod_SpDi: Mod_SpDi {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_SPDI";
+            bindings = <&ps>, <&di>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Mod_tide: Mod_tide {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_TIDE";
+            bindings = <&kp MINUS>, <&kp TILDE>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
+        };
+
+        Mod_PrintScreen: Mod_PrintScreen {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_PRINTSCREEN";
+            bindings = <&kp PRINTSCREEN>, <&kp LC(LS(LG(T)))>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Mod_Time: Mod_Time {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_TIME";
+            bindings = <&kp TILDE>, <&kp COLON>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
         };
     };
 
