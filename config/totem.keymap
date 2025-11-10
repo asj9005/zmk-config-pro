@@ -374,6 +374,46 @@
             flavor = "tap-preferred";
             tapping-term-ms = <180>;
         };
+
+        At_Shift: At_Shift {
+            compatible = "zmk,behavior-mod-morph";
+            label = "AT_SHIFT";
+            bindings = <&AutoLayer_6 LEFT_SHIFT F>, <&AutoLayer_3 LEFT_SHIFT F>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT|MOD_LCTL|MOD_LALT|MOD_LGUI)>;
+            keep-mods = <(MOD_LCTL|MOD_LSFT|MOD_LALT|MOD_LGUI)>;
+        };
+
+        At_Ctrl: At_Ctrl {
+            compatible = "zmk,behavior-mod-morph";
+            label = "AT_CTRL";
+            bindings = <&AutoLayer_6 LCTRL D>, <&AutoLayer_3 LCTRL D>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT|MOD_LCTL|MOD_LALT|MOD_LGUI)>;
+            keep-mods = <(MOD_LCTL|MOD_LSFT|MOD_LALT|MOD_LGUI)>;
+        };
+
+        At_Alt: At_Alt {
+            compatible = "zmk,behavior-mod-morph";
+            label = "AT_ALT";
+            bindings = <&AutoLayer_6 LEFT_ALT S>, <&AutoLayer_3 LEFT_ALT S>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT|MOD_LCTL|MOD_LALT|MOD_LGUI)>;
+            keep-mods = <(MOD_LCTL|MOD_LSFT|MOD_LALT|MOD_LGUI)>;
+        };
+
+        At_Gui: At_Gui {
+            compatible = "zmk,behavior-mod-morph";
+            label = "AT_GUI";
+            bindings = <&AutoLayer_6 LEFT_GUI A>, <&AutoLayer_3 LEFT_GUI A>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT|MOD_LCTL|MOD_LALT|MOD_LGUI)>;
+            keep-mods = <(MOD_LCTL|MOD_LSFT|MOD_LALT|MOD_LGUI)>;
+        };
     };
 
     combos {
@@ -766,7 +806,7 @@
             display-name = "Mouse";
             bindings = <
         &AutoLayer_1 LC(LS(LA(LG(P))))  &AutoLayer_4 9 W         &AutoLayer_4 2 E      &AutoLayer_4 3 R           &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
-        &AutoLayer_6 LEFT_GUI A         &AutoLayer_6 LEFT_ALT S  &AutoLayer_6 LCTRL D  &AutoLayer_6 LEFT_SHIFT F  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+        &At_Gui                         &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
 &trans  &AutoLayer_3 LEFT_GUI Z         &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
                                                                  &trans                &trans                     &mkp MB1          &trans           &trans          &trans
             >;
@@ -797,7 +837,7 @@
         Num {
             bindings = <
         &AutoLayer_1 LC(LA(LG(LS(P))))  &AutoLayer_4 9 W         &AutoLayer_4 2 E      &AutoLayer_4 3 R           &AutoLayer_1 T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
-        &AutoLayer_6 LEFT_GUI A         &AutoLayer_6 LEFT_ALT S  &AutoLayer_6 LCTRL D  &AutoLayer_6 LEFT_SHIFT F  &AutoLayer_1 G    &kp N0     &kp N4  &kp N5  &kp N6  &trans
+        &At_Gui                         &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &kp N0     &kp N4  &kp N5  &kp N6  &trans
 &trans  &AutoLayer_3 LEFT_GUI Z         &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &kp EQUAL  &kp N1  &kp N2  &kp N3  &trans  &trans
                                                                  &trans                &trans                     &trans            &trans     &trans  &trans
             >;
