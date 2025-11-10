@@ -71,6 +71,9 @@
     quick-tap-ms = <150>;
 };
 
+&mmv {
+};
+
 / {
     behaviors {
         hm: homerow_mods {
