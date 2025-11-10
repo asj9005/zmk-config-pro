@@ -87,15 +87,6 @@
             bindings = <&sk>, <&kp>;
         };
 
-        Mod_Colon: Mod_Colon {
-            compatible = "zmk,behavior-mod-morph";
-            label = "MOD_COLON";
-            bindings = <&kp COLON>, <&kp SEMI>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT|MOD_LSFT)>;
-        };
-
         LangShift_1: LangShift_1 {
             compatible = "zmk,behavior-sticky-key";
             label = "LANGSHIFT_1";
@@ -106,10 +97,32 @@
             ignore-modifiers;
         };
 
-        Mod_Bracket: Mod_Bracket {
+        LangShift_2: LangShift_2 {
+            compatible = "zmk,behavior-hold-tap";
+            label = "LANGSHIFT_2";
+            bindings = <&lang_temp>, <&LangShift_1>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        LangShift_3: LangShift_3 {
+            compatible = "zmk,behavior-hold-tap";
+            label = "LANGSHIFT_3";
+            bindings = <&kp>, <&lang>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        LangShift_4: LangShift_4 {
             compatible = "zmk,behavior-mod-morph";
-            label = "MOD_BRACKET";
-            bindings = <&bracket>, <&bracket2>;
+            label = "LANGSHIFT_4";
+            bindings =
+                <&LangShift_2 RIGHT_SHIFT RIGHT_SHIFT>,
+                <&LangShift_3 RIGHT_SHIFT 0>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -133,6 +146,25 @@
             #binding-cells = <2>;
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
+        };
+
+        swapper: swapper {
+            compatible = "zmk,behavior-tri-state";
+            label = "SWAPPER";
+            #binding-cells = <0>;
+            bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
+
+            ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
+        };
+
+        mo_caps: mo_caps {
+            compatible = "zmk,behavior-hold-tap";
+            label = "MO_CAPS";
+            bindings = <&mo>, <&caps_word>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "balanced";
         };
 
         numsymtog: numsymtog {
@@ -199,23 +231,22 @@
             bindings = <&kp LC(LS(LA(LG(M))))>, <&caps_word>;
         };
 
-        swapper: swapper {
-            compatible = "zmk,behavior-tri-state";
-            label = "SWAPPER";
-            #binding-cells = <0>;
-            bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
+        Mod_Bracket: Mod_Bracket {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_BRACKET";
+            bindings = <&bracket>, <&bracket2>;
 
-            ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
         };
 
-        mo_caps: mo_caps {
-            compatible = "zmk,behavior-hold-tap";
-            label = "MO_CAPS";
-            bindings = <&mo>, <&caps_word>;
+        Mod_Colon: Mod_Colon {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_COLON";
+            bindings = <&kp COLON>, <&kp SEMI>;
 
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "balanced";
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
         ps_di_mop: ps_di_mop {
@@ -270,37 +301,6 @@
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
-        };
-
-        LangShift_2: LangShift_2 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "LANGSHIFT_2";
-            bindings = <&lang_temp>, <&LangShift_1>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        LangShift_3: LangShift_3 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "LANGSHIFT_3";
-            bindings = <&kp>, <&lang>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        LangShift_4: LangShift_4 {
-            compatible = "zmk,behavior-mod-morph";
-            label = "LANGSHIFT_4";
-            bindings =
-                <&LangShift_2 RIGHT_SHIFT RIGHT_SHIFT>,
-                <&LangShift_3 RIGHT_SHIFT 0>;
-
-            #binding-cells = <0>;
-            mods = <(MOD_RSFT)>;
         };
 
         Mod_Comma: Mod_Comma {
