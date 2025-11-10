@@ -87,35 +87,28 @@
             bindings = <&sk>, <&kp>;
         };
 
-        tapdance: tapdance {
-            compatible = "zmk,behavior-tap-dance";
-            label = "TAPDANCE";
-            #binding-cells = <0>;
-            bindings = <&mo 6>, <&kmswitch>;
-        };
-
-        Colon1: Colon1 {
+        Mod_Colon: Mod_Colon {
             compatible = "zmk,behavior-mod-morph";
-            label = "COLON1";
+            label = "MOD_COLON";
             bindings = <&kp COLON>, <&kp SEMI>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        shiftsk: shiftsk {
+        LangShift_1: LangShift_1 {
             compatible = "zmk,behavior-sticky-key";
-            label = "SHIFTSK";
-            bindings = <&kp>;
+            label = "LANGSHIFT_1";
+            bindings = <&sk>;
             #binding-cells = <1>;
             release-after-ms = <1000>;
             quick-release;
             ignore-modifiers;
         };
 
-        bracketmod: bracketmod {
+        Mod_Bracket: Mod_Bracket {
             compatible = "zmk,behavior-mod-morph";
-            label = "BRACKETMOD";
+            label = "MOD_BRACKET";
             bindings = <&bracket>, <&bracket2>;
 
             #binding-cells = <0>;
@@ -234,134 +227,64 @@
             mods = <(MOD_RSFT)>;
         };
 
-        backspace1: backspace1 {
+        Mod_BackSpace: Mod_BackSpace {
             compatible = "zmk,behavior-mod-morph";
-            label = "BACKSPACE1";
+            label = "MOD_BACKSPACE";
             bindings = <&kp BACKSPACE>, <&kp LC(BACKSPACE)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        delete1: delete1 {
+        Mod_Delete: Mod_Delete {
             compatible = "zmk,behavior-mod-morph";
-            label = "DELETE1";
+            label = "MOD_DELETE";
             bindings = <&kp DELETE>, <&kp LC(DELETE)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        Jum: Jum {
+        Mod_Dot: Mod_Dot {
             compatible = "zmk,behavior-mod-morph";
-            label = "JUM";
+            label = "MOD_DOT";
             bindings = <&kp PERIOD>, <&kp EXCLAMATION>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        HomeEnd1: HomeEnd1 {
+        Mod_HomeEnd: Mod_HomeEnd {
             compatible = "zmk,behavior-mod-morph";
-            label = "HOMEEND1";
+            label = "MOD_HOMEEND";
             bindings = <&kp LC(HOME)>, <&kp LC(END)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        Arrow_Mod: Arrow_Mod {
+        Mod_Arrow: Mod_Arrow {
             compatible = "zmk,behavior-mod-morph";
-            label = "ARROW_MOD";
+            label = "MOD_ARROW";
             bindings = <&Arrow_Right>, <&Arrow_Left>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        Gui_Combo: Gui_Combo {
+        LangShift_2: LangShift_2 {
             compatible = "zmk,behavior-hold-tap";
-            label = "GUI_COMBO";
-            bindings = <&kp>, <&Skcb_Gui>;
+            label = "LANGSHIFT_2";
+            bindings = <&lang_temp>, <&LangShift_1>;
 
             #binding-cells = <2>;
             tapping-term-ms = <180>;
             flavor = "tap-preferred";
         };
 
-        Alt_Combo: Alt_Combo {
+        LangShift_3: LangShift_3 {
             compatible = "zmk,behavior-hold-tap";
-            label = "ALT_COMBO";
-            bindings = <&kp>, <&Skcb_Alt>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        Ctrl_Combo: Ctrl_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "CTRL_COMBO";
-            bindings = <&kp>, <&Skcb_Ctrl>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        Shift_Combo: Shift_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "SHIFT_COMBO";
-            bindings = <&kp>, <&Skcb_Shift>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        CS_Combo: CS_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "CS_COMBO";
-            bindings = <&Skcb_CSH>, <&Skcb_CS>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        CA_Combo: CA_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "CA_COMBO";
-            bindings = <&Skcb_CAH>, <&Skcb_CA>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        SA_Combo: SA_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "SA_COMBO";
-            bindings = <&Skcb_SAH>, <&Skcb_SA>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        lang_shift1: lang_shift1 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "LANG_SHIFT1";
-            bindings = <&lang_temp>, <&shiftsk>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        lang_shift2: lang_shift2 {
-            compatible = "zmk,behavior-hold-tap";
-            label = "LANG_SHIFT2";
+            label = "LANGSHIFT_3";
             bindings = <&kp>, <&lang>;
 
             #binding-cells = <2>;
@@ -369,56 +292,56 @@
             flavor = "tap-preferred";
         };
 
-        lang_shift3: lang_shift3 {
+        LangShift_4: LangShift_4 {
             compatible = "zmk,behavior-mod-morph";
-            label = "LANG_SHIFT3";
+            label = "LANGSHIFT_4";
             bindings =
-                <&lang_shift1 RIGHT_SHIFT RIGHT_SHIFT>,
-                <&lang_shift2 RIGHT_SHIFT 0>;
+                <&LangShift_2 RIGHT_SHIFT RIGHT_SHIFT>,
+                <&LangShift_3 RIGHT_SHIFT 0>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        Comma1: Comma1 {
+        Mod_Comma: Mod_Comma {
             compatible = "zmk,behavior-mod-morph";
-            label = "COMMA1";
+            label = "MOD_COMMA";
             bindings = <&kp COMMA>, <&kp QUESTION>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        MBK_Mod: MBK_Mod {
+        Mod_MKP3: Mod_MKP3 {
             compatible = "zmk,behavior-mod-morph";
-            label = "MBK_MOD";
+            label = "MOD_MKP3";
             bindings = <&mkp MB3>, <&mkp MB2>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        Ps_Mod: Ps_Mod {
+        Mod_PrintScreen: Mod_PrintScreen {
             compatible = "zmk,behavior-mod-morph";
-            label = "PS_MOD";
+            label = "MOD_PRINTSCREEN";
             bindings = <&kp PRINTSCREEN>, <&kp LC(LS(LG(T)))>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        MBK_Mod1: MBK_Mod1 {
+        Mod_MKP4: Mod_MKP4 {
             compatible = "zmk,behavior-mod-morph";
-            label = "MBK_MOD1";
+            label = "MOD_MKP4";
             bindings = <&mkp MB4>, <&kp LA(UP_ARROW)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        MBK_Mod2: MBK_Mod2 {
+        Mod_MKP5: Mod_MKP5 {
             compatible = "zmk,behavior-mod-morph";
-            label = "MBK_MOD2";
+            label = "MOD_MKP5";
             bindings = <&mkp MB5>, <&kp LA(LC(LG(LS(F))))>;
 
             #binding-cells = <0>;
@@ -435,95 +358,45 @@
             flavor = "tap-preferred";
         };
 
-        Arrow_Ht: Arrow_Ht {
-            compatible = "zmk,behavior-hold-tap";
-            label = "ARROW_HT";
-            bindings = <&kp>, <&kp>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <210>;
-            flavor = "tap-preferred";
-        };
-
-        tide_mod: tide_mod {
+        Mod_tide: Mod_tide {
             compatible = "zmk,behavior-mod-morph";
-            label = "TIDE_MOD";
+            label = "MOD_TIDE";
             bindings = <&kp MINUS>, <&kp TILDE>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
-        Nav_Mod: Nav_Mod {
-            compatible = "zmk,behavior-hold-tap";
-            label = "NAV_MOD";
-            bindings = <&kp>, <&sk>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        NavCS_Combo: NavCS_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "NAVCS_COMBO";
-            bindings = <&Skcb_CSH>, <&Nav_CS>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        NavCA_Combo: NavCA_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "NAVCA_COMBO";
-            bindings = <&Skcb_CAH>, <&Nav_CA>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        NavSA_Combo: NavSA_Combo {
-            compatible = "zmk,behavior-hold-tap";
-            label = "NAVSA_COMBO";
-            bindings = <&Skcb_SAH>, <&Nav_SA>;
-
-            #binding-cells = <2>;
-            tapping-term-ms = <180>;
-            flavor = "tap-preferred";
-        };
-
-        LeftHome: LeftHome {
+        Mod_NavLeft: Mod_NavLeft {
             compatible = "zmk,behavior-mod-morph";
-            label = "LEFTHOME";
+            label = "MOD_NAVLEFT";
             bindings = <&kp LEFT>, <&kp HOME>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        RightEnd: RightEnd {
+        Mod_NavRight: Mod_NavRight {
             compatible = "zmk,behavior-mod-morph";
-            label = "RIGHTEND";
+            label = "MOD_NAVRIGHT";
             bindings = <&kp RIGHT>, <&kp END>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        TopPgup: TopPgup {
+        Mod_NavPgup: Mod_NavPgup {
             compatible = "zmk,behavior-mod-morph";
-            label = "TOPPGUP";
+            label = "MOD_NAVPGUP";
             bindings = <&kp PG_UP>, <&kp LC(HOME)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
 
-        BottomPgdn: BottomPgdn {
+        Mod_NavPgdn: Mod_NavPgdn {
             compatible = "zmk,behavior-mod-morph";
-            label = "BOTTOMPGDN";
+            label = "MOD_NAVPGDN";
             bindings = <&kp PG_DN>, <&kp LC(END)>;
 
             #binding-cells = <0>;
@@ -560,7 +433,7 @@
         };
 
         bracketcombo {
-            bindings = <&bracketmod>;
+            bindings = <&Mod_Bracket>;
             key-positions = <27 29>;
         };
 
@@ -576,12 +449,12 @@
         };
 
         Arrow_combo {
-            bindings = <&Arrow_Mod>;
+            bindings = <&Mod_Arrow>;
             key-positions = <30 27>;
         };
 
         Colon_combo {
-            bindings = <&Colon1>;
+            bindings = <&Mod_Colon>;
             key-positions = <28 29>;
         };
 
@@ -596,48 +469,48 @@
         };
 
         LG_Combo {
-            bindings = <&Gui_Combo LEFT_GUI 0>;
+            bindings = <&none>;
             key-positions = <11 10>;
             layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LS_Combo {
-            bindings = <&Shift_Combo LEFT_SHIFT 0>;
+            bindings = <&none>;
             key-positions = <12 11>;
             layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LC_Combo {
-            bindings = <&Ctrl_Combo LCTRL 0>;
+            bindings = <&none>;
             key-positions = <12 13>;
             layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LA_Combo {
-            bindings = <&Alt_Combo LEFT_ALT 0>;
+            bindings = <&none>;
             key-positions = <13 11>;
             layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         RG_Combo {
-            bindings = <&Gui_Combo LEFT_GUI 0>;
+            bindings = <&none>;
             key-positions = <18 19>;
         };
 
         RS_Combo {
-            bindings = <&Shift_Combo LEFT_SHIFT 0>;
+            bindings = <&none>;
             key-positions = <17 18>;
             layers = <0 5 6 7 4>;
         };
 
         RC_Combo {
-            bindings = <&Ctrl_Combo LCTRL 0>;
+            bindings = <&none>;
             key-positions = <17 16>;
             layers = <0 4 5 6 7>;
         };
 
         RA_Combo {
-            bindings = <&Alt_Combo LEFT_ALT 0>;
+            bindings = <&none>;
             key-positions = <18 16>;
             layers = <0 5 6 7 4>;
         };
@@ -668,45 +541,45 @@
         };
 
         LCS_Combo {
-            bindings = <&CS_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <11 12 13>;
             layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LCA_Combo {
-            bindings = <&CA_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <12 10 13>;
             layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         LSA_Combo {
-            bindings = <&SA_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <11 10 12>;
             layers = <0 1 2 3 4 5 6 7 9>;
         };
 
         RCS_Combo {
-            bindings = <&CS_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <16 17 18>;
         };
 
         RCA_Combo {
-            bindings = <&CA_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <17 19 16>;
         };
 
         RSA_Combo {
-            bindings = <&SA_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <19 18 17>;
         };
 
         Comma2 {
-            bindings = <&Comma1>;
+            bindings = <&Mod_Comma>;
             key-positions = <27 28>;
         };
 
         Printscreen_Combo {
-            bindings = <&Ps_Mod>;
+            bindings = <&Mod_PrintScreen>;
             key-positions = <16 7 18>;
         };
 
@@ -786,43 +659,43 @@
         };
 
         Navcombo_Gui {
-            bindings = <&Nav_Mod LEFT_GUI LEFT_GUI>;
+            bindings = <&none>;
             key-positions = <11 10>;
             layers = <8>;
         };
 
         Navcombo_Shift {
-            bindings = <&Nav_Mod LEFT_SHIFT LEFT_SHIFT>;
+            bindings = <&none>;
             key-positions = <11 12>;
             layers = <8>;
         };
 
         Navcombo_Ctrl {
-            bindings = <&Nav_Mod LCTRL LCTRL>;
+            bindings = <&none>;
             key-positions = <12 13>;
             layers = <8>;
         };
 
         Navcombo_Alt {
-            bindings = <&Nav_Mod LEFT_ALT LEFT_ALT>;
+            bindings = <&none>;
             key-positions = <13 11>;
             layers = <8>;
         };
 
         Navcombo_Cs {
-            bindings = <&NavCS_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <11 12 13>;
             layers = <8>;
         };
 
         Navcombo_CA {
-            bindings = <&NavCA_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <12 10 13>;
             layers = <8>;
         };
 
         Navcombo_SA {
-            bindings = <&NavSA_Combo 0 0>;
+            bindings = <&none>;
             key-positions = <11 10 12>;
             layers = <8>;
         };
@@ -1185,19 +1058,19 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y            &kp U         &kp I         &kp O  &delete1
-       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H            &kp J         &kp K         &kp L  &backspace1
-&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B            &kp N         &kp M         &kp P  &Jum         &shiftdance
-                                   &sl 7            &lt 8 SPACE      &tomolayer 1 1    &tomolayer 10 4  &lang_shift3  &mo_caps 5 0
+       &kp LC(M)  &kp W            &kp E            &kp R            &kp T             &kp Y            &kp U         &kp I         &kp O  &Mod_Delete
+       &kp A      &Sign_layer 9 S  &Sign_layer 2 D  &Sign_layer 3 F  &kp G             &kp H            &kp J         &kp K         &kp L  &Mod_BackSpace
+&sl 6  &kp Z      &kp X            &kp C            &kp V            &kp Q             &kp B            &kp N         &kp M         &kp P  &Mod_Dot        &shiftdance
+                                   &sl 7            &lt 8 SPACE      &tomolayer 1 1    &tomolayer 10 4  &LangShift_4  &mo_caps 5 0
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &MBK_Mod1       &mmv MOVE_UP    &MBK_Mod2        &trans
+        &atlayertab LC(M)  &atlayertab W      &atlayertab E      &atlayertab R      &atlayertab T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
         &atlayertab A      &atlayerspeed 9 S  &atlayerspeed 2 D  &atlayerspeed 3 F  &atlayertab G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &MBK_Mod         &trans  &trans
+&trans  &atlayertab Z      &atlayertab X      &atlayertab C      &atlayertab V      &atlayertab Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
                                               &trans             &trans             &mkp MB1         &trans           &trans          &trans
             >;
         };
@@ -1266,10 +1139,10 @@
 
         Nav {
             bindings = <
-        &kp LC(SPACE)  &kp LC(LS(TAB))    &kp LC(TAB)       &swapper         &fancyzone                &trans            &MBK_Mod1  &kp UP       &MBK_Mod2  &trans
-        &kp LS(HOME)   &kp LA(LG(SPACE))  &swapper          &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &LeftHome  &kp DOWN     &RightEnd  &trans
-&trans  &kp LS(END)    &kp LC(INS)        &kp LC(KP_MINUS)  &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &TopPgup   &BottomPgdn  &HomeEnd1  &trans  &trans
-                                          &trans            &trans           &trans                    &kp ENTER         &trans     &trans
+        &kp LC(SPACE)  &kp LC(LS(TAB))    &kp LC(TAB)       &swapper         &fancyzone                &trans            &Mod_MKP4     &kp UP        &Mod_MKP5      &trans
+        &kp LS(HOME)   &kp LA(LG(SPACE))  &swapper          &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &Mod_NavLeft  &kp DOWN      &Mod_NavRight  &trans
+&trans  &kp LS(END)    &kp LC(INS)        &kp LC(KP_MINUS)  &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &Mod_NavPgup  &Mod_NavPgdn  &Mod_HomeEnd   &trans  &trans
+                                          &trans            &trans           &trans                    &kp ENTER         &trans        &trans
             >;
 
             label = "Nav";
