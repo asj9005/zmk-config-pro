@@ -825,20 +825,20 @@
         Base {
             display-name = "Base";
             bindings = <
-       &kp LS(LA(LC(LG(P))))  &Sign_layer 9 W  &Sign_layer 2 E  &Sign_layer 3 R   &kp T               &kp Y      &kp U             &kp I           &kp O           &Mod_Delete
-       &hm LEFT_GUI A         &hm LEFT_ALT S   &hm LCTRL D      &hm LEFT_SHIFT F  &kp G               &kp H      &hm LEFT_SHIFT J  &hm LCTRL K     &hm LEFT_ALT L  &Mod_BackSpace
-&sl 6  &kp Z                  &kp X            &kp C            &kp V             &kp Q               &kp B      &kp N             &kp M           &kp P           &Mod_Dot        &TD_Obsidian
-                                               &sl 7            &lt 8 SPACE       &Layter_ToMo 1 1    &Mod_ToMo  &LangShift_5      &HT_MoCaps 5 0
+       &kp LS(LA(LC(P)))  &Sign_layer 9 W  &Sign_layer 2 E  &Sign_layer 3 R   &kp T               &kp Y      &kp U             &kp I           &kp O           &Mod_Delete
+       &hm LEFT_GUI A     &hm LEFT_ALT S   &hm LCTRL D      &hm LEFT_SHIFT F  &kp G               &kp H      &hm LEFT_SHIFT J  &hm LCTRL K     &hm LEFT_ALT L  &Mod_BackSpace
+&sl 6  &kp Z              &kp X            &kp C            &kp V             &kp Q               &kp B      &kp N             &kp M           &kp P           &Mod_Dot        &TD_Obsidian
+                                           &sl 7            &lt 8 SPACE       &Layter_ToMo 1 1    &Mod_ToMo  &LangShift_5      &HT_MoCaps 5 0
             >;
         };
 
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &AutoLayer_1 LC(LS(LA(LG(P))))  &AutoLayer_4 9 W         &AutoLayer_4 2 E      &AutoLayer_4 3 R           &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
-        &At_Gui                         &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &AutoLayer_3 LEFT_GUI Z         &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
-                                                                 &trans                &trans                     &mkp MB1          &trans           &trans          &trans
+        &AutoLayer_1 LC(LS(LA(P)))  &AutoLayer_4 9 W         &AutoLayer_4 2 E      &AutoLayer_4 3 R           &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
+        &At_Gui                     &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
+&trans  &AutoLayer_3 LEFT_GUI Z     &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
+                                                             &trans                &trans                     &mkp MB1          &trans           &trans          &trans
             >;
         };
 
@@ -866,10 +866,10 @@
 
         Num {
             bindings = <
-        &AutoLayer_1 LC(LA(LG(LS(P))))  &AutoLayer_4 9 W         &AutoLayer_4 2 E      &AutoLayer_4 3 R           &AutoLayer_1 T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
-        &At_Gui                         &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &kp N0     &kp N4  &kp N5  &kp N6  &trans
-&trans  &AutoLayer_3 LEFT_GUI Z         &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &kp EQUAL  &kp N1  &kp N2  &kp N3  &trans  &trans
-                                                                 &trans                &trans                     &trans            &trans     &trans  &trans
+        &AutoLayer_1 LC(LA(LS(P)))  &AutoLayer_4 9 W         &AutoLayer_4 2 E      &AutoLayer_4 3 R           &AutoLayer_1 T    &kp MINUS  &kp N7  &kp N8  &kp N9  &trans
+        &At_Gui                     &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &kp N0     &kp N4  &kp N5  &kp N6  &trans
+&trans  &AutoLayer_3 LEFT_GUI Z     &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &kp EQUAL  &kp N1  &kp N2  &kp N3  &trans  &trans
+                                                             &trans                &trans                     &trans            &trans     &trans  &trans
             >;
 
             label = "Num";
