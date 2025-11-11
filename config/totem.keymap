@@ -71,8 +71,7 @@
     quick-tap-ms = <150>;
 };
 
-&mmv {
-};
+&mmv { acceleration-exponent = <2>; };
 
 / {
     behaviors {
@@ -434,6 +433,17 @@
             mods = <(MOD_LCTL|MOD_LSFT|MOD_LALT|MOD_LGUI)>;
             keep-mods = <(MOD_LCTL|MOD_LSFT|MOD_LALT|MOD_LGUI)>;
         };
+
+        hm_swapper: hm_swapper {
+            compatible = "zmk,behavior-hold-tap";
+            label = "HM_SWAPPER";
+            #binding-cells = <2>;
+            flavor = "tap-preferred";
+            tapping-term-ms = <200>;
+            quick-tap-ms = <125>;
+            global-quick-tap;
+            bindings = <&kp>, <&swapper>;
+        };
     };
 
     combos {
@@ -492,7 +502,7 @@
 
         CBL_KmSwitch {
             bindings = <&kmswitch>;
-            key-positions = <3 1>;
+            key-positions = <11 13>;
         };
 
         CBL_SelectAll {
@@ -896,10 +906,10 @@
 
         Nav {
             bindings = <
-        &kp LC(SPACE)  &kp LC(LS(TAB))    &kp LC(TAB)       &kp LA(SPACE)    &fancyzone                &trans            &Mod_MKP4     &kp UP        &Mod_MKP5      &trans
-        &kp LS(HOME)   &kp LA(LG(SPACE))  &swapper          &kp LC(LS(Q))    &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &Mod_NavLeft  &kp DOWN      &Mod_NavRight  &trans
-&trans  &kp LS(END)    &kp LC(INS)        &kp LC(KP_MINUS)  &kp LC(KP_PLUS)  &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &Mod_NavPgup  &Mod_NavPgdn  &Mod_HomeEnd   &trans  &trans
-                                          &trans            &trans           &trans                    &trans            &trans        &trans
+        &kp LC(SPACE)          &kp LC(LS(TAB))             &kp LC(TAB)          &kp LA(SPACE)             &fancyzone                &trans            &Mod_MKP4     &kp UP        &Mod_MKP5      &trans
+        &hm LEFT_GUI LS(HOME)  &hm LEFT_ALT LA(LG(SPACE))  &hm_swapper LCTRL 0  &hm LEFT_SHIFT LC(LS(Q))  &kp LG(UP_ARROW)          &kp LS(UP_ARROW)  &Mod_NavLeft  &kp DOWN      &Mod_NavRight  &trans
+&trans  &kp LS(END)            &kp LC(INS)                 &kp LC(KP_MINUS)     &kp LC(KP_PLUS)           &kp LS(LG(LEFT_ARROW))    &kp LS(DOWN)      &Mod_NavPgup  &Mod_NavPgdn  &Mod_HomeEnd   &trans  &trans
+                                                           &trans               &trans                    &trans                    &trans            &trans        &trans
             >;
 
             label = "Nav";
