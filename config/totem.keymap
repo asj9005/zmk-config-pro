@@ -214,7 +214,7 @@
         Mod_BackSpace: Mod_BackSpace {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_BACKSPACE";
-            bindings = <&kp BACKSPACE>, <&kp LC(BACKSPACE)>;
+            bindings = <&kp BACKSPACE>, <&kp BACKSPACE>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -223,7 +223,7 @@
         Mod_Delete: Mod_Delete {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_DELETE";
-            bindings = <&kp DELETE>, <&kp LC(DELETE)>;
+            bindings = <&kp DELETE>, <&kp DELETE>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -609,6 +609,16 @@
             bindings = <&esccombo>;
             key-positions = <6 7 8>;
         };
+
+        Lang_Combo {
+            bindings = <&lang>;
+            key-positions = <12 17>;
+        };
+
+        CtrlShift_Combo {
+            bindings = <&CtrlShift>;
+            key-positions = <11 12 13>;
+        };
     };
 
     macros {
@@ -816,6 +826,15 @@
             label = "AUTOLAYER_5";
             wait-ms = <0>;
             tap-ms = <0>;
+        };
+
+        CtrlShift: CtrlShift {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings = <&macro_tap>, <&sk LCTRL &sk LEFT_SHIFT>;
+
+            label = "CTRLSHIFT";
+            wait-ms = <0>;
         };
     };
 
