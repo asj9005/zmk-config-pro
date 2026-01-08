@@ -833,7 +833,7 @@
                 <&sk LCTRL &sk LEFT_SHIFT>,
                 <&macro_pause_for_release>,
                 <&macro_release>,
-                <&sk LCTRL &kp LEFT_SHIFT>;
+                <&sk LCTRL &sk LEFT_SHIFT>;
 
             label = "CTRLSHIFT";
             wait-ms = <0>;
@@ -850,6 +850,7 @@
                 <&mo 2 &kp F23>;
 
             label = "MOUSE_FAST";
+            wait-ms = <0>;
         };
 
         Mouse_Slow: Mouse_Slow {
@@ -863,6 +864,7 @@
                 <&mo 3 &kp F22>;
 
             label = "MOUSE_SLOW";
+            wait-ms = <0>;
         };
     };
 
