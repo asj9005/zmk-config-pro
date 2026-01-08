@@ -444,6 +444,35 @@
             global-quick-tap;
             bindings = <&kp>, <&swapper>;
         };
+
+        Mod_Kmswitch: Mod_Kmswitch {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_KMSWITCH";
+            bindings = <&kp F24>, <&kmswitch_Hard>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        AutoLayer_Fast: AutoLayer_Fast {
+            compatible = "zmk,behavior-hold-tap";
+            label = "AUTOLAYER_FAST";
+            bindings = <&Mouse_Fast>, <&AutoLayer_1>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
+
+        AutoLayer_Slow: AutoLayer_Slow {
+            compatible = "zmk,behavior-hold-tap";
+            label = "AUTOLAYER_SLOW";
+            bindings = <&Mouse_Slow>, <&AutoLayer_1>;
+
+            #binding-cells = <2>;
+            tapping-term-ms = <180>;
+            flavor = "tap-preferred";
+        };
     };
 
     combos {
@@ -501,7 +530,7 @@
         };
 
         CBL_KmSwitch {
-            bindings = <&kmswitch>;
+            bindings = <&Mod_Kmswitch>;
             key-positions = <11 13>;
         };
 
@@ -632,7 +661,7 @@
             label = "ps";
         };
 
-        kmswitch: kmswitch {
+        kmswitch_Hard: kmswitch {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
             bindings =
@@ -836,6 +865,30 @@
             label = "CTRLSHIFT";
             wait-ms = <0>;
         };
+
+        Mouse_Fast: Mouse_Fast {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_press>,
+                <&mo 2 &kp F23>,
+                <&macro_release>,
+                <&mo 2 &kp F23>;
+
+            label = "MOUSE_FAST";
+        };
+
+        Mouse_Slow: Mouse_Slow {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_press>,
+                <&mo 3 &kp F22>,
+                <&macro_release>,
+                <&mo 3 &kp F22>;
+
+            label = "MOUSE_SLOW";
+        };
     };
 
     keymap {
@@ -854,7 +907,7 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &AutoLayer_1 LC(LS(LA(P)))  &AutoLayer_4 9 W         &AutoLayer_4 2 E      &AutoLayer_4 3 R           &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
+        &AutoLayer_1 LC(LS(LA(P)))  &AutoLayer_4 9 W         &AutoLayer_Fast 0 E   &AutoLayer_Slow 0 R        &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
         &At_Gui                     &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
 &trans  &AutoLayer_3 LEFT_GUI Z     &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
                                                              &trans                &trans                     &mkp MB1          &trans           &trans          &trans
@@ -910,7 +963,7 @@
         &sys_reset  &trans           &trans           &trans           &studio_unlock    &trans  &trans  &trans  &trans  &trans
         &trans      &kp LC(LA(F13))  &kp LC(LA(F14))  &kp LC(LA(F16))  &kp LG(L)         &trans  &trans  &trans  &trans  &trans
 &trans  &trans      &trans           &trans           &trans           &trans            &trans  &trans  &trans  &trans  &trans  &sys_reset
-                                     &trans           &trans           &kmswitch         &trans  &trans  &trans
+                                     &trans           &trans           &kmswitch_Hard    &trans  &trans  &trans
             >;
         };
 
