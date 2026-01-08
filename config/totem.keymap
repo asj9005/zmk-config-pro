@@ -26,38 +26,6 @@
 #define Nav         8
 #define Han         9
 
-/* --- Mouse speed scalers (instant ACC / PREC) --- */
-
-&mmv_input_listener {
-    /* default 1x */
-
-    input-processors = <&zip_xy_scaler 1 1>;
-
-    fast {
-        layers = <Acc>;
-        input-processors = <&zip_xy_scaler 5 1>; /* 5x speed */
-    };
-
-    slow {
-        layers = <Prec>;
-        input-processors = <&zip_xy_scaler 1 3>; /* 1/3x speed */
-    };
-};
-
-&msc_input_listener {
-    input-processors = <&zip_scroll_scaler 1 1>;
-
-    fast {
-        layers = <Acc>;
-        input-processors = <&zip_scroll_scaler 3 1>;
-    };
-
-    slow {
-        layers = <Prec>;
-        input-processors = <&zip_scroll_scaler 1 3>;
-    };
-};
-
 &mt {
     quick-tap-ms = <100>;
     global-quick-tap;
