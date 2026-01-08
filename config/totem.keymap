@@ -609,7 +609,7 @@
 
         Lang_Combo {
             bindings = <&lang>;
-            key-positions = <12 17>;
+            key-positions = <17 36>;
         };
 
         CtrlShift_Combo {
@@ -828,7 +828,12 @@
         CtrlShift: CtrlShift {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
-            bindings = <&macro_tap>, <&sk LCTRL &sk LEFT_SHIFT>;
+            bindings =
+                <&macro_press>,
+                <&sk LCTRL &sk LEFT_SHIFT>,
+                <&macro_pause_for_release>,
+                <&macro_release>,
+                <&sk LCTRL &kp LEFT_SHIFT>;
 
             label = "CTRLSHIFT";
             wait-ms = <0>;
@@ -840,6 +845,7 @@
             bindings =
                 <&macro_press>,
                 <&mo 2 &kp F23>,
+                <&macro_pause_for_release>,
                 <&macro_release>,
                 <&mo 2 &kp F23>;
 
@@ -852,6 +858,7 @@
             bindings =
                 <&macro_press>,
                 <&mo 3 &kp F22>,
+                <&macro_pause_for_release>,
                 <&macro_release>,
                 <&mo 3 &kp F22>;
 
