@@ -465,6 +465,15 @@
             flavor = "tap-preferred";
             hold-trigger-key-positions = <7 16 17 18>;
         };
+
+        Mod_Copy: Mod_Copy {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_COPY";
+            bindings = <&kp LC(V)>, <&kp F21>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
     };
 
     combos {
@@ -481,7 +490,7 @@
         };
 
         CBL_Paste {
-            bindings = <&kp LC(V)>;
+            bindings = <&Mod_Copy>;
             key-positions = <23 24>;
         };
 
@@ -993,7 +1002,7 @@
         &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &kp LC(LS(F22))    &kp AT_SIGN        &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
         &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &kp LC(LS(F23))    &kp UNDERSCORE     &kp MINUS     &kp SQT        &kp PERCENT  &trans
 &trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &kp LC(LS(F24))    &kp DOUBLE_QUOTES  &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
-                        &trans         &hangul_table  &kp LANGUAGE_2     &kp LC(F10)        &kp LA(C)     &hangul_mail
+                        &hangul_table  &trans         &kp LANGUAGE_2     &kp LC(F10)        &kp LA(C)     &hangul_mail
             >;
 
             label = "Han";
