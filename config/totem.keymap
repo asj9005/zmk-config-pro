@@ -474,6 +474,24 @@
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
         };
+
+        Mod_Quote: Mod_Quote {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_QUOTE";
+            bindings = <&kp SQT>, <&kp DOUBLE_QUOTES>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
+
+        Mod_Then: Mod_Then {
+            compatible = "zmk,behavior-mod-morph";
+            label = "MOD_THEN";
+            bindings = <&kp GREATER_THAN>, <&kp LESS_THAN>;
+
+            #binding-cells = <0>;
+            mods = <(MOD_RSFT)>;
+        };
     };
 
     combos {
@@ -999,10 +1017,10 @@
 
         Han {
             bindings = <
-        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &kp LC(LS(F22))    &kp AT_SIGN        &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
-        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &kp LC(LS(F23))    &kp UNDERSCORE     &kp MINUS     &kp SQT        &kp PERCENT  &trans
-&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &kp LC(LS(F24))    &kp DOUBLE_QUOTES  &kp HASH      &kp AMPERSAND  &kp CARET    &kp PIPE              &kp GRAVE
-                        &hangul_table  &trans         &kp LANGUAGE_2     &kp LC(F10)        &kp LA(C)     &hangul_mail
+        &trans  &trans  &kp LA(LS(R))  &kp LA(LS(E))  &kp LC(LS(F22))    &kp MINUS       &kp ASTERISK  &kp PLUS       &kp SLASH    &kp NON_US_BACKSLASH
+        &trans  &trans  &kp LA(LS(N))  &kp LA(LS(W))  &kp LC(LS(F23))    &kp UNDERSCORE  &kp HASH      &Mod_Quote     &kp PERCENT  &trans
+&trans  &trans  &trans  &kp LA(LS(A))  &kp LA(LS(Z))  &kp LC(LS(F24))    &Mod_Time       &kp AT_SIGN   &kp AMPERSAND  &kp CARET    &Mod_Then             &kp GRAVE
+                        &hangul_table  &trans         &kp LANGUAGE_2     &kp LC(F10)     &trans        &hangul_mail
             >;
 
             label = "Han";
