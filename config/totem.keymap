@@ -469,7 +469,7 @@
         Mod_Copy: Mod_Copy {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_COPY";
-            bindings = <&kp LC(V)>, <&kp F21>;
+            bindings = <&kp LC(V)>, <&kp LC(F21)>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -663,9 +663,16 @@
             key-positions = <17 36>;
         };
 
+        Nav_CtrlShift {
+            bindings = <&Nav_CtrlShift>;
+            key-positions = <11 12 13>;
+            layers = <8>;
+        };
+
         CtrlShift_Combo {
             bindings = <&CtrlShift>;
             key-positions = <11 12 13>;
+            layers = <0 1 2 3 4 5 6 7 9 10>;
         };
     };
 
@@ -876,7 +883,7 @@
             tap-ms = <0>;
         };
 
-        CtrlShift: CtrlShift {
+        Nav_CtrlShift: Nav_CtrlShift {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
             bindings =
@@ -886,7 +893,7 @@
                 <&macro_release>,
                 <&sk LCTRL &sk LEFT_SHIFT>;
 
-            label = "CTRLSHIFT";
+            label = "NAV_CTRLSHIFT";
             wait-ms = <0>;
         };
 
@@ -915,6 +922,22 @@
                 <&mo 3 &kp F22>;
 
             label = "MOUSE_SLOW";
+            wait-ms = <0>;
+        };
+
+        CtrlShift: CtrlShift {
+            compatible = "zmk,behavior-macro";
+            #binding-cells = <0>;
+            bindings =
+                <&macro_tap>,
+                <&to 0>,
+                <&macro_press>,
+                <&sk LCTRL &sk LEFT_SHIFT>,
+                <&macro_pause_for_release>,
+                <&macro_release>,
+                <&sk LCTRL &sk LEFT_SHIFT>;
+
+            label = "CTRLSHIFT";
             wait-ms = <0>;
         };
     };
