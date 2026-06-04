@@ -469,7 +469,7 @@
         Mod_Copy: Mod_Copy {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_COPY";
-            bindings = <&kp LC(V)>, <&kp LC(F21)>;
+            bindings = <&kp LC(V)>, <&kp F21>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
@@ -692,10 +692,10 @@
             #binding-cells = <0>;
             bindings =
                 <&macro_tap>,
-                <&kp CAPS &kp SCROLLLOCK &kp KP_NUMLOCK>,
-                <&macro_wait_time 80>,
+                <&kp SCROLLLOCK>,
+                <&macro_wait_time 40>,
                 <&macro_tap>,
-                <&kp CAPSLOCK &kp SCROLLLOCK &kp KP_NUMLOCK>;
+                <&kp SCROLLLOCK>;
 
             label = "kmswitch";
         };
