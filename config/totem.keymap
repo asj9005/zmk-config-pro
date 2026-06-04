@@ -416,7 +416,7 @@
         Mod_Kmswitch: Mod_Kmswitch {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_KMSWITCH";
-            bindings = <&kp F24>, <&kmswitch_Hard>;
+            bindings = <&kmswitch_Hard>, <&kp F24>;
 
             #binding-cells = <0>;
             mods = <(MOD_RSFT)>;
