@@ -690,14 +690,10 @@
         kmswitch_Hard: kmswitch {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
-            bindings =
-                <&macro_tap>,
-                <&kp SCROLLLOCK>,
-                <&macro_wait_time 40>,
-                <&macro_tap>,
-                <&kp SCROLLLOCK>;
-
+            bindings = <&kp SCROLLLOCK &kp SCROLLLOCK>;
             label = "kmswitch";
+            wait-ms = <40>;
+            tap-ms = <40>;
         };
 
         fancyzone: lang_toggle {
