@@ -148,7 +148,7 @@
             compatible = "zmk,behavior-tap-dance";
             label = "TD_OBSIDIAN";
             #binding-cells = <0>;
-            bindings = <&kp LC(LS(LA(LG(M))))>, <&kp LS(LA(LC(LG(P))))>;
+            bindings = <&kp LC(LS(LA(LG(M))))>, <&kp LS(LA(LC(LG(H))))>;
         };
 
         Sign_layer: Sign_layer {
