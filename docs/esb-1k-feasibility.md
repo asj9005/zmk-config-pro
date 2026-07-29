@@ -41,6 +41,8 @@
 | `badjeff/zmk-feature-split-esb` | `1f4cd4558bb9e0626ec2507f334f239862af859d` |
 | `badjeff/sdk-nrf` | `9b3d2623fdcd9c0fd0284f860beea924568c9826` |
 | `nrfconnect/sdk-nrfxlib` | `dfadf17305d8f000eda9aa74a5b9ff1c5647a23e` |
+| `nrfconnect/sdk-mbedtls` | `c5115abac477249fab42e61368b8f87c3c9265e1` |
+| `nrfconnect/sdk-oberon-psa-crypto` | `d682b30a4498ecbaa8992e909b8d8c31f4988956` |
 | Prospector | `ed98221f3b52b7066dbb10ba3af8a29150b93a5a` |
 | zmk-tri-state | `2007896c6d5bfb519e8babccf8633841c5647d8b` |
 
@@ -89,7 +91,7 @@ ESB 모듈 README는 ZMK 0.4/Zephyr 4.1 조합에서 다음 두 project를 요�
 - `badjeff/sdk-nrf`의 `v3.1-branch+zmk-fixes`
 - `nrfconnect/sdk-nrfxlib`의 대응 `v3.1-branch`
 
-이 조합은 NCS 3.1 계열 nrfx ESB library와 Zephyr 4.1 CMake/Kconfig 검증을 맞추기 위한 것이다. 일반 ZMK manifest의 Nordic project 조합만 사용하면 ESB library/CMake 구성이 일치하지 않는다. `badjeff/zmk` fork는 ESB 모듈 자체의 필수 의존성이 아니므로, upstream ZMK로 빌드가 성립하면 추가하지 않는다.
+이 조합은 NCS 3.1 계열 nrfx ESB library와 Zephyr 4.1 CMake/Kconfig 검증을 맞추기 위한 것이다. 일반 ZMK manifest의 Nordic project 조합만 사용하면 ESB library/CMake 구성이 일치하지 않는다. 패치된 `sdk-nrf`의 security module은 BLE rollback 빌드에서도 Zephyr module로 발견되므로 NCS 3.1.1에 대응하는 `sdk-mbedtls`와 `sdk-oberon-psa-crypto`도 exact SHA로 고정한다. Oberon project가 없으면 `OBERON_PSA_CORE_PATH`가 비어 BLE 빌드의 crypto source가 filesystem root에서 조회된다. `badjeff/zmk` fork는 ESB 모듈 자체의 필수 의존성이 아니므로, upstream ZMK로 빌드가 성립하면 추가하지 않는다.
 
 Compatibility overlay가 복사하는 upstream 파일의 SPDX 고지는 유지한다. Nordic-derived 파일은 `LicenseRef-Nordic-5-Clause`, ZMK-derived 파일은 MIT이며, 새 Totem 전용 파일은 MIT다. 정확한 overlay 범위와 라이선스 경계는 `compat/README.md`에 기록한다.
 

@@ -53,6 +53,19 @@ manifest:
       repo-path: sdk-nrfxlib
       revision: dfadf17305d8f000eda9aa74a5b9ff1c5647a23e
       path: nrfxlib
+    # sdk-nrf's security module is discovered in every build, including the
+    # retained BLE profiles. Pin its matching NCS 3.1.1 crypto projects so
+    # ARM_MBEDTLS_PATH and OBERON_PSA_CORE_PATH never resolve empty.
+    - name: mbedtls
+      remote: nrfconnect
+      repo-path: sdk-mbedtls
+      revision: c5115abac477249fab42e61368b8f87c3c9265e1
+      path: modules/crypto/mbedtls
+    - name: oberon-psa-crypto
+      remote: nrfconnect
+      repo-path: sdk-oberon-psa-crypto
+      revision: d682b30a4498ecbaa8992e909b8d8c31f4988956
+      path: modules/crypto/oberon-psa-crypto
     - name: prospector-zmk-module
       remote: carrefinho
       revision: ed98221f3b52b7066dbb10ba3af8a29150b93a5a

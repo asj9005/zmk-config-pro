@@ -59,7 +59,7 @@ if(CONFIG_TOTEM_ESB_COMPAT)
     zephyr_include_directories(include)
     zephyr_library_sources(src/totem_esb_hooks.c)
     if(CONFIG_TOTEM_ESB_BENCHMARK AND CONFIG_ZMK_SPLIT_ROLE_CENTRAL AND CONFIG_ZMK_USB)
-        zephyr_link_options(-Wl,--wrap=zmk_usb_hid_send_keyboard_report)
+        zephyr_ld_options(-Wl,--wrap=zmk_usb_hid_send_keyboard_report)
     endif()
 
     if(CONFIG_TOTEM_ESB_PROSPECTOR)

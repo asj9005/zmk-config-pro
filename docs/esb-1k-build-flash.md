@@ -74,6 +74,8 @@ CONFIG_ZMK_SPLIT_ESB_RETRY_CMD=0
 | zmk-feature-split-esb | `1f4cd4558bb9e0626ec2507f334f239862af859d` |
 | sdk-nrf | `9b3d2623fdcd9c0fd0284f860beea924568c9826` |
 | nrfxlib | `dfadf17305d8f000eda9aa74a5b9ff1c5647a23e` |
+| sdk-mbedtls | `c5115abac477249fab42e61368b8f87c3c9265e1` |
+| sdk-oberon-psa-crypto | `d682b30a4498ecbaa8992e909b8d8c31f4988956` |
 | Prospector | `ed98221f3b52b7066dbb10ba3af8a29150b93a5a` |
 | zmk-tri-state | `2007896c6d5bfb519e8babccf8633841c5647d8b` |
 
