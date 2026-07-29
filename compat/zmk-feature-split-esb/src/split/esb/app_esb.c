@@ -10,6 +10,7 @@
 #include <esb.h>
 
 #include <zmk/events/activity_state_changed.h>
+#include <totem/esb_benchmark.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(app_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
@@ -38,8 +39,8 @@ static void on_timeslot_start_stop(zmk_split_esb_timeslot_callback_type_t type);
 #error "zmk,esb-split :: base-addr-1 must include 4 bytes"
 #endif
 
-#if (!HAS_ADDR_PREFIX || ADDR_PREFIX_LEN > CONFIG_ESB_PIPE_COUNT)
-#error "zmk,esb-split :: base-addr-0 must include 8 bytes"
+#if (!HAS_ADDR_PREFIX || ADDR_PREFIX_LEN != CONFIG_ESB_PIPE_COUNT)
+#error "zmk,esb-split :: addr-prefix count must equal CONFIG_ESB_PIPE_COUNT"
 #endif
 
 uint8_t esb_base_addr_0[BASE_ADDR_0_LEN] = DT_INST_PROP(0, base_addr_0);
@@ -74,29 +75,32 @@ static app_esb_callback_t m_callback;
 
 // Track msgq full errors
 static uint32_t m_msgq_full_last_time;
+static struct k_spinlock m_tx_lock;
 
-// Retry table for tracking message retries (includes payload for rebuild)
+// Retry table for tracking application retry rounds and total hardware attempts.
 struct retry_entry {
     uint16_t msg_id;
+    uint16_t attempts;
     uint8_t left;
-    uint8_t max;
-    struct esb_payload payload;
 };
-static struct retry_entry m_retry_table[CONFIG_ZMK_SPLIT_ESB_PROTO_MSGQ_ITEMS];
+/*
+ * One entry can be in the hardware FIFO while the whole application msgq is
+ * occupied, hence the extra slot.
+ */
+static struct retry_entry m_retry_table[CONFIG_ZMK_SPLIT_ESB_PROTO_MSGQ_ITEMS + 1];
 static uint16_t m_current_tx_msg_id;
 
 static void clear_retry_table(void) {
-    for (int i = 0; i < CONFIG_ZMK_SPLIT_ESB_PROTO_MSGQ_ITEMS; i++) {
+    for (int i = 0; i < ARRAY_SIZE(m_retry_table); i++) {
         struct retry_entry *entry = &m_retry_table[i];
         entry->msg_id = 0;
+        entry->attempts = 0;
         entry->left = 0;
-        entry->max = 0;
-        entry->payload.length = 0;
-    }    
+    }
 }
 
 static int find_retry_by_msg_id(uint16_t msg_id) {
-    for (int i = 0; i < CONFIG_ZMK_SPLIT_ESB_PROTO_MSGQ_ITEMS; i++) {
+    for (int i = 0; i < ARRAY_SIZE(m_retry_table); i++) {
         if (m_retry_table[i].msg_id == msg_id) {
             return i;
         }
@@ -108,21 +112,13 @@ static int find_empty_retry_slot(void) {
     return find_retry_by_msg_id(0);
 }
 
-static int add_retry_entry(uint16_t msg_id, uint8_t max, struct esb_payload *payload) {
+static int add_retry_entry(uint16_t msg_id, uint8_t max) {
     int idx = find_empty_retry_slot();
     if (idx >= 0) {
         struct retry_entry *entry = &m_retry_table[idx];
         entry->msg_id = msg_id;
+        entry->attempts = 0;
         entry->left = max;
-        entry->max = max;
-        if (max && payload) {
-            memcpy(entry->payload.data, payload->data, payload->length);
-            entry->payload.length = payload->length;
-            entry->payload.pipe = payload->pipe;
-            entry->payload.noack = payload->noack;
-        } else {
-            entry->payload.length = 0;
-        }
     }
     return idx;
 }
@@ -131,13 +127,21 @@ static void remove_retry_entry_by_msg_id(uint16_t msg_id) {
     int idx = find_retry_by_msg_id(msg_id);
     if (idx >= 0) {
         struct retry_entry *entry = &m_retry_table[idx];
-        if (entry->max > 0) {
-            memset(&entry->payload, 0, sizeof(struct esb_payload));
-        }
         entry->msg_id = 0;
+        entry->attempts = 0;
         entry->left = 0;
-        entry->max = 0;
     }
+}
+
+static uint16_t add_tx_attempts_by_msg_id(uint16_t msg_id, uint16_t attempts) {
+    int idx = find_retry_by_msg_id(msg_id);
+    if (idx < 0) {
+        return attempts;
+    }
+
+    uint32_t total = m_retry_table[idx].attempts + attempts;
+    m_retry_table[idx].attempts = MIN(total, UINT16_MAX);
+    return m_retry_table[idx].attempts;
 }
 
 static uint8_t get_retry_left_by_msg_id(uint16_t msg_id) {
@@ -151,19 +155,6 @@ static uint8_t decrement_retry_by_msg_id(uint16_t msg_id) {
         m_retry_table[idx].left--;
     }
     return (idx >= 0) ? m_retry_table[idx].left : 0;
-}
-
-static bool get_retry_payload_by_msg_id(uint16_t msg_id, struct esb_payload *payload) {
-    int idx = find_retry_by_msg_id(msg_id);
-    if (idx >= 0 && m_retry_table[idx].max > 0 && payload) {
-        struct retry_entry *entry = &m_retry_table[idx];
-        memcpy(payload->data, entry->payload.data, entry->payload.length);
-        payload->length = entry->payload.length;
-        payload->pipe = entry->payload.pipe;
-        payload->noack = entry->payload.noack;
-        return true;
-    }
-    return false;
 }
 
 struct queued_payload {
@@ -180,6 +171,14 @@ static bool m_active = false;
 static bool m_enabled = false;
 
 static int pull_packet_from_tx_msgq(void);
+static int pull_packet_from_tx_msgq_unlocked(void);
+
+static int pull_packet_from_tx_msgq(void) {
+    k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+    int ret = pull_packet_from_tx_msgq_unlocked();
+    k_spin_unlock(&m_tx_lock, key);
+    return ret;
+}
 
 static void event_handler(struct esb_evt const *event) {
     app_esb_event_t m_event = {0};
@@ -187,67 +186,87 @@ static void event_handler(struct esb_evt const *event) {
         case ESB_EVENT_TX_SUCCESS:
             // LOG_DBG("TX SUCCESS, tx_attempts: %d", event->tx_attempts);
             // LOG_DBG("give d1");
-            // Clear retry entry for the message that succeeded
+            if (m_mode == APP_ESB_MODE_PRX) {
+                // ACK payloads have no application ID/pipe in the SDK event.
+                // The event only means a hardware ACK slot became available.
+                k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+                pull_packet_from_tx_msgq_unlocked();
+                k_spin_unlock(&m_tx_lock, key);
+                /*
+                 * A previously full lower message queue may now have room.
+                 * Ask common.c to retry the preserved producer-ring head.
+                 */
+                m_event.evt_type = APP_ESB_EVT_TX_SPACE_AVAILABLE;
+                m_callback(&m_event);
+                break;
+            }
+            k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+            // Clear retry entry for the PTX message that succeeded.
             m_event.msg_id = m_current_tx_msg_id;
-            m_event.tx_attempts = event->tx_attempts;
+            m_event.tx_attempts =
+                add_tx_attempts_by_msg_id(m_current_tx_msg_id, event->tx_attempts);
             remove_retry_entry_by_msg_id(m_current_tx_msg_id);
             m_current_tx_msg_id = 0;
+            pull_packet_from_tx_msgq_unlocked();
+            k_spin_unlock(&m_tx_lock, key);
             // Forward an event to the application
             m_event.evt_type = APP_ESB_EVT_TX_SUCCESS;
             m_callback(&m_event);
-            pull_packet_from_tx_msgq();
             break;
-        case ESB_EVENT_TX_FAILED:
+        case ESB_EVENT_TX_FAILED: {
             // LOG_WRN("TX FAILED, tx_attempts: %d", event->tx_attempts);
-            // Check retry count for failed message
-            m_event.msg_id = m_current_tx_msg_id;
-            m_event.tx_attempts = event->tx_attempts;
-            uint8_t retry_left = decrement_retry_by_msg_id(m_current_tx_msg_id);
-            LOG_WRN("Retry left for msg %d: %d", m_current_tx_msg_id, retry_left);
+            if (m_mode == APP_ESB_MODE_PRX) {
+                LOG_WRN("Unexpected TX failure while queueing PRX ACK payload");
+                k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+                pull_packet_from_tx_msgq_unlocked();
+                k_spin_unlock(&m_tx_lock, key);
+                break;
+            }
+            k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+            uint16_t failed_msg_id = m_current_tx_msg_id;
+            uint16_t total_attempts =
+                add_tx_attempts_by_msg_id(failed_msg_id, event->tx_attempts);
+            uint8_t retry_left = get_retry_left_by_msg_id(failed_msg_id);
 
-            // Re-insert failed payload into msgq for retry in next cycle
-            bool dispose_msg = !retry_left;
+            /*
+             * The Nordic SDK leaves the failed payload, including its RF PID,
+             * at the head of its TX FIFO. Restart that same entry immediately
+             * so a newer sequence cannot overtake it and PRX duplicate/ACK
+             * payload semantics remain intact.
+             */
             if (retry_left > 0) {
-                struct esb_payload retry_payload;
-                if (get_retry_payload_by_msg_id(m_current_tx_msg_id, &retry_payload)) {
-                    struct queued_payload retry_queued = {
-                        .payload = retry_payload,
-                        .msg_id = m_current_tx_msg_id,
-                    };
-                    int requeue_ret =
-                        k_msgq_put(&m_msgq_tx_payloads, &retry_queued, K_NO_WAIT);
-                    if (requeue_ret == -ENOMSG) {
-                        LOG_DBG("Msgq full, cannot re-queue payload from retry table");
-                        dispose_msg = true;
-                    }
-                } else {
-                    // This should not be called.
-                    LOG_ERR("Failed to get payload form retry table for retry");
-                    dispose_msg = true;
-                }
-            }
-            if (dispose_msg) {
-                // Clear retry entry for the message that should give up retry
-                remove_retry_entry_by_msg_id(m_current_tx_msg_id);
-                m_current_tx_msg_id = 0;
-                LOG_DBG("Disposed payload form retry table after too much fail");
-            }
-
+                decrement_retry_by_msg_id(failed_msg_id);
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP)
-            esb_rf_ch_hop();
+                esb_rf_ch_hop();
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP) */
+                int retry_err = esb_start_tx();
+                if (retry_err == 0) {
+                    LOG_WRN("Retrying msg %u immediately (%u application retries left)",
+                            failed_msg_id, retry_left - 1U);
+                    k_spin_unlock(&m_tx_lock, key);
+                    break;
+                }
+                LOG_ERR("Immediate retry failed for msg %u (err %d)", failed_msg_id,
+                        retry_err);
+            }
 
+            // The retry budget is exhausted, or an immediate restart failed.
             esb_flush_tx();
-            // Forward an event to the application
+            m_event.msg_id = failed_msg_id;
+            m_event.tx_attempts = total_attempts;
+            remove_retry_entry_by_msg_id(failed_msg_id);
+            m_current_tx_msg_id = 0;
+            pull_packet_from_tx_msgq_unlocked();
+            k_spin_unlock(&m_tx_lock, key);
             m_event.evt_type = APP_ESB_EVT_TX_FAIL;
             m_callback(&m_event);
-            pull_packet_from_tx_msgq();
             break;
+        }
         case ESB_EVENT_RX_RECEIVED:
             // LOG_DBG("RX SUCCESS");
             struct esb_payload rx_payload;
             while (esb_read_rx_payload(&rx_payload) == 0) {
-                // LOG_DBG("Chunk %d, pipe: %d, len: %d", 
+                // LOG_DBG("Chunk %d, pipe: %d, len: %d",
                 //     rx_payload.pid, rx_payload.pipe, rx_payload.length);
                 uint8_t buf[CONFIG_ESB_MAX_PAYLOAD_LENGTH];
                 memcpy(buf, rx_payload.data, rx_payload.length);
@@ -340,20 +359,41 @@ static int esb_initialize(app_esb_mode_t mode) {
     NVIC_SetPriority(RADIO_IRQn, 0);
 
     if (mode == APP_ESB_MODE_PRX) {
-        esb_start_rx();
+        err = esb_start_rx();
+        if (err) {
+            return err;
+        }
     }
 
     return 0;
 }
 
-#define ESB_TX_FIFO_REQUE_MAX (CONFIG_ZMK_SPLIT_ESB_PROTO_MSGQ_ITEMS \
-                               * CONFIG_ZMK_SPLIT_ESB_PROTO_TX_RETRANSMIT_COUNT)
-
-static int pull_packet_from_tx_msgq(void) {
+static int pull_packet_from_tx_msgq_unlocked(void) {
     int ret = 0;
     int esb_ret;
     struct queued_payload queued;
-    static uint8_t que_was_fulled = 0;
+
+    if (m_mode == APP_ESB_MODE_PRX) {
+        while (k_msgq_peek(&m_msgq_tx_payloads, &queued) == 0) {
+            ret = esb_write_payload(&queued.payload);
+            if (ret == 0) {
+                // PRX queues this as an ACK payload for queued.payload.pipe.
+                // Keep RX running; esb_start_tx() is invalid in PRX mode.
+                k_msgq_get(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
+                continue;
+            }
+            if (ret == -ENOMEM) {
+                // Hardware ACK FIFO is full. Keep the app-queue head and
+                // refill when a PRX TX-success event frees a slot.
+                return ret;
+            }
+
+            LOG_WRN("Unable to queue PRX ACK payload (err %d, pipe %u, len %u)", ret,
+                    queued.payload.pipe, queued.payload.length);
+            return ret;
+        }
+        return 0;
+    }
 
     if (!esb_is_idle()) {
         return -EBUSY;
@@ -365,53 +405,33 @@ static int pull_packet_from_tx_msgq(void) {
         ret = esb_write_payload(tx_payload);
 
         if (ret == -ENOMEM) {
-            // LOG_WRN("esb_tx_fifo: queue full %d", que_was_fulled);
-            // force dequeue, guarding for phantom PRX.
-            que_was_fulled++;
+            /*
+             * PTX is idle, so a full hardware FIFO is stale state. Flush it
+             * once, but preserve the software-queue head if the rewrite still
+             * fails.
+             */
             esb_flush_tx();
-            if (que_was_fulled >= ESB_TX_FIFO_REQUE_MAX) {
-                // dequeue FIFO msg
-                k_msgq_get(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
+            ret = esb_write_payload(tx_payload);
+            if (ret != 0) {
+                m_current_tx_msg_id = 0;
+                return ret;
             }
-
-        } else if (ret == -EMSGSIZE) {
-            LOG_WRN("esb_tx_fifo: tx_payload size too large (%d) > CONFIG_ESB_MAX_PAYLOAD_LENGTH (%d)",
-                    tx_payload->length, CONFIG_ESB_MAX_PAYLOAD_LENGTH);
-            // dequeue FIFO msg
-            k_msgq_get(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
-            remove_retry_entry_by_msg_id(m_current_tx_msg_id);
-            m_current_tx_msg_id = 0;
-
-        } else if (ret) {
+        }
+        if (ret) {
             LOG_WRN("esb_write_payload failed (%d)", ret);
-            // Check if we should retry before removing
-            uint8_t retry_left = get_retry_left_by_msg_id(m_current_tx_msg_id);
-            if (retry_left > 0) {
-                // Dequeue from msgq, payload already cached in retry table
-                k_msgq_get(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
-                LOG_WRN("Payload dequeued, retry_left=%d", retry_left);
-                // Don't write to ESB, will retry via event_handler in next cycle
-            } else {
-                // dequeue FIFO msg
-                k_msgq_get(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
-            }
-
+            m_current_tx_msg_id = 0;
+            return ret;
         } else {
             // LOG_DBG("Payload len: %d", tx_payload.length);
             esb_ret = esb_start_tx();
-            if (esb_ret == -EBUSY) {
-                LOG_DBG("ESB busy, will retry on next event");
-                return -EBUSY;
-            } else if (esb_ret == -ENODATA) {
-                LOG_DBG("ESB TX FIFO empty");
-                return 0;
-            } else if (esb_ret < 0) {
+            if (esb_ret < 0) {
                 LOG_ERR("esb_start_tx failed (%d)", esb_ret);
+                esb_flush_tx();
+                m_current_tx_msg_id = 0;
                 return esb_ret;
             }
             k_msgq_get(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
             // LOG_INF("TX evt_msg_id: %d", m_current_tx_msg_id);
-            que_was_fulled = 0;
         }
     }
 
@@ -429,13 +449,14 @@ int zmk_split_esb_init(app_esb_mode_t mode, app_esb_callback_t callback) {
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)
     LOG_INF("Timeslothandler init");
     zmk_split_esb_timeslot_init(on_timeslot_start_stop);
+    return 0;
 #else
     ret = zmk_split_esb_set_enable(true);
     if (ret) {
         LOG_ERR("esb enable failed: %d", ret);
     }
+    return ret;
 #endif
-    return 0;
 }
 
 int zmk_split_esb_set_enable(bool enabled) {
@@ -447,6 +468,7 @@ int zmk_split_esb_set_enable(bool enabled) {
         int ret = esb_initialize(m_mode);
         if (ret) {
             LOG_ERR("set_enable: esb_initialize failed: %d", ret);
+            m_enabled = false;
             return ret;
         }
         m_active = true;
@@ -469,6 +491,16 @@ int zmk_split_esb_set_enable(bool enabled) {
 }
 
 int zmk_split_esb_send(app_esb_data_t *tx_packet) {
+    if (tx_packet == NULL || tx_packet->data == NULL) {
+        return -EINVAL;
+    }
+    if (tx_packet->len == 0 || tx_packet->len > CONFIG_ESB_MAX_PAYLOAD_LENGTH) {
+        return -EMSGSIZE;
+    }
+    if (tx_packet->pipe >= CONFIG_ESB_PIPE_COUNT) {
+        return -EINVAL;
+    }
+
     int ret = 0;
     struct queued_payload queued = {.msg_id = tx_packet->msg_id};
     struct esb_payload *tx_payload = &queued.payload;
@@ -480,37 +512,32 @@ int zmk_split_esb_send(app_esb_data_t *tx_packet) {
 #endif
     memcpy(tx_payload->data, tx_packet->data, tx_packet->len);
     tx_payload->length = tx_packet->len;
-    if (!tx_payload->length) {
-        LOG_WRN("bypass queuing null payload");
-        return 0;
-    }
+    k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
     ret = k_msgq_put(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
 
     if (ret == 0) {
-        add_retry_entry(tx_packet->msg_id, tx_packet->max_retry, tx_payload);
+        if (m_mode == APP_ESB_MODE_PTX) {
+            add_retry_entry(tx_packet->msg_id, tx_packet->max_retry);
+        }
         m_msgq_full_last_time = 0;
     } else if (ret == -ENOMSG) {
+        totem_esb_transport_queue_pressure(false);
         uint32_t now = k_uptime_get_32();
         if (!m_msgq_full_last_time) {
             m_msgq_full_last_time = now;
         }
         if (now - m_msgq_full_last_time > CONFIG_ZMK_SPLIT_ESB_MSGQ_FULL_TIMEOUT_MS) {
-            LOG_WRN("Msgq full for %dms, clearing msgq and retry table", 
-                CONFIG_ZMK_SPLIT_ESB_MSGQ_FULL_TIMEOUT_MS);
-            k_msgq_purge(&m_msgq_tx_payloads);
-            clear_retry_table();
-            m_current_tx_msg_id = 0;
-            if (m_active) {
-                esb_flush_tx(); 
-            }
-            m_msgq_full_last_time = 0;
+            LOG_WRN("Msgq has remained full for at least %dms; preserving queued packets",
+                    CONFIG_ZMK_SPLIT_ESB_MSGQ_FULL_TIMEOUT_MS);
+            m_msgq_full_last_time = now;
         }
     } else {
         LOG_DBG("Failed to queue esb tx_payload_q (%d)", ret);
     }
     if (m_active) {
-        pull_packet_from_tx_msgq();
+        pull_packet_from_tx_msgq_unlocked();
     }
+    k_spin_unlock(&m_tx_lock, key);
     return ret;
 }
 
@@ -542,7 +569,7 @@ static int app_esb_suspend(void) {
         esb_stop_rx();
     }
 
-    // Todo: Figure out how to use the esb_suspend() function 
+    // Todo: Figure out how to use the esb_suspend() function
     // rather than having to disable at the end of every timeslot
     //esb_suspend();
     return 0;

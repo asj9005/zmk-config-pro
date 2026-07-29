@@ -10,6 +10,7 @@
 #include <zephyr/device.h>
 
 #include <zmk/split/transport/types.h>
+#include <totem/esb_benchmark.h>
 #include "app_esb.h"
 
 #define ZMK_SPLIT_ESB_ENVELOPE_MAGIC_PREFIX "ZmKe"
@@ -39,8 +40,12 @@ struct esb_event_payload {
     uint8_t source;
     uint8_t wire_type;
     uint32_t sequence;
+    uint32_t session_id;
     uint32_t source_tick;
-    struct zmk_split_transport_peripheral_event event;
+    union {
+        struct zmk_split_transport_peripheral_event event;
+        struct totem_esb_link_metric_payload link_metric;
+    } body;
 } __packed;
 
 struct esb_event_envelope {
@@ -57,12 +62,15 @@ struct esb_msg_postfix {
 struct esb_msg_meta {
     uint16_t msg_id;
     uint8_t max_retry;
+    uint8_t pipe;
 } __packed;
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
-#define ESB_MSG_EXTRA_SIZE (sizeof(struct esb_msg_prefix) + sizeof(struct esb_msg_postfix) + sizeof(struct esb_msg_meta))
+#define ESB_MSG_WIRE_MIN_SIZE (sizeof(struct esb_msg_prefix) + sizeof(struct esb_msg_postfix))
+#define ESB_MSG_EXTRA_SIZE (ESB_MSG_WIRE_MIN_SIZE + sizeof(struct esb_msg_meta))
 #else
-#define ESB_MSG_EXTRA_SIZE (sizeof(struct esb_msg_prefix) + sizeof(struct esb_msg_meta))
+#define ESB_MSG_WIRE_MIN_SIZE sizeof(struct esb_msg_prefix)
+#define ESB_MSG_EXTRA_SIZE (ESB_MSG_WIRE_MIN_SIZE + sizeof(struct esb_msg_meta))
 #endif
 
 typedef void (*zmk_split_esb_process_rx_callback_t)(uint8_t pipe);
@@ -72,7 +80,7 @@ struct zmk_split_esb_state {
     zmk_split_esb_process_rx_callback_t process_rx_callback;
     struct ring_buf *tx_buf;
     struct ring_buf *rx_bufs;
-    uint32_t rx_overflow_count;
+    uint32_t rx_overflow_count[CONFIG_ESB_PIPE_COUNT];
 };
 
 void zmk_split_esb_tx(struct zmk_split_esb_state *state);

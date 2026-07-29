@@ -15,6 +15,32 @@ manifest:
       remote: zmkfirmware
       revision: 904c9aec8822d79149d42c8a9a77e8828eb08f5a
       import: app/west.yml
+    # Main-manifest definitions override same-named imported projects. Keep
+    # this after ZMK so ZMK's explicit LVGL/HAL overrides are resolved before
+    # the pinned Zephyr project's own imported dependency manifest.
+    - name: zephyr
+      remote: zmkfirmware
+      revision: 9df4b12b5af3438a8b9d7a33780dc3b3b2f516c1
+      clone-depth: 1
+      import:
+        name-blocklist:
+          - ci-tools
+          - hal_altera
+          - hal_cypress
+          - hal_infineon
+          - hal_microchip
+          - hal_nxp
+          - hal_openisa
+          - hal_xtensa
+          - hal_st
+          - hal_ti
+          - loramac-node
+          - mcuboot
+          - mcumgr
+          - net-tools
+          - openthread
+          - edtt
+          - trusted-firmware-m
     - name: zmk-feature-split-esb
       remote: badjeff
       revision: 1f4cd4558bb9e0626ec2507f334f239862af859d

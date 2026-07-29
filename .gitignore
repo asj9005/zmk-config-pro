@@ -1,0 +1,4 @@
+.west/
+build/
+__pycache__/
+*.py[cod]

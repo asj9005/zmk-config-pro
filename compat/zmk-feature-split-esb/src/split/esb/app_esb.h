@@ -12,7 +12,8 @@
 typedef enum {
     APP_ESB_EVT_TX_SUCCESS,
     APP_ESB_EVT_TX_FAIL,
-    APP_ESB_EVT_RX
+    APP_ESB_EVT_RX,
+    APP_ESB_EVT_TX_SPACE_AVAILABLE,
 } app_esb_event_type_t;
 
 typedef enum {

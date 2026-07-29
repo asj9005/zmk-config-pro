@@ -6,8 +6,11 @@
 
 #include <zephyr/types.h>
 #include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <string.h>
 
 #include <zephyr/settings/settings.h>
+#include <zephyr/random/random.h>
 #include <zephyr/sys/crc.h>
 #include <zephyr/sys/ring_buffer.h>
 
@@ -44,12 +47,17 @@ BUILD_ASSERT(RX_BUFFER_SIZE <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
              "ESB central command exceeds the configured payload");
 
 RING_BUF_DECLARE(tx_buf, TX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_EVENT_BUFFER_ITEMS);
+static struct k_spinlock tx_ring_lock;
 
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS)
 struct ring_buf rx_bufs[CONFIG_ESB_PIPE_COUNT];
 uint8_t rx_bufs_data[CONFIG_ESB_PIPE_COUNT][RX_RING_BUF_SIZE];
 
 static const uint8_t peripheral_id = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID;
+BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID > 0,
+             "Pipe 0 is reserved; peripheral IDs start at 1");
+BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID < CONFIG_ESB_PIPE_COUNT,
+             "Peripheral ID must map to a configured ESB pipe");
 
 static void process_rx_cb(uint8_t pipe);
 
@@ -99,6 +107,8 @@ static uint8_t get_retry_count(const struct zmk_split_transport_peripheral_event
 }
 
 static uint32_t wire_sequence;
+static uint32_t wire_session_id;
+static uint8_t heartbeat_metric;
 
 static int enqueue_wire_event(enum esb_wire_event_type wire_type,
                               const struct zmk_split_transport_peripheral_event *event) {
@@ -111,16 +121,21 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
         }
     }
 
-    size_t payload_size = sizeof(peripheral_id) + sizeof(uint8_t) + sizeof(uint32_t) * 2;
+    size_t payload_size = sizeof(peripheral_id) + sizeof(uint8_t) + sizeof(uint32_t) * 3;
     if (wire_type == ESB_WIRE_EVENT_ZMK) {
         payload_size += data_size + sizeof(enum zmk_split_transport_peripheral_event_type);
+    } else if (wire_type == ESB_WIRE_EVENT_HEARTBEAT) {
+        payload_size += sizeof(struct totem_esb_link_metric_payload);
     }
+
+    k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
 
     if (ring_buf_space_get(&tx_buf) < ESB_MSG_EXTRA_SIZE + payload_size) {
         LOG_WRN("No room to send event to the central (have %d but only space for %d/%d)",
                 ESB_MSG_EXTRA_SIZE + payload_size, ring_buf_space_get(&tx_buf),
                 ring_buf_capacity_get(&tx_buf));
-        ring_buf_reset(&tx_buf);
+        totem_esb_transport_queue_pressure(true);
+        k_spin_unlock(&tx_ring_lock, key);
         return -ENOSPC;
     }
 
@@ -135,11 +150,17 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
                 .source = peripheral_id,
                 .wire_type = wire_type,
                 .sequence = ++wire_sequence,
+                .session_id = wire_session_id,
                 .source_tick = k_cycle_get_32(),
             },
     };
     if (event != NULL) {
-        env.payload.event = *event;
+        env.payload.body.event = *event;
+    } else if (wire_type == ESB_WIRE_EVENT_HEARTBEAT) {
+        env.payload.body.link_metric.metric = heartbeat_metric;
+        env.payload.body.link_metric.value =
+            totem_esb_link_metric_value(heartbeat_metric);
+        heartbeat_metric = (heartbeat_metric + 1U) % TOTEM_ESB_LINK_METRIC_COUNT;
     }
 
     size_t evt_env_len = sizeof(env.prefix) + payload_size;
@@ -148,6 +169,9 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
     size_t put = ring_buf_put(&tx_buf, (uint8_t *)&env, evt_env_len);
     if (put != evt_env_len) {
         LOG_WRN("Failed to put the whole message (%d vs %d)", put, evt_env_len);
+        ring_buf_reset(&tx_buf);
+        k_spin_unlock(&tx_ring_lock, key);
+        return -ENOSPC;
     }
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
@@ -156,6 +180,9 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
     put = ring_buf_put(&tx_buf, (uint8_t *)&postfix, sizeof(postfix));
     if (put != sizeof(postfix)) {
         LOG_WRN("Failed to put the postfix (%d vs %d)", put, sizeof(postfix));
+        ring_buf_reset(&tx_buf);
+        k_spin_unlock(&tx_ring_lock, key);
+        return -ENOSPC;
     }
     // LOG_HEXDUMP_DBG(&postfix, sizeof(postfix), "postfix");
 #endif
@@ -169,15 +196,23 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
     uint8_t max_retry =
         event != NULL ? get_retry_count(event)
                       : (wire_type == ESB_WIRE_EVENT_HEARTBEAT ? 1 : 0);
-    struct esb_msg_meta meta = {.msg_id = evt_msg_id, .max_retry = max_retry};
+    struct esb_msg_meta meta = {
+        .msg_id = evt_msg_id,
+        .max_retry = max_retry,
+        .pipe = state.tx_pipe,
+    };
 
     put = ring_buf_put(&tx_buf, (uint8_t *)&meta, sizeof(meta));
     if (put != sizeof(meta)) {
         LOG_WRN("Failed to put the meta (%d vs %d)", put, sizeof(meta));
+        ring_buf_reset(&tx_buf);
+        k_spin_unlock(&tx_ring_lock, key);
+        return -ENOSPC;
     }
     // LOG_HEXDUMP_DBG(&meta, sizeof(meta), "meta");
 
     begin_tx();
+    k_spin_unlock(&tx_ring_lock, key);
 
     return 0;
 }
@@ -192,7 +227,7 @@ static bool is_enabled = false;
 
 static int split_peripheral_esb_set_enabled(bool enabled) {
     is_enabled = enabled;
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT) 
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)
     return zmk_split_esb_set_enable(enabled);
 #else
     return 0;
@@ -253,7 +288,48 @@ static void notify_status_work_cb(struct k_work *_work) { notify_transport_statu
 
 static K_WORK_DEFINE(notify_status_work, notify_status_work_cb);
 
+static bool command_payload_size_is_valid(const struct esb_command_envelope *env) {
+    const size_t header_size = sizeof(uint8_t) + sizeof(env->payload.cmd.type);
+    if (env->prefix.payload_size < header_size) {
+        return false;
+    }
+
+    ssize_t data_size;
+    switch (env->payload.cmd.type) {
+    case ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_POLL_EVENTS:
+        data_size = 0;
+        break;
+    case ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_INVOKE_BEHAVIOR:
+        /*
+         * The core command handler treats behavior_dev as a C string. ESB
+         * provides CRC integrity but no sender authentication, so reject a
+         * forged CRC-valid frame that could otherwise trigger an out-of-bounds
+         * string read.
+         */
+        if (memchr(env->payload.cmd.data.invoke_behavior.behavior_dev, '\0',
+                   sizeof(env->payload.cmd.data.invoke_behavior.behavior_dev)) == NULL) {
+            return false;
+        }
+        data_size = sizeof(env->payload.cmd.data.invoke_behavior);
+        break;
+    case ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_SET_PHYSICAL_LAYOUT:
+        data_size = sizeof(env->payload.cmd.data.set_physical_layout);
+        break;
+    case ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_SET_HID_INDICATORS:
+        data_size = sizeof(env->payload.cmd.data.set_hid_indicators);
+        break;
+    default:
+        return false;
+    }
+
+    return env->prefix.payload_size == header_size + data_size;
+}
+
 static int zmk_split_esb_peripheral_init(void) {
+    wire_session_id = sys_rand32_get();
+    if (wire_session_id == 0) {
+        wire_session_id = 1;
+    }
     for (int i = 0; i < CONFIG_ESB_PIPE_COUNT; i++) {
         ring_buf_init(&rx_bufs[i], RX_RING_BUF_SIZE, rx_bufs_data[i]);
     }
@@ -275,30 +351,42 @@ SYS_INIT(zmk_split_esb_peripheral_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY
 static void process_rx_work_cb(struct k_work *work) {
     for (int pipe = 0; pipe < CONFIG_ESB_PIPE_COUNT; pipe++) {
         struct ring_buf *rx_buf = &state.rx_bufs[pipe];
-        while (ring_buf_size_get(rx_buf) > ESB_MSG_EXTRA_SIZE) {
-            struct esb_command_envelope env;
+        while (ring_buf_size_get(rx_buf) > ESB_MSG_WIRE_MIN_SIZE) {
+            struct esb_command_envelope env = {0};
             int item_err = zmk_split_esb_get_item(rx_buf, (uint8_t *)&env,
                                                   sizeof(struct esb_command_envelope));
             switch (item_err) {
             case 0:
-                if (env.payload.cmd.type == ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_POLL_EVENTS) {
-                    // begin_tx(); // NOTE: Shall NOT be called from central due to ESB natural.
+                if (!command_payload_size_is_valid(&env)) {
+                    LOG_WRN("Invalid ESB command payload size/type on pipe %d", pipe);
                     break;
                 }
-                if (env.payload.source != peripheral_id) {
-                    LOG_WRN("Ignoring command type %d for source %d (expect %d)", 
-                            env.payload.cmd.type, env.payload.source, peripheral_id);
+                if (env.payload.source != peripheral_id || pipe != peripheral_id) {
+                    LOG_WRN("Ignoring command type %d for source %d on pipe %d (expect %d)",
+                            env.payload.cmd.type, env.payload.source, pipe, peripheral_id);
+                    break;
+                }
+                if (env.payload.cmd.type == ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_POLL_EVENTS) {
+                    // begin_tx(); // NOTE: Shall NOT be called from central due to ESB natural.
                     break;
                 }
                 zmk_split_transport_peripheral_command_handler(&esb_peripheral, env.payload.cmd);
                 break;
             case -EAGAIN:
-                break;
+                /*
+                 * RX entries are complete ESB payloads, so a truncated frame
+                 * is malformed rather than a fragment that can finish later.
+                 */
+                LOG_WRN("Discarding incomplete ESB command on pipe %d", pipe);
+                ring_buf_reset(rx_buf);
+                goto next_pipe;
             default:
-                // LOG_WRN("Issue fetching an item from the RX buffer: %d", item_err);
+                LOG_WRN("Issue fetching an item from the RX buffer: %d", item_err);
                 break;
             }
         }
+    next_pipe:
+        continue;
     }
 }
 

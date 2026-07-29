@@ -24,6 +24,17 @@ config ZMK_BLE
 
 endif
 
+if (SHIELD_TOTEM_LEFT || SHIELD_TOTEM_RIGHT || SHIELD_TOTEM_DONGLE) && ZMK_BLE
+
+choice BT_CTLR_TX_PWR
+    default BT_CTLR_TX_PWR_PLUS_8
+endchoice
+
+config BT_CTLR_PHY_2M
+    default n
+
+endif
+
 if SHIELD_TOTEM_ESB_DONGLE
 
 config ZMK_KEYBOARD_NAME
