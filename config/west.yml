@@ -6,17 +6,33 @@ manifest:
       url-base: https://github.com/carrefinho
     - name: urob
       url-base: https://github.com/urob
+    - name: badjeff
+      url-base: https://github.com/badjeff
+    - name: nrfconnect
+      url-base: https://github.com/nrfconnect
   projects:
     - name: zmk
       remote: zmkfirmware
-      revision: main
+      revision: 904c9aec8822d79149d42c8a9a77e8828eb08f5a
       import: app/west.yml
+    - name: zmk-feature-split-esb
+      remote: badjeff
+      revision: 1f4cd4558bb9e0626ec2507f334f239862af859d
+    - name: sdk-nrf
+      remote: badjeff
+      revision: 9b3d2623fdcd9c0fd0284f860beea924568c9826
+      path: nrf
+    - name: nrfxlib
+      remote: nrfconnect
+      repo-path: sdk-nrfxlib
+      revision: dfadf17305d8f000eda9aa74a5b9ff1c5647a23e
+      path: nrfxlib
     - name: prospector-zmk-module
       remote: carrefinho
-      revision: feat/new-status-screens
+      revision: ed98221f3b52b7066dbb10ba3af8a29150b93a5a
     - name: zmk-tri-state
       remote: urob
-      revision: main
+      revision: 2007896c6d5bfb519e8babccf8633841c5647d8b
       path: modules/zmk/tri-state
   self:
     path: config

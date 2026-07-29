@@ -10,3 +10,7 @@ siblings:
   - totem_left
   - totem_right
   - totem_dongle
+  - totem_esb_left
+  - totem_esb_right
+  - totem_esb_dongle
+  - totem_esb_benchmark

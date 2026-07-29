@@ -1,0 +1,44 @@
+menu "Totem ESB compatibility and benchmark"
+
+config TOTEM_ESB_COMPAT
+    bool "Apply the pinned Totem ESB compatibility patch"
+    depends on ZMK_SPLIT_ESB
+    default n
+    help
+      Applies the small compatibility layer for the exact ESB and Prospector
+      revisions pinned in config/west.yml.
+
+config TOTEM_ESB_PROSPECTOR
+    bool "Enable Prospector ESB peer status integration"
+    depends on TOTEM_ESB_COMPAT && ZMK_SPLIT_ROLE_CENTRAL
+    default n
+
+config TOTEM_ESB_HEARTBEAT_INTERVAL_MS
+    int "Peripheral heartbeat interval in milliseconds"
+    depends on TOTEM_ESB_COMPAT
+    default 250
+    range 50 5000
+
+config TOTEM_ESB_PEER_TIMEOUT_MS
+    int "Central peer timeout in milliseconds"
+    depends on TOTEM_ESB_COMPAT && ZMK_SPLIT_ROLE_CENTRAL
+    default 1500
+    range 250 30000
+
+config TOTEM_ESB_BENCHMARK
+    bool "Enable ESB sequence/latency benchmark logging"
+    depends on TOTEM_ESB_COMPAT
+    default n
+
+config TOTEM_ESB_BENCHMARK_PERIOD_US
+    int "Synthetic benchmark packet period in microseconds"
+    depends on TOTEM_ESB_BENCHMARK
+    default 1000
+    range 500 1000000
+
+config TOTEM_ESB_BENCHMARK_ZERO_DEBOUNCE
+    bool "Use zero debounce in a benchmark-only auxiliary shield"
+    depends on TOTEM_ESB_BENCHMARK
+    default n
+
+endmenu

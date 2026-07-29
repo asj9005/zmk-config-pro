@@ -1,0 +1,6 @@
+#include "totem_esb_addr.dtsi"
+
+&kscan0 {
+    debounce-press-ms = <1>;
+    debounce-release-ms = <5>;
+};

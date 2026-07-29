@@ -1,0 +1,4 @@
+name: totem-esb-compat
+build:
+  cmake: .
+  kconfig: Kconfig

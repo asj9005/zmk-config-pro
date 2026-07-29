@@ -9,3 +9,15 @@ config SHIELD_TOTEM_RIGHT
 
 config SHIELD_TOTEM_DONGLE
     def_bool $(shields_list_contains,totem_dongle)
+
+config SHIELD_TOTEM_ESB_LEFT
+    def_bool $(shields_list_contains,totem_esb_left)
+
+config SHIELD_TOTEM_ESB_RIGHT
+    def_bool $(shields_list_contains,totem_esb_right)
+
+config SHIELD_TOTEM_ESB_DONGLE
+    def_bool $(shields_list_contains,totem_esb_dongle)
+
+config SHIELD_TOTEM_ESB_BENCHMARK
+    def_bool $(shields_list_contains,totem_esb_benchmark)

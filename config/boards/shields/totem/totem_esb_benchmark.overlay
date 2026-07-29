@@ -1,0 +1,9 @@
+/*
+ * Config-only auxiliary shield for explicit benchmark builds.
+ * Add it after one of the ESB role shields.
+ */
+
+&kscan0 {
+    debounce-press-ms = <0>;
+    debounce-release-ms = <0>;
+};

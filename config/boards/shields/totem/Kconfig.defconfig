@@ -23,3 +23,23 @@ config ZMK_BLE
     default y
 
 endif
+
+if SHIELD_TOTEM_ESB_DONGLE
+
+config ZMK_KEYBOARD_NAME
+    default "TOTEM ESB"
+
+config ZMK_SPLIT_ROLE_CENTRAL
+    default y
+
+config ZMK_USB
+    default y
+
+endif
+
+if SHIELD_TOTEM_ESB_LEFT || SHIELD_TOTEM_ESB_RIGHT || SHIELD_TOTEM_ESB_DONGLE
+
+config ZMK_SPLIT
+    default y
+
+endif
