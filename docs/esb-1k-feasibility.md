@@ -19,7 +19,7 @@
 - 두 half는 서로 다른 pipe를 사용해도 같은 RF channel과 하나의 PRX radio를 공유한다. TDMA/CSMA가 없으므로 양쪽 동시 1 kHz 생성이 양쪽 각각 1 kHz 수신이나 무손실을 보장하지 않는다.
 - source tick과 dongle tick은 서로 동기화되지 않으므로 단순 timestamp 차감만으로 one-way latency를 실측할 수 없다. 동기화 왕복 측정 또는 외부 GPIO/logic analyzer가 필요하다.
 
-따라서 upstream ESB 모듈을 기반으로 하되, 위 항목만 고치는 작은 호환성 overlay를 별도로 유지한다. ZMK 전체를 복사하거나 대규모 fork하지 않는다. 현재 작업 브랜치의 10개 Actions matrix 항목은 아직 **대기/미검증**이며, 하드웨어에서 USB, radio latency, loss, 화면 및 battery를 계측하지 않았다. 빌드 성공만으로 1K fresh-event 달성을 주장하지 않는다.
+따라서 upstream ESB 모듈을 기반으로 하되, 위 항목만 고치는 작은 호환성 overlay를 별도로 유지한다. ZMK 전체를 복사하거나 대규모 fork하지 않는다. 구현 commit `3cf5bb610187ab2e84330703c28fb9a79c5c97ec`의 [Actions run 30433480301](https://github.com/asj9005/zmk-config-pro/actions/runs/30433480301)에서 10개 matrix 항목과 최종 artifact merge가 모두 성공했다. 하드웨어에서 USB cadence, radio latency/loss, 화면 및 battery는 계측하지 않았으며, 빌드 성공만으로 1K fresh-event 달성을 주장하지 않는다.
 
 ## 1. 현재 revision과 기준 빌드
 
@@ -65,9 +65,9 @@ Zephyr는 ZMK import의 moving branch에 맡기지 않고 main manifest에서 ex
 
 ## 3. 현재 USB HID endpoint polling interval
 
-ZMK `904c9aec...`의 `app/Kconfig`는 `ZMK_USB`일 때 `CONFIG_USB_HID_POLL_INTERVAL_MS` 기본값을 1로 둔다. Zephyr HID device core는 이 값을 Full-Speed interrupt endpoint descriptor의 `bInterval`에 넣는다. 따라서 현재 Prospector 동글도 설정상 1 ms가 기본값이지만, 기준 run의 산출물 descriptor를 별도로 추출해 확인한 기록은 없다.
+ZMK `904c9aec...`의 `app/Kconfig`는 `ZMK_USB`일 때 `CONFIG_USB_HID_POLL_INTERVAL_MS` 기본값을 1로 둔다. Zephyr HID device core는 이 값을 Full-Speed interrupt endpoint descriptor의 `bInterval`에 넣는다. Actions run 30433480301의 release 및 benchmark 동글 UF2를 디코딩한 결과, 두 이미지의 HID interrupt-IN descriptor template에 모두 `bInterval=1`이 들어 있었다. Release 동글 빌드 로그에서도 `CONFIG_USB_HID_POLL_INTERVAL_MS=1`, `CONFIG_ZMK_USB=y`를 확인했다.
 
-ESB 동글 설정에는 `CONFIG_USB_HID_POLL_INTERVAL_MS=1`을 명시한다. 최종 검증은 빌드된 USB descriptor의 `bInterval=1`과 실제 USBPcap interrupt cadence를 분리하여 기록한다. 이 항목은 USB host가 1 ms마다 poll할 수 있음을 뜻할 뿐, 새 radio event가 1 ms마다 도착한다는 뜻은 아니다.
+ESB 동글 설정에는 `CONFIG_USB_HID_POLL_INTERVAL_MS=1`을 명시한다. 빌드된 descriptor의 `bInterval=1`은 확인했지만, 실제 USBPcap interrupt cadence와 장치 enumerate는 **미측정**이다. 이 항목은 USB host가 1 ms마다 poll할 수 있음을 뜻할 뿐, 새 radio event가 1 ms마다 도착한다는 뜻은 아니다.
 
 ## 4. 현재 ZMK/Zephyr와 ESB 모듈 호환성
 
@@ -77,12 +77,12 @@ ESB 동글 설정에는 `CONFIG_USB_HID_POLL_INTERVAL_MS=1`을 명시한다. 최
 
 | 조합 | 판정 | 근거/조치 |
 |---|---|---|
-| ZMK 0.4 + Zephyr 4.1 | 조건부 호환 | ESB 모듈의 목표 조합. Exact SHA는 고정했으나 현 branch CI 결과는 대기 |
-| XIAO BLE / nRF52840 | 호환 후보 | Nordic ESB 지원 SoC. 예제의 좌우는 nice_nano이므로 XIAO 좌우 빌드 검증은 별도 필요 |
+| ZMK 0.4 + Zephyr 4.1 | 빌드 호환 확인 | Exact SHA 고정 후 BLE/ESB 10개 CI 성공 |
+| XIAO BLE / nRF52840 | 빌드 호환 확인 | Nordic ESB 지원 SoC이며 XIAO 좌우/동글 ESB release와 benchmark CI 성공. 실기 RF는 미측정 |
 | tri-state | 구조상 호환 | keymap/behavior 파일을 변경하지 않고 회귀 빌드 |
 | ZMK pointing/mouse key | 구조상 호환 | central의 기존 behavior 처리 유지. queue/stack 크기 검증 필요 |
-| Prospector 새 화면 | 조건부 호환 | BLE observer/output 및 source index overlay 구현. CI/실기 검증 대기 |
-| GitHub Actions | 조건부 호환 | 모든 dependency SHA pin 완료. 현재 10개 matrix 빌드 검증 대기 |
+| Prospector 새 화면 | 빌드 호환 확인 | BLE observer/output 및 source index overlay를 포함한 release/benchmark 동글 CI 성공. 실기 화면은 미측정 |
+| GitHub Actions | 호환 확인 | 모든 dependency SHA pin 및 10개 matrix/merge 성공 |
 
 ## 5. 패치된 NCS와 nrfxlib가 필요한 이유
 
@@ -166,13 +166,13 @@ Prospector listener는 연속된 source event를 coalesce할 수 있다. Peer tr
 
 화면은 release와 현재 benchmark 동글 firmware 모두에 유지한다. Display와 LVGL flush thread priority는 10으로 두어 radio IRQ 및 USB 경로보다 낮게 실행하도록 구성한다. 화면이 queue latency에 미치는 영향은 코드만으로 수치화하지 않는다. 현재 `build.yaml`에는 display-disabled artifact가 없으므로 display on/off 비교는 **미구현/미측정**이다.
 
-Benchmark는 release와 메모리·timing 조건도 다르다. Deferred log buffer 4 KiB, RTT up buffer 4 KiB, dongle pending-USB FIFO 64개를 추가하고 per-packet logging을 수행한다. Benchmark dongle은 HID/RTT 계측에 필요하지 않은 Studio RPC/CDC를 제외하여 USB 경합과 4 KiB RPC stack을 제거하지만 Prospector 화면은 유지한다. RTT backend는 DROP mode이므로 consumer가 따라오지 못해 log가 하나라도 빠진 capture로 packet loss 0을 주장할 수 없다. Benchmark build의 logging 부하는 실제 장치에서 아직 검증되지 않았다.
+Benchmark는 release와 메모리·timing 조건도 다르다. Deferred log buffer 4 KiB, RTT up buffer 4 KiB, dongle pending-USB FIFO 64개를 추가하고 per-packet logging을 수행한다. Benchmark dongle은 HID/RTT 계측에 필요하지 않은 Studio RPC/CDC를 제외하여 USB 경합과 4 KiB RPC stack을 제거하지만 Prospector 화면은 유지한다. CI linker 결과는 FLASH 346,740 B / 788 KiB, RAM 242,760 B / 256 KiB(92.61%)다. RTT backend는 DROP mode이므로 consumer가 따라오지 못해 log가 하나라도 빠진 capture로 packet loss 0을 주장할 수 없다. Benchmark build의 logging 부하는 실제 장치에서 아직 검증되지 않았다.
 
 ## 9. 배터리 상태 전달
 
 ESB 모듈은 BLE 이름을 가진 ZMK battery Kconfig를 `!ZMK_SPLIT_BLE`일 때도 제공하며, peripheral battery event를 serialize하고 central의 표준 `zmk_peripheral_battery_state_changed` 처리기로 전달한다. 이름만 보고 이 설정을 제거하면 안 된다.
 
-Wire 전달 자체는 지원되며 compatibility overlay가 wire ID 1/2를 logical source 0/1로 바꾼다. Peer transition 또는 battery event 뒤 bounded full pass가 두 source의 표시 상태를 한 번씩 다시 게시한다. 이 코드 경로의 CI와 실제 배터리 값/화면 표시는 아직 **미검증/미측정**이다.
+Wire 전달 자체는 지원되며 compatibility overlay가 wire ID 1/2를 logical source 0/1로 바꾼다. Peer transition 또는 battery event 뒤 bounded full pass가 두 source의 표시 상태를 한 번씩 다시 게시한다. 이 코드 경로를 포함한 동글 firmware는 CI에서 빌드됐지만, 실제 배터리 값과 화면 표시는 **미측정**이다.
 
 ## 10. USB 1K와 fresh radio 1K의 차이
 
@@ -208,7 +208,7 @@ source와 dongle clock이 동기화되지 않은 상태의 timestamp 차이는 l
 - 새 address는 공통 DTSI 한 곳에만 둔다.
 - Release와 현재 benchmark는 display enabled다. Display-disabled 변형은 아직 구현하지 않는다.
 - 외부 project와 reusable workflow는 exact SHA로 고정하고 각 upstream license를 보존한다.
-- `build.yaml`의 10개 항목은 BLE 3, reset 1, ESB release 3, ESB benchmark 3이다. 현재 branch CI 결과는 대기/미검증이다.
+- `build.yaml`의 10개 항목은 BLE 3, reset 1, ESB release 3, ESB benchmark 3이며 Actions run 30433480301에서 모두 성공했다.
 - 실제 하드웨어 계측이 끝나기 전 결과 표의 fresh-event rate, loss 및 end-to-end latency는 `미측정`으로 남긴다.
 
 ## 참고 구현

@@ -10,7 +10,7 @@ Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 Z
 | ESB release | `totem_left totem_esb_left` | `totem_right totem_esb_right` | `totem_dongle prospector_adapter totem_esb_dongle` |
 | ESB benchmark | release 조합 + `totem_esb_benchmark` | release 조합 + `totem_esb_benchmark` | release 조합 + `totem_esb_benchmark` |
 
-`build.yaml`에는 기존 BLE 3개, `settings_reset`, ESB release 3개, ESB benchmark 3개 등 총 10개 항목이 있다. 현재 작업 브랜치에서 이 10개 빌드의 GitHub Actions 결과는 아직 **대기/미검증**이다. 성공한 run의 `firmware` artifact를 내려받아 ZIP을 푼 뒤 다음 release 파일을 사용한다.
+`build.yaml`에는 기존 BLE 3개, `settings_reset`, ESB release 3개, ESB benchmark 3개 등 총 10개 항목이 있다. 구현 commit `3cf5bb610187ab2e84330703c28fb9a79c5c97ec`의 [GitHub Actions run 30433480301](https://github.com/asj9005/zmk-config-pro/actions/runs/30433480301)에서 10개가 모두 빌드됐고, 병합된 `firmware` artifact에 UF2 10개가 들어 있음을 확인했다. Artifact를 내려받아 ZIP을 푼 뒤 다음 release 파일을 사용한다.
 
 - `totem_left_esb.uf2`
 - `totem_right_esb.uf2`
@@ -26,10 +26,11 @@ Fresh-event 검증은 부팅 때 생성되는 32-bit session ID와 source별 seq
 
 현재 상태:
 
-- ESB 전송 및 benchmark 코드 경로: 구현됨, 현재 10개 CI 빌드 **대기/미검증**
+- ESB 전송 및 benchmark 코드 경로: 구현됨, 10개 CI 빌드 **성공**
 - release debounce: press 1 ms, release 5 ms
 - Prospector 화면, peer 상태 및 battery event 코드 경로: 포함됨, 실기 **미측정**
-- 실제 USB enumerate, descriptor 및 USBPcap 1 ms cadence: **미측정**
+- 컴파일된 release/benchmark 동글 HID descriptor의 `bInterval=1`: **확인**
+- 실제 USB enumerate 및 USBPcap 1 ms cadence: **미측정**
 - 실제 ESB typical/p95/p99 latency: **미측정**
 - 양쪽 동시 입력과 source별 100,000-event loss: **미측정**
 - 실제 Prospector 화면 및 좌우 battery 표시: **미측정**

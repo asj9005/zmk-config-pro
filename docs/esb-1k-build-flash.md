@@ -2,7 +2,7 @@
 
 이 문서는 동일한 Seeed XIAO BLE/nRF52840 하드웨어에서 기존 ZMK BLE split 빌드와 ESB split 빌드를 구분하여 빌드하고 플래시하는 방법을 설명한다.
 
-> 현재 ESB 구현은 USB HID polling interval을 1 ms로 설정하고 fresh-event 계측 경로를 포함한다. 현재 작업 브랜치의 10개 Actions matrix 결과는 아직 대기/미검증이며, 실제 키보드에서 USB cadence, radio latency/loss, 양쪽 동시 부하, 화면 및 battery를 모두 **미측정** 상태로 둔다. 빌드 성공 또는 `bInterval=1`만으로 “1K fresh radio event” 달성을 의미하지 않는다.
+> 현재 ESB 구현은 USB HID polling interval을 1 ms로 설정하고 fresh-event 계측 경로를 포함한다. 구현 commit `3cf5bb610187ab2e84330703c28fb9a79c5c97ec`의 [Actions run 30433480301](https://github.com/asj9005/zmk-config-pro/actions/runs/30433480301)에서 10개 matrix 빌드가 모두 성공했다. 실제 키보드의 USB cadence, radio latency/loss, 양쪽 동시 부하, 화면 및 battery는 모두 **미측정**이며, 빌드 성공 또는 `bInterval=1`만으로 “1K fresh radio event” 달성을 의미하지 않는다.
 
 ## 1. 빌드 프로필과 파일
 
@@ -33,7 +33,7 @@ ESB release는 press debounce 1 ms, release debounce 5 ms를 사용한다. Bench
 - pull request 생성 또는 갱신
 - GitHub의 **Actions → Build → Run workflow**에서 수동 실행
 
-수동 실행 시 ESB 작업 브랜치 `feature/totem-prospector-esb-1k`를 선택한다. 전체 matrix에서 위의 10개 빌드가 모두 성공했는지 확인한다. 특히 ESB release/benchmark뿐 아니라 기존 BLE 세 개와 `settings_reset`도 확인해야 롤백 가능성을 검증할 수 있다. 이 문서 작성 시점에는 새 10개 matrix의 성공 결과가 없다.
+수동 실행 시 ESB 작업 브랜치 `feature/totem-prospector-esb-1k`를 선택한다. 전체 matrix에서 위의 10개 빌드가 모두 성공했는지 확인한다. 특히 ESB release/benchmark뿐 아니라 기존 BLE 세 개와 `settings_reset`도 확인해야 롤백 가능성을 검증할 수 있다. 검증 기준 run 30433480301은 10/10 성공했고 최종 `firmware` artifact에 표의 UF2 10개가 모두 들어 있었다.
 
 완료된 run의 **Artifacts**에서 `firmware`를 다운로드하고 ZIP을 푼다. ZIP 파일 자체는 XIAO에 복사하지 않는다. 압축을 푼 뒤 역할에 맞는 `.uf2` 파일을 사용한다.
 

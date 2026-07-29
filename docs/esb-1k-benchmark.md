@@ -11,7 +11,7 @@
 
 `bInterval=1`만 확인하거나 같은 HID report를 1 ms마다 반복한 결과는 fresh radio 1K의 증거가 아니다. 이 저장소의 synthetic benchmark packet(`wire=2`)은 radio transport를 검증하지만 HID report를 생성하지도 않는다. 따라서 radio와 USB 결과를 각각 측정하고, end-to-end가 필요하면 별도의 상관 가능한 hardware 계측을 사용한다.
 
-이 문서에는 실측값을 미리 채우지 않는다. 현재 작업 브랜치의 10개 Actions matrix도 아직 대기/미검증이다. 장치에서 얻지 않은 값은 결과 표에 **미측정**으로 남긴다.
+이 문서에는 실측값을 미리 채우지 않는다. 구현 commit `3cf5bb610187ab2e84330703c28fb9a79c5c97ec`의 [Actions run 30433480301](https://github.com/asj9005/zmk-config-pro/actions/runs/30433480301)은 10/10 빌드에 성공했다. 장치에서 얻지 않은 값은 결과 표에 **미측정**으로 남긴다.
 
 ## 2. firmware 계측 경로
 
@@ -31,7 +31,7 @@
 | right | `totem_right totem_esb_right totem_esb_benchmark` |
 | Prospector dongle | `totem_dongle prospector_adapter totem_esb_dongle totem_esb_benchmark` |
 
-이 세 조합은 `build.yaml`의 Actions matrix와 로컬 build에서 모두 만들 수 있다. 예정 artifact는 `totem_left_esb_benchmark.uf2`, `totem_right_esb_benchmark.uf2`, `totem_dongle_esb_prospector_benchmark.uf2`다. Dongle benchmark는 Prospector 화면과 USB HID를 유지하지만 Studio RPC/CDC snippet은 사용하지 않고 계측 출력은 RTT로만 보낸다. Release dongle은 기존처럼 Studio를 유지한다. 파일명이 정의됐다는 사실은 아직 build 성공을 뜻하지 않는다.
+이 세 조합은 `build.yaml`의 Actions matrix와 로컬 build에서 모두 만들 수 있다. 검증된 artifact는 `totem_left_esb_benchmark.uf2`, `totem_right_esb_benchmark.uf2`, `totem_dongle_esb_prospector_benchmark.uf2`다. Dongle benchmark는 Prospector 화면과 USB HID를 유지하지만 Studio RPC/CDC snippet은 사용하지 않고 계측 출력은 RTT로만 보낸다. Release dongle은 기존처럼 Studio를 유지한다.
 
 0 ms debounce는 transport만 분리해서 보는 benchmark 전용 값이다. Release ESB firmware의 기본 press 1 ms/release 5 ms 결과로 간주하면 안 된다. 현재 benchmark 동글도 Prospector 화면을 유지하며 display-disabled artifact는 구현되지 않았다.
 
@@ -320,12 +320,12 @@ Left-only, right-only, both 조건을 같은 duration과 RF 환경에서 실행�
 
 | 항목 | firmware/commit | 방법 | 결과 | 상태 |
 |---|---|---|---|---|
-| 10개 Actions matrix |  | CI |  | 대기/미검증 |
-| Left ESB benchmark build |  | CI/local build |  | 대기/미검증 |
-| Right ESB benchmark build |  | CI/local build |  | 대기/미검증 |
-| Dongle ESB benchmark build, display on |  | CI/local build |  | 대기/미검증 |
-| USB Full-Speed 확인 |  | descriptor/device tree |  | 미측정 |
-| HID interrupt-IN `bInterval` |  | endpoint descriptor |  | 미측정 |
+| 10개 Actions matrix | `3cf5bb610187ab2e84330703c28fb9a79c5c97ec` | CI run 30433480301 | 10/10 및 artifact merge 성공 | 성공 |
+| Left ESB benchmark build | `3cf5bb610187ab2e84330703c28fb9a79c5c97ec` | CI | UF2 생성 | 성공 |
+| Right ESB benchmark build | `3cf5bb610187ab2e84330703c28fb9a79c5c97ec` | CI | UF2 생성 | 성공 |
+| Dongle ESB benchmark build, display on | `3cf5bb610187ab2e84330703c28fb9a79c5c97ec` | CI | RAM 242,760 B / 256 KiB, UF2 생성 | 성공 |
+| USB Full-Speed 확인 | `3cf5bb610187ab2e84330703c28fb9a79c5c97ec` | XIAO nRF52840 USBD 코드/빌드 | Full-Speed 구조 확인, 실기 enumerate 미측정 | 구조 확인/실기 미측정 |
+| HID interrupt-IN `bInterval` | `3cf5bb610187ab2e84330703c28fb9a79c5c97ec` | 병합 artifact의 동글 UF2 descriptor template decode | release/benchmark 모두 1 | 빌드 확인 |
 | USB completion cadence |  | USBPcap CSV | typical / p95 / p99 | 미측정 |
 | 연속 동일 payload 비율 |  | USBPcap CSV |  | 미측정 |
 | Dongle RX→USB queue enter |  | `BENCH_USB`, simple 1:1 key | typical / p95 / p99 | 미측정 |
