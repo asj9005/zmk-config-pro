@@ -51,7 +51,7 @@ Invalid RX의 주요 errno는 CRC32 mismatch `-EBADMSG` (`-74`), magic prefix mi
 
 `BENCH_USB`의 `rx_tick`, `queue_enter_tick`, `queue_done_tick`은 모두 dongle clock이므로 서로의 차이를 계산할 수 있다. 다만 firmware는 수신 key event와 keyboard-report 함수 호출을 FIFO로 연결한다. 일반 key 한 개가 press/report, release/report로 1:1 대응하는 단순 테스트에서만 사용한다. Hold-tap, layer, combo, sticky key, local event 또는 report coalescing이 들어가면 unmatched 또는 잘못 정렬된 표본이 생길 수 있다. `wire=2` synthetic packet은 HID report를 만들지 않는다.
 
-Benchmark firmware는 deferred log buffer 8 KiB, RTT up buffer 4 KiB와 DROP mode를 사용한다. Logger drop, malformed benchmark marker, RX overflow, application queue pressure 또는 producer overflow가 있으면 loss 0 결과로 사용할 수 없다. Per-packet logging과 추가 RAM 때문에 benchmark timing은 release timing과 동일하지 않다. 현재 benchmark는 display-on이며 display-disabled artifact는 구현되지 않았다.
+Benchmark firmware는 deferred log buffer 4 KiB, RTT up buffer 4 KiB와 DROP mode를 사용한다. Dongle benchmark는 display와 USB HID를 유지하되 Studio RPC/CDC를 제외하고 RTT로만 계측한다. Logger drop, malformed benchmark marker, RX overflow, application queue pressure 또는 producer overflow가 있으면 loss 0 결과로 사용할 수 없다. Per-packet logging과 추가 RAM 때문에 benchmark timing은 release timing과 동일하지 않다. 현재 benchmark는 display-on이며 display-disabled artifact는 구현되지 않았다.
 
 Left와 right는 같은 fixed RF channel과 하나의 dongle PRX를 공유하고 TDMA/CSMA를 사용하지 않는다. Hardware retry delay는 left 500 µs/right 800 µs로 다르지만 동시 1 kHz를 보장하지 않는다. RF hopping은 꺼져 있으므로 analyzer 결과도 source별 실제 동시부하와 고정-channel 혼잡 결과로 해석한다.
 

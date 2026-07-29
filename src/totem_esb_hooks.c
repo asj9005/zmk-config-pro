@@ -22,7 +22,7 @@ struct pending_usb_event {
     uint8_t pressed;
 };
 
-K_MSGQ_DEFINE(pending_usb_events, sizeof(struct pending_usb_event), 128, 4);
+K_MSGQ_DEFINE(pending_usb_events, sizeof(struct pending_usb_event), 64, 4);
 #endif
 
 #if IS_ENABLED(CONFIG_TOTEM_ESB_PROSPECTOR)

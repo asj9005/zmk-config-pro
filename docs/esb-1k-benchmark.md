@@ -19,7 +19,7 @@
 
 - `CONFIG_TOTEM_ESB_BENCHMARK=y`
 - RTT deferred logging
-- log buffer 8 KiB, RTT up buffer 4 KiB, DROP mode
+- log buffer 4 KiB, RTT up buffer 4 KiB, DROP mode
 - 기본 synthetic period 1,000 µs
 - benchmark 전용 0 ms debounce
 
@@ -31,7 +31,7 @@
 | right | `totem_right totem_esb_right totem_esb_benchmark` |
 | Prospector dongle | `totem_dongle prospector_adapter totem_esb_dongle totem_esb_benchmark` |
 
-이 세 조합은 `build.yaml`의 Actions matrix와 로컬 build에서 모두 만들 수 있다. 예정 artifact는 `totem_left_esb_benchmark.uf2`, `totem_right_esb_benchmark.uf2`, `totem_dongle_esb_prospector_benchmark.uf2`다. 파일명이 정의됐다는 사실은 아직 build 성공을 뜻하지 않는다.
+이 세 조합은 `build.yaml`의 Actions matrix와 로컬 build에서 모두 만들 수 있다. 예정 artifact는 `totem_left_esb_benchmark.uf2`, `totem_right_esb_benchmark.uf2`, `totem_dongle_esb_prospector_benchmark.uf2`다. Dongle benchmark는 Prospector 화면과 USB HID를 유지하지만 Studio RPC/CDC snippet은 사용하지 않고 계측 출력은 RTT로만 보낸다. Release dongle은 기존처럼 Studio를 유지한다. 파일명이 정의됐다는 사실은 아직 build 성공을 뜻하지 않는다.
 
 0 ms debounce는 transport만 분리해서 보는 benchmark 전용 값이다. Release ESB firmware의 기본 press 1 ms/release 5 ms 결과로 간주하면 안 된다. 현재 benchmark 동글도 Prospector 화면을 유지하며 display-disabled artifact는 구현되지 않았다.
 
@@ -146,7 +146,7 @@ One-way 또는 end-to-end latency를 구하려면 clock 동기화·offset 보정
 5. RTT consumer가 지속해서 로그를 비우는지 확인한다. Zephyr logger의 dropped-message 경고가 하나라도 있으면 그 capture로 `0 / 100,000 loss`나 완전한 retransmission 통계를 주장하지 않는다.
 6. 처음 몇 초는 warm-up으로 버리거나 분석 대상 시작 session/sequence를 기록한다.
 
-Benchmark 설정은 deferred log buffer 8 KiB, RTT up buffer 4 KiB 및 `CONFIG_LOG_BACKEND_RTT_MODE_DROP=y`를 사용한다. Dongle은 pending USB event 128개 FIFO도 추가한다. 매 packet 한 줄 logging은 radio/work queue timing과 RAM 사용량을 바꾸며, 2개 half가 동시에 1 kHz로 송신하면 logger가 packet 처리보다 먼저 포화될 수 있다. Logger drop, malformed marker, RX overflow, application queue pressure 또는 producer overflow가 하나라도 있으면 해당 capture를 무손실 검증으로 사용하지 않는다. 이 mode는 release timing 자체가 아니라 sequence/cadence와 실패 원인을 관찰하기 위한 계측 build다.
+Benchmark 설정은 deferred log buffer 4 KiB, RTT up buffer 4 KiB 및 `CONFIG_LOG_BACKEND_RTT_MODE_DROP=y`를 사용한다. Dongle은 pending USB event 64개 FIFO도 추가한다. Benchmark dongle에서는 Studio RPC/CDC를 제외하여 4 KiB RPC stack과 불필요한 USB traffic을 없앤다. 매 packet 한 줄 logging은 radio/work queue timing과 RAM 사용량을 바꾸며, 2개 half가 동시에 1 kHz로 송신하면 logger가 packet 처리보다 먼저 포화될 수 있다. Logger drop, malformed marker, RX overflow, application queue pressure 또는 producer overflow가 하나라도 있으면 해당 capture를 무손실 검증으로 사용하지 않는다. 이 mode는 release timing 자체가 아니라 sequence/cadence와 실패 원인을 관찰하기 위한 계측 build다.
 
 ### 분석
 

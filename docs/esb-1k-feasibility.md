@@ -91,7 +91,7 @@ ESB 모듈 README는 ZMK 0.4/Zephyr 4.1 조합에서 다음 두 project를 요�
 - `badjeff/sdk-nrf`의 `v3.1-branch+zmk-fixes`
 - `nrfconnect/sdk-nrfxlib`의 대응 `v3.1-branch`
 
-이 조합은 NCS 3.1 계열 nrfx ESB library와 Zephyr 4.1 CMake/Kconfig 검증을 맞추기 위한 것이다. 일반 ZMK manifest의 Nordic project 조합만 사용하면 ESB library/CMake 구성이 일치하지 않는다. 패치된 `sdk-nrf`의 security module은 BLE rollback 빌드에서도 Zephyr module로 발견되므로 NCS 3.1.1에 대응하는 `sdk-mbedtls`와 `sdk-oberon-psa-crypto`도 exact SHA로 고정한다. Oberon project가 없으면 `OBERON_PSA_CORE_PATH`가 비어 BLE 빌드의 crypto source가 filesystem root에서 조회된다. `badjeff/zmk` fork는 ESB 모듈 자체의 필수 의존성이 아니므로, upstream ZMK로 빌드가 성립하면 추가하지 않는다.
+이 조합은 NCS 3.1 계열 nrfx ESB library와 Zephyr 4.1 CMake/Kconfig 검증을 맞추기 위한 것이다. 일반 ZMK manifest의 Nordic project 조합만 사용하면 ESB library/CMake 구성이 일치하지 않는다. 패치된 `sdk-nrf`의 security module은 BLE rollback 빌드에서도 Zephyr module로 발견되므로 NCS 3.1.1에 대응하는 `sdk-mbedtls`와 `sdk-oberon-psa-crypto`도 exact SHA로 고정한다. Oberon project가 없으면 `OBERON_PSA_CORE_PATH`가 비어 BLE 빌드의 crypto source가 filesystem root에서 조회된다. 또한 고정된 ZMK Zephyr의 `BT_ECC`는 ECC key-pair 연산만 선택하고 NCS Oberon이 요구하는 `PSA_WANT_KEY_TYPE_ECC_PUBLIC_KEY`를 선택하지 않는다. 루트 `Kconfig`의 hidden compatibility symbol은 `NRF_SECURITY && BT_ECC`일 때만 이 prerequisite를 보충하므로 ESB-only 및 settings-reset 프로필에 crypto를 강제로 켜지 않는다. `badjeff/zmk` fork는 ESB 모듈 자체의 필수 의존성이 아니므로, upstream ZMK로 빌드가 성립하면 추가하지 않는다.
 
 Compatibility overlay가 복사하는 upstream 파일의 SPDX 고지는 유지한다. Nordic-derived 파일은 `LicenseRef-Nordic-5-Clause`, ZMK-derived 파일은 MIT이며, 새 Totem 전용 파일은 MIT다. 정확한 overlay 범위와 라이선스 경계는 `compat/README.md`에 기록한다.
 
@@ -166,7 +166,7 @@ Prospector listener는 연속된 source event를 coalesce할 수 있다. Peer tr
 
 화면은 release와 현재 benchmark 동글 firmware 모두에 유지한다. Display와 LVGL flush thread priority는 10으로 두어 radio IRQ 및 USB 경로보다 낮게 실행하도록 구성한다. 화면이 queue latency에 미치는 영향은 코드만으로 수치화하지 않는다. 현재 `build.yaml`에는 display-disabled artifact가 없으므로 display on/off 비교는 **미구현/미측정**이다.
 
-Benchmark는 release와 메모리·timing 조건도 다르다. Deferred log buffer 8 KiB, RTT up buffer 4 KiB, dongle pending-USB FIFO 128개를 추가하고 per-packet logging을 수행한다. RTT backend는 DROP mode이므로 consumer가 따라오지 못해 log가 하나라도 빠진 capture로 packet loss 0을 주장할 수 없다. Benchmark build의 RAM 적합성 및 logging 부하는 현재 10개 CI와 실제 장치에서 아직 검증되지 않았다.
+Benchmark는 release와 메모리·timing 조건도 다르다. Deferred log buffer 4 KiB, RTT up buffer 4 KiB, dongle pending-USB FIFO 64개를 추가하고 per-packet logging을 수행한다. Benchmark dongle은 HID/RTT 계측에 필요하지 않은 Studio RPC/CDC를 제외하여 USB 경합과 4 KiB RPC stack을 제거하지만 Prospector 화면은 유지한다. RTT backend는 DROP mode이므로 consumer가 따라오지 못해 log가 하나라도 빠진 capture로 packet loss 0을 주장할 수 없다. Benchmark build의 logging 부하는 실제 장치에서 아직 검증되지 않았다.
 
 ## 9. 배터리 상태 전달
 

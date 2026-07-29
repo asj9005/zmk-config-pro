@@ -200,14 +200,13 @@ west build -p always -s zmk/app -d build/totem_right_esb_benchmark `
   "-DZMK_EXTRA_MODULES=$repo"
 
 west build -p always -s zmk/app -d build/totem_dongle_esb_prospector_benchmark `
-  -b "xiao_ble//zmk" -S studio-rpc-usb-uart -- `
+  -b "xiao_ble//zmk" -- `
   "-DSHIELD=totem_dongle prospector_adapter totem_esb_dongle totem_esb_benchmark" `
-  "-DCONFIG_ZMK_STUDIO=y" `
   "-DZMK_CONFIG=$repo\config" `
   "-DZMK_EXTRA_MODULES=$repo"
 ```
 
-Benchmark는 deferred log buffer 8 KiB, RTT up buffer 4 KiB와 DROP mode를 사용한다. Logging과 추가 RAM이 release timing을 바꾸므로 benchmark 수치를 release firmware 수치로 바꾸어 쓰지 않는다. Logger drop이 있는 capture로 loss 0을 주장하지 않는다. 실제 계측 방법과 결과 기록 형식은 `docs/esb-1k-benchmark.md`를 따른다.
+Benchmark는 deferred log buffer 4 KiB, RTT up buffer 4 KiB와 DROP mode를 사용한다. Dongle benchmark는 HID와 RTT만 사용하고 Studio RPC/CDC는 넣지 않는다. 이는 256 KiB RAM에 display와 계측기를 함께 유지하고 USB HID 측정에서 Studio traffic의 경합을 없애기 위한 benchmark 전용 차이이며, release dongle의 Studio 기능은 그대로 유지된다. Logging과 추가 RAM이 release timing을 바꾸므로 benchmark 수치를 release firmware 수치로 바꾸어 쓰지 않는다. Logger drop이 있는 capture로 loss 0을 주장하지 않는다. 실제 계측 방법과 결과 기록 형식은 `docs/esb-1k-benchmark.md`를 따른다.
 
 ## 8. ESB transport 동작 요약
 

@@ -1,3 +1,11 @@
+# Zephyr 4.1 BT_ECC selects the ECC key-pair operations but omits the public
+# key prerequisite enforced by the pinned NCS 3.1.1 Oberon core.
+config TOTEM_NCS_BLE_ECC_PUBLIC_KEY_COMPAT
+    bool
+    default y
+    depends on NRF_SECURITY && BT_ECC
+    select PSA_WANT_KEY_TYPE_ECC_PUBLIC_KEY
+
 menu "Totem ESB compatibility and benchmark"
 
 config TOTEM_ESB_COMPAT
