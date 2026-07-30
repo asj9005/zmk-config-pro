@@ -1,0 +1,63 @@
+name: Materialize secure ESB v3
+
+on:
+  push:
+    branches:
+      - feature/totem-prospector-esb-secure-v3
+    paths:
+      - ".v3-materialize/**"
+      - ".github/workflows/v3-materialize.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: secure-esb-v3-materialize
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout bootstrap commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 1
+      - name: Verify and apply exact v3 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .v3-materialize/chunk-*.txt | base64 --decode > /tmp/v3.patch.gz
+          printf '%s  %s\n' '5fd6f1b9bce65613a04187c2bdce5acccbd0902057f0a22c6242a513856c0072' /tmp/v3.patch.gz | sha256sum -c -
+          gzip -dc /tmp/v3.patch.gz > /tmp/v3.patch
+          printf '%s  %s\n' '5607cfeca7868febec4f06b8201aa27d8079f92737ca078052904b26c458d6d3' /tmp/v3.patch | sha256sum -c -
+          git apply --check /tmp/v3.patch
+          git apply --binary --whitespace=nowarn /tmp/v3.patch
+          test "$(git hash-object .github/workflows/build.yml)" = '258486a99d61c62c7573ac084762a448cb934a21'
+          test "$(git hash-object Kconfig)" = '59f1f7ff46e41f9d30c4048fc550c942b6552d71'
+          test "$(git hash-object README.md)" = '58c5b0db711452c843d228743faeff46f67d5786'
+          test "$(git hash-object compat/zmk-feature-split-esb/src/split/esb/central.c)" = '162900789287636061d6bdd782a10d084ca1007d'
+          test "$(git hash-object compat/zmk-feature-split-esb/src/split/esb/common.c)" = 'cf9d5de3dabfc67f50e9b176f2544ed9b83fc331'
+          test "$(git hash-object compat/zmk-feature-split-esb/src/split/esb/common.h)" = '77c60adf3f575ac9ee84cc6f9da6e402e6d823fc'
+          test "$(git hash-object compat/zmk-feature-split-esb/src/split/esb/peripheral.c)" = '819950c60ab83212a2a93e2b9f72375a3229d50d'
+          test "$(git hash-object docs/esb-v3-build-flash.md)" = '3ac06781c100aec3e1e2e75d44e01c2ee0adf367'
+          test "$(git hash-object docs/esb-v3-security.md)" = '66b3e329a88522de505d3ebece583f99dfb62458'
+          test "$(git hash-object include/totem/esb_benchmark.h)" = '8065ebc6e21f186041cbdc800d5a65ff1b2dc804'
+          test "$(git hash-object src/totem_esb_hooks.c)" = '5f9f3e52a06e8c84f44bd7a77cbac306770127d4'
+          test "$(git hash-object tests/test_esb_v3_protocol.py)" = '3917aa8c1172accbfac08f4da3b66f9ba4f4fba1'
+          rm -rf -- .v3-materialize
+          rm -f -- .github/workflows/v3-materialize.yml
+          git add -A
+          tree_sha="$(git write-tree)"
+          echo "materialized tree: ${tree_sha}"
+          test "${tree_sha}" = '5f2673a0b6e6365ec03da8f0a55e68fb5b11992e'
+      - name: Commit verified tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: harden secure ESB recovery state machine'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
