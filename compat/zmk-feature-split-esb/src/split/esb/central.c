@@ -7,8 +7,11 @@
 #include <zephyr/types.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
+#include <stddef.h>
 
 #include <zephyr/settings/settings.h>
+#include <zephyr/random/random.h>
+#include <zephyr/sys/atomic.h>
 #include <zephyr/sys/crc.h>
 #include <zephyr/sys/ring_buffer.h>
 
@@ -29,11 +32,14 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <zmk/physical_layouts.h>
 
 #include <totem/esb_benchmark.h>
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+#include <totem/esb_v3_crypto.h>
+#endif
 
 #include "app_esb.h"
 #include "common.h"
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
+#if ESB_MSG_HAS_POSTFIX
 #define TX_BUFFER_SIZE                                                                        \
     (sizeof(struct esb_command_envelope) + sizeof(struct esb_msg_postfix) +                   \
      sizeof(struct esb_msg_meta))
@@ -43,7 +49,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #define RX_BUFFER_SIZE (sizeof(struct esb_event_envelope))
 #endif
 
-BUILD_ASSERT(TX_BUFFER_SIZE <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
+BUILD_ASSERT(TX_BUFFER_SIZE - sizeof(struct esb_msg_meta) <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
              "ESB central command plus local metadata exceeds the configured payload");
 BUILD_ASSERT(RX_BUFFER_SIZE <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
              "ESB peripheral event exceeds the configured payload");
@@ -85,6 +91,138 @@ static ssize_t get_payload_data_size(const struct zmk_split_transport_central_co
     }
 }
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+struct esb_v3_central_peer {
+    uint64_t pending_peripheral_nonce;
+    uint64_t active_peripheral_nonce;
+    uint64_t central_nonce;
+    uint64_t active_central_nonce;
+    uint64_t pending_session;
+    uint64_t active_session;
+    uint32_t request_sequence;
+    uint32_t last_recovery_sequence;
+    uint32_t down_sequence;
+    int64_t challenge_queued_at;
+    bool pending;
+    atomic_t active;
+};
+
+static struct esb_v3_central_peer
+    secure_peers[CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT];
+K_MUTEX_DEFINE(command_mutex);
+
+static int enqueue_v3_downlink(
+    uint8_t source, enum esb_wire_command_type wire_type,
+    const struct zmk_split_transport_central_command *cmd,
+    uint64_t session_id, uint32_t sequence, uint64_t peripheral_nonce,
+    uint32_t request_sequence) {
+    uint8_t wire_source = source + 1U;
+    size_t body_size = 0;
+    if (wire_type == ESB_WIRE_COMMAND_ZMK) {
+        if (cmd == NULL) {
+            return -EINVAL;
+        }
+        ssize_t data_size = get_payload_data_size(cmd);
+        if (data_size < 0) {
+            return data_size;
+        }
+        body_size = sizeof(cmd->type) + data_size;
+    } else if (wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
+        body_size = sizeof(((struct esb_command_payload *)0)->body.challenge);
+    } else if (wire_type != ESB_WIRE_COMMAND_V3_SESSION_OK) {
+        return -ENOTSUP;
+    }
+
+    size_t header_size = offsetof(struct esb_command_payload, body);
+    size_t payload_size = header_size + body_size;
+    struct esb_command_envelope env = {
+        .prefix =
+            {
+                .magic_prefix = ZMK_SPLIT_ESB_ENVELOPE_MAGIC_PREFIX,
+                .payload_size = payload_size,
+            },
+        .payload =
+            {
+                .source = wire_source,
+                .wire_type = wire_type,
+                .sequence = sequence,
+                .session_id = session_id,
+                .source_tick = wire_type == ESB_WIRE_COMMAND_ZMK
+                                   ? k_cycle_get_32()
+                                   : 0,
+            },
+    };
+    if (wire_type == ESB_WIRE_COMMAND_ZMK) {
+        env.payload.body.cmd = *cmd;
+    } else if (wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
+        env.payload.body.challenge.peripheral_nonce = peripheral_nonce;
+        env.payload.body.challenge.request_sequence = request_sequence;
+    }
+
+    size_t env_len = sizeof(env.prefix) + payload_size;
+    struct esb_msg_postfix postfix;
+    int err =
+        zmk_split_esb_finalize_item((uint8_t *)&env, env_len, true, &postfix);
+    if (err != 0) {
+        return err;
+    }
+
+    k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
+    size_t frame_size = env_len + sizeof(postfix) + sizeof(struct esb_msg_meta);
+    if (ring_buf_space_get(&tx_buf) < frame_size) {
+        k_spin_unlock(&tx_ring_lock, key);
+        return -ENOSPC;
+    }
+    size_t put = ring_buf_put(&tx_buf, (uint8_t *)&env, env_len);
+    put += ring_buf_put(&tx_buf, (uint8_t *)&postfix, sizeof(postfix));
+    static uint16_t command_message_id;
+    if (++command_message_id >= UINT16_MAX - 1000U) {
+        command_message_id = 1;
+    }
+    struct esb_msg_meta meta = {
+        .msg_id = command_message_id,
+        .max_retry = CONFIG_ZMK_SPLIT_ESB_RETRY_CMD,
+        .pipe = wire_source,
+    };
+    put += ring_buf_put(&tx_buf, (uint8_t *)&meta, sizeof(meta));
+    if (put != frame_size) {
+        LOG_ERR("Unable to queue complete secure ESB downlink");
+        ring_buf_reset(&tx_buf);
+        k_spin_unlock(&tx_ring_lock, key);
+        return -ENOSPC;
+    }
+    begin_tx();
+    k_spin_unlock(&tx_ring_lock, key);
+    return 0;
+}
+
+static int split_central_esb_send_command(
+    uint8_t source, struct zmk_split_transport_central_command cmd) {
+    k_mutex_lock(&command_mutex, K_FOREVER);
+    if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT ||
+        !atomic_get(&secure_peers[source].active) ||
+        !totem_esb_peer_is_connected(source)) {
+        int err = source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT
+                      ? -EINVAL
+                      : -ENOTCONN;
+        k_mutex_unlock(&command_mutex);
+        return err;
+    }
+    if (secure_peers[source].down_sequence >= UINT32_MAX - 1U) {
+        k_mutex_unlock(&command_mutex);
+        return -EOVERFLOW;
+    }
+    uint32_t sequence = secure_peers[source].down_sequence + 1U;
+    int err = enqueue_v3_downlink(
+        source, ESB_WIRE_COMMAND_ZMK, &cmd,
+        secure_peers[source].active_session, sequence, 0, 0);
+    if (err == 0) {
+        secure_peers[source].down_sequence = sequence;
+    }
+    k_mutex_unlock(&command_mutex);
+    return err;
+}
+#else
 static int split_central_esb_send_command(uint8_t source,
                                           struct zmk_split_transport_central_command cmd) {
     if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT) {
@@ -135,8 +273,15 @@ static int split_central_esb_send_command(uint8_t source,
         return -ENOSPC;
     }
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
-    struct esb_msg_postfix postfix = {.crc = crc32_ieee((void *)&env, cmd_env_len)};
+#if ESB_MSG_HAS_POSTFIX
+    struct esb_msg_postfix postfix;
+    int finalize_err =
+        zmk_split_esb_finalize_item((uint8_t *)&env, cmd_env_len, true, &postfix);
+    if (finalize_err != 0) {
+        ring_buf_reset(&tx_buf);
+        k_spin_unlock(&tx_ring_lock, key);
+        return finalize_err;
+    }
 
     put = ring_buf_put(&tx_buf, (uint8_t *)&postfix, sizeof(postfix));
     if (put != sizeof(postfix)) {
@@ -173,6 +318,7 @@ static int split_central_esb_send_command(uint8_t source,
 
     return 0;
 }
+#endif
 
 void zmk_split_esb_on_prx_esb_callback(app_esb_event_t *event) {
     zmk_split_esb_cb(event, &state);
@@ -242,6 +388,14 @@ static void notify_status_work_cb(struct k_work *_work) { notify_transport_statu
 static K_WORK_DEFINE(notify_status_work, notify_status_work_cb);
 
 static int zmk_split_esb_central_init(void) {
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    int crypto_err = totem_esb_v3_crypto_init();
+    if (crypto_err != 0) {
+        LOG_ERR("Refusing to start plaintext fallback after crypto failure (%d)",
+                crypto_err);
+        return crypto_err;
+    }
+#endif
     for (int i = 0; i < CONFIG_ESB_PIPE_COUNT; i++) {
         ring_buf_init(&rx_bufs[i], RX_RING_BUF_SIZE, rx_bufs_data[i]);
     }
@@ -261,7 +415,11 @@ extern const struct zmk_split_transport_central *active_transport;
 struct esb_rx_sequence_state {
     bool session_initialized;
     bool initialized;
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    uint64_t session_id;
+#else
     uint32_t session_id;
+#endif
     uint32_t last;
     uint32_t received;
     uint32_t gaps;
@@ -277,7 +435,11 @@ static uint8_t
                   [(CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX + 7) / 8];
 
 static bool event_payload_size_is_valid(const struct esb_event_envelope *env) {
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    const size_t header_size = offsetof(struct esb_event_payload, body);
+#else
     const size_t header_size = sizeof(uint8_t) * 2 + sizeof(uint32_t) * 3;
+#endif
     if (env->prefix.payload_size < header_size) {
         return false;
     }
@@ -290,6 +452,18 @@ static bool event_payload_size_is_valid(const struct esb_event_envelope *env) {
     if (env->payload.wire_type == ESB_WIRE_EVENT_BENCHMARK) {
         return env->prefix.payload_size == header_size;
     }
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (env->payload.wire_type == ESB_WIRE_EVENT_V3_HELLO ||
+        env->payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
+        return env->prefix.payload_size == header_size;
+    }
+    if (env->payload.wire_type == ESB_WIRE_EVENT_V3_RECOVERY) {
+        return env->prefix.payload_size ==
+                   header_size + sizeof(env->payload.body.recovery) &&
+               env->payload.body.recovery.link_metric.metric <
+                   TOTEM_ESB_LINK_METRIC_COUNT;
+    }
+#endif
     if (env->payload.wire_type != ESB_WIRE_EVENT_ZMK ||
         env->prefix.payload_size < header_size + sizeof(env->payload.body.event.type)) {
         return false;
@@ -339,24 +513,235 @@ void totem_esb_source_disconnected(uint8_t source) {
     }
     release_source_keys(source);
     rx_sequences[source].initialized = false;
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    k_mutex_lock(&command_mutex, K_FOREVER);
+    atomic_set(&secure_peers[source].active, false);
+    secure_peers[source].pending = false;
+    secure_peers[source].active_session = 0;
+    secure_peers[source].pending_session = 0;
+    secure_peers[source].active_peripheral_nonce = 0;
+    secure_peers[source].active_central_nonce = 0;
+    totem_esb_v3_discard_pending(source);
+    totem_esb_v3_clear_active(source);
+    k_mutex_unlock(&command_mutex);
+#endif
 }
 
-static void update_source_session(uint8_t source, uint32_t session_id) {
+static void update_source_session(
+    uint8_t source,
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    uint64_t session_id,
+#else
+    uint32_t session_id,
+#endif
+    bool force) {
     struct esb_rx_sequence_state *seq = &rx_sequences[source];
-    if (seq->session_initialized && seq->session_id == session_id) {
+    if (!force && seq->session_initialized && seq->session_id == session_id) {
         return;
     }
 
     if (seq->session_initialized) {
         release_source_keys(source);
         seq->session_changes++;
-        LOG_INF("ESB source %u started session %u (previous %u)", source, session_id,
-                seq->session_id);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+        LOG_INF("ESB source %u started session %llu (previous %llu)", source,
+                (unsigned long long)session_id,
+                (unsigned long long)seq->session_id);
+#else
+        LOG_INF("ESB source %u started session %u (previous %u)", source,
+                session_id, seq->session_id);
+#endif
     }
     seq->session_initialized = true;
     seq->initialized = false;
     seq->session_id = session_id;
 }
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+static int secure_random_u64(uint64_t *value) {
+    int err = sys_csrand_get(value, sizeof(*value));
+    if (err != 0) {
+        return err;
+    }
+    return *value == 0 ? -EIO : 0;
+}
+
+static int queue_v3_challenge(uint8_t source) {
+    struct esb_v3_central_peer *peer = &secure_peers[source];
+    int err = enqueue_v3_downlink(
+        source, ESB_WIRE_COMMAND_V3_CHALLENGE, NULL, peer->central_nonce, 0,
+        peer->pending_peripheral_nonce, peer->request_sequence);
+    if (err == 0) {
+        peer->challenge_queued_at = k_uptime_get();
+    }
+    return err;
+}
+
+static int begin_v3_pending_session(uint8_t source, uint64_t peripheral_nonce,
+                                    uint32_t request_sequence) {
+    struct esb_v3_central_peer *peer = &secure_peers[source];
+    if (peripheral_nonce == 0) {
+        return -EINVAL;
+    }
+    if (peer->pending &&
+        peer->pending_peripheral_nonce == peripheral_nonce &&
+        peer->request_sequence == request_sequence) {
+        if (k_uptime_get() - peer->challenge_queued_at >= 10) {
+            return queue_v3_challenge(source);
+        }
+        return 0;
+    }
+
+    uint64_t central_nonce;
+    uint64_t session_id;
+    int err;
+    do {
+        err = secure_random_u64(&central_nonce);
+        if (err != 0) {
+            return err;
+        }
+        err = totem_esb_v3_prepare_pending(source, peripheral_nonce,
+                                           central_nonce, &session_id);
+    } while (err == -EAGAIN);
+    if (err != 0) {
+        return err;
+    }
+
+    peer->pending = true;
+    peer->pending_peripheral_nonce = peripheral_nonce;
+    peer->central_nonce = central_nonce;
+    peer->pending_session = session_id;
+    peer->request_sequence = request_sequence;
+    peer->challenge_queued_at = 0;
+    return queue_v3_challenge(source);
+}
+
+static bool v3_recovery_sequence_is_fresh(struct esb_v3_central_peer *peer,
+                                          uint32_t sequence) {
+    /*
+     * A sender must rekey before wrap, so wrap is never a valid transition.
+     * Strict monotonicity makes nonce reuse fail closed if a future sender
+     * regression accidentally emits sequence 1 under the same key.
+     */
+    return sequence != 0 && sequence > peer->last_recovery_sequence;
+}
+
+static void confirm_v3_active_session(uint8_t source) {
+    struct esb_v3_central_peer *peer = &secure_peers[source];
+    if (!peer->pending ||
+        peer->pending_peripheral_nonce != peer->active_peripheral_nonce ||
+        peer->central_nonce != peer->active_central_nonce) {
+        return;
+    }
+    peer->pending = false;
+    peer->pending_session = 0;
+    totem_esb_v3_discard_pending(source);
+}
+
+static int process_v3_control_event(uint8_t source,
+                                    const struct esb_event_envelope *env) {
+    struct esb_v3_central_peer *peer = &secure_peers[source];
+    switch (env->payload.wire_type) {
+    case ESB_WIRE_EVENT_V3_HELLO:
+        if (env->payload.sequence != 0 || env->payload.session_id == 0) {
+            return -EINVAL;
+        }
+        /*
+         * A captured HELLO from the current boot must not force a needless
+         * rekey. A genuinely rebooted/rekeying half presents a new nonce.
+         */
+        if (atomic_get(&peer->active) &&
+            peer->active_peripheral_nonce == env->payload.session_id) {
+            return 0;
+        }
+        return begin_v3_pending_session(source, env->payload.session_id, 0);
+
+    case ESB_WIRE_EVENT_V3_RECOVERY:
+        if (env->payload.sequence == 0 || env->payload.session_id == 0) {
+            return -EINVAL;
+        }
+        if (atomic_get(&peer->active) &&
+            peer->active_peripheral_nonce == env->payload.session_id &&
+            peer->active_session ==
+                env->payload.body.recovery.active_session) {
+            if (!v3_recovery_sequence_is_fresh(peer,
+                                               env->payload.sequence)) {
+                totem_esb_benchmark_security_drop(
+                    source, "replay", env->payload.sequence);
+                return -EALREADY;
+            }
+            peer->last_recovery_sequence = env->payload.sequence;
+            confirm_v3_active_session(source);
+            k_mutex_lock(&command_mutex, K_FOREVER);
+            bool downlink_needs_rekey =
+                peer->down_sequence >= UINT32_MAX - 1U;
+            k_mutex_unlock(&command_mutex);
+            if (downlink_needs_rekey) {
+                return begin_v3_pending_session(
+                    source, env->payload.session_id,
+                    env->payload.sequence);
+            }
+            totem_esb_peer_seen(source);
+            totem_esb_benchmark_link_metric(
+                source, peer->active_session,
+                env->payload.body.recovery.link_metric.metric,
+                env->payload.body.recovery.link_metric.value);
+            return 0;
+        }
+        return begin_v3_pending_session(source, env->payload.session_id,
+                                        env->payload.sequence);
+
+    case ESB_WIRE_EVENT_V3_READY: {
+        if (!peer->pending || env->payload.sequence != 0 ||
+            env->payload.session_id != peer->pending_session) {
+            return -ESTALE;
+        }
+        bool session_changed = false;
+        /*
+         * Serialize pending-key promotion with the normal command sender.
+         * This keeps an in-flight command from using a key handle while the
+         * old active slot is being destroyed, without adding a mutex to the
+         * steady-state uplink receive path.
+         */
+        k_mutex_lock(&command_mutex, K_FOREVER);
+        int err = enqueue_v3_downlink(
+            source, ESB_WIRE_COMMAND_V3_SESSION_OK, NULL,
+            peer->pending_session, 0, 0, 0);
+        if (err != 0) {
+            k_mutex_unlock(&command_mutex);
+            return err;
+        }
+        if (!atomic_get(&peer->active) ||
+            peer->active_peripheral_nonce !=
+                peer->pending_peripheral_nonce ||
+            peer->active_central_nonce != peer->central_nonce) {
+            atomic_set(&peer->active, false);
+            err = totem_esb_v3_activate_pending(source);
+            if (err != 0) {
+                k_mutex_unlock(&command_mutex);
+                return err;
+            }
+            peer->active_session = peer->pending_session;
+            peer->active_peripheral_nonce =
+                peer->pending_peripheral_nonce;
+            peer->active_central_nonce = peer->central_nonce;
+            peer->last_recovery_sequence = peer->request_sequence;
+            peer->down_sequence = 0;
+            atomic_set(&peer->active, true);
+            session_changed = true;
+        }
+        k_mutex_unlock(&command_mutex);
+        if (session_changed) {
+            update_source_session(source, peer->active_session, true);
+            totem_esb_peer_seen(source);
+        }
+        return 0;
+    }
+    default:
+        return -ENOTSUP;
+    }
+}
+#endif
 
 static void process_rx_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
@@ -365,7 +750,8 @@ static void process_rx_work_cb(struct k_work *work) {
         while (ring_buf_size_get(rx_buf) > ESB_MSG_WIRE_MIN_SIZE) {
             struct esb_event_envelope env = {0};
             int item_err = zmk_split_esb_get_item(rx_buf, (uint8_t *)&env,
-                                                  sizeof(struct esb_event_envelope));
+                                                  sizeof(struct esb_event_envelope),
+                                                  false);
             switch (item_err) {
             case 0: {
                 if (!event_payload_size_is_valid(&env)) {
@@ -386,18 +772,37 @@ static void process_rx_work_cb(struct k_work *work) {
                 }
 
                 uint8_t source = env.payload.source - 1;
-                update_source_session(source, env.payload.session_id);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+                if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO ||
+                    env.payload.wire_type == ESB_WIRE_EVENT_V3_RECOVERY ||
+                    env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
+                    int control_err = process_v3_control_event(source, &env);
+                    if (control_err != 0 && control_err != -EALREADY) {
+                        totem_esb_benchmark_rx_invalid(pipe, control_err);
+                    }
+                    break;
+                }
+                if (!atomic_get(&secure_peers[source].active) ||
+                    env.payload.session_id !=
+                        secure_peers[source].active_session ||
+                    env.payload.sequence == 0) {
+                    totem_esb_benchmark_security_drop(
+                        source, "session", env.payload.sequence);
+                    break;
+                }
+#else
+                update_source_session(source, env.payload.session_id, false);
+#endif
                 struct esb_rx_sequence_state *seq = &rx_sequences[source];
                 uint32_t gap = 0;
                 bool accept = true;
 
                 if (seq->initialized) {
-                    uint32_t delta = env.payload.sequence - seq->last;
-                    if (delta == 0) {
+                    if (env.payload.sequence == seq->last) {
                         seq->duplicates++;
                         accept = false;
-                    } else if (delta < (UINT32_MAX / 2U) + 1U) {
-                        gap = delta - 1U;
+                    } else if (env.payload.sequence > seq->last) {
+                        gap = env.payload.sequence - seq->last - 1U;
                         seq->gaps += gap;
                         seq->last = env.payload.sequence;
                     } else {
@@ -410,7 +815,17 @@ static void process_rx_work_cb(struct k_work *work) {
                 }
                 seq->received++;
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+                if (accept) {
+                    confirm_v3_active_session(source);
+                    totem_esb_peer_seen(source);
+                } else {
+                    totem_esb_benchmark_security_drop(
+                        source, "replay", env.payload.sequence);
+                }
+#else
                 totem_esb_peer_seen(source);
+#endif
 
                 uint8_t event_type = 0;
                 uint8_t position = 0;
@@ -488,6 +903,9 @@ static void process_rx_work_cb(struct k_work *work) {
             case -EMSGSIZE:
             case -EBADMSG:
             case -EINVAL:
+            case -EACCES:
+            case -ENOKEY:
+            case -EADDRNOTAVAIL:
                 totem_esb_benchmark_rx_invalid(pipe, item_err);
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP)
                 if (item_err == -EBADMSG) {

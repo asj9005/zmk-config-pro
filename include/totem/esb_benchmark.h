@@ -6,6 +6,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <zephyr/toolchain.h>
 
@@ -23,14 +24,18 @@ struct totem_esb_link_metric_payload {
     uint32_t value;
 } __packed;
 
-void totem_esb_benchmark_rx(uint8_t source, uint32_t session_id, uint32_t sequence,
+void totem_esb_benchmark_rx(uint8_t source, uint64_t session_id, uint32_t sequence,
                             uint32_t gap, uint32_t source_tick, uint8_t wire_type,
                             uint8_t event_type, uint8_t position, uint8_t pressed,
                             bool accepted_for_zmk);
 void totem_esb_benchmark_rx_invalid(uint8_t pipe, int error);
 void totem_esb_benchmark_rx_overflow(uint8_t pipe, uint32_t count);
-void totem_esb_benchmark_link_metric(uint8_t source, uint32_t session_id, uint8_t metric,
+void totem_esb_benchmark_link_metric(uint8_t source, uint64_t session_id, uint8_t metric,
                                      uint32_t value);
+void totem_esb_benchmark_crypto(uint8_t source, bool encrypt, size_t bytes,
+                                uint32_t cycles, int result);
+void totem_esb_benchmark_security_drop(uint8_t source, const char *reason,
+                                       uint32_t sequence);
 void totem_esb_benchmark_tx(uint8_t source, uint16_t message_id, uint16_t attempts,
                             bool success);
 void totem_esb_transport_queue_pressure(bool producer_ring);

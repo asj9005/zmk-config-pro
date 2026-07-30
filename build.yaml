@@ -29,3 +29,28 @@ include:
   - board: xiao_ble//zmk
     shield: totem_dongle prospector_adapter totem_esb_dongle totem_esb_benchmark
     artifact-name: totem_dongle_esb_prospector_benchmark
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y
+    artifact-name: ci_only_totem_left_esb_v3_testkey
+  - board: xiao_ble//zmk
+    shield: totem_right totem_esb_right totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y
+    artifact-name: ci_only_totem_right_esb_v3_testkey
+  - board: xiao_ble//zmk
+    shield: totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3
+    snippet: studio-rpc-usb-uart
+    cmake-args: -DCONFIG_ZMK_STUDIO=y -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y
+    artifact-name: ci_only_totem_dongle_esb_v3_prospector_testkey
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3 totem_esb_benchmark
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y
+    artifact-name: ci_only_totem_left_esb_v3_benchmark_testkey
+  - board: xiao_ble//zmk
+    shield: totem_right totem_esb_right totem_esb_v3 totem_esb_benchmark
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y
+    artifact-name: ci_only_totem_right_esb_v3_benchmark_testkey
+  - board: xiao_ble//zmk
+    shield: totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3 totem_esb_benchmark
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y
+    artifact-name: ci_only_totem_dongle_esb_v3_prospector_benchmark_testkey

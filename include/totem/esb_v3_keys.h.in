@@ -1,0 +1,10 @@
+/*
+ * Generated at configure time from Kconfig. Do not commit production keys or
+ * copy this generated header out of a local build directory.
+ */
+
+#pragma once
+
+#define TOTEM_ESB_V3_LOCAL_KEY_BYTES @TOTEM_ESB_V3_LOCAL_KEY_BYTES@
+#define TOTEM_ESB_V3_LEFT_KEY_BYTES @TOTEM_ESB_V3_LEFT_KEY_BYTES@
+#define TOTEM_ESB_V3_RIGHT_KEY_BYTES @TOTEM_ESB_V3_RIGHT_KEY_BYTES@

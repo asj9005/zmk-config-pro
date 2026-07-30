@@ -6,6 +6,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
+#include <string.h>
 
 #include <totem/esb_benchmark.h>
 
@@ -15,7 +16,7 @@
 
 struct pending_usb_event {
     uint8_t source;
-    uint32_t session_id;
+    uint64_t session_id;
     uint32_t sequence;
     uint32_t rx_tick;
     uint8_t position;
@@ -176,15 +177,15 @@ uint8_t totem_esb_peer_connected_count(void) { return 0; }
 void totem_esb_schedule_display_sync(void) {}
 #endif
 
-void totem_esb_benchmark_rx(uint8_t source, uint32_t session_id, uint32_t sequence,
+void totem_esb_benchmark_rx(uint8_t source, uint64_t session_id, uint32_t sequence,
                             uint32_t gap, uint32_t source_tick, uint8_t wire_type,
                             uint8_t event_type, uint8_t position, uint8_t pressed,
                             bool accepted_for_zmk) {
 #if IS_ENABLED(CONFIG_TOTEM_ESB_BENCHMARK)
     uint32_t dongle_tick = k_cycle_get_32();
-    LOG_INF("BENCH_RX source=%u session=%u seq=%u gap=%u source_tick=%u dongle_tick=%u "
+    LOG_INF("BENCH_RX source=%u session=%llu seq=%u gap=%u source_tick=%u dongle_tick=%u "
             "wire=%u event=%u position=%u pressed=%u accepted=%u",
-            source, session_id, sequence, gap, source_tick, dongle_tick, wire_type,
+            source, (unsigned long long)session_id, sequence, gap, source_tick, dongle_tick, wire_type,
             event_type, position, pressed, accepted_for_zmk);
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) && IS_ENABLED(CONFIG_ZMK_USB)
     if (accepted_for_zmk && wire_type == 0 &&
@@ -227,9 +228,9 @@ int __wrap_zmk_usb_hid_send_keyboard_report(void) {
     struct pending_usb_event pending;
 
     if (k_msgq_get(&pending_usb_events, &pending, K_NO_WAIT) == 0) {
-        LOG_INF("BENCH_USB source=%u session=%u seq=%u position=%u pressed=%u "
+        LOG_INF("BENCH_USB source=%u session=%llu seq=%u position=%u pressed=%u "
                 "rx_tick=%u queue_enter_tick=%u queue_done_tick=%u result=%d",
-                pending.source, pending.session_id, pending.sequence, pending.position,
+                pending.source, (unsigned long long)pending.session_id, pending.sequence, pending.position,
                 pending.pressed, pending.rx_tick, queue_enter_tick, queue_done_tick, result);
     } else {
         LOG_INF("BENCH_USB_UNMATCHED queue_enter_tick=%u queue_done_tick=%u result=%d",
@@ -259,16 +260,94 @@ void totem_esb_benchmark_rx_overflow(uint8_t pipe, uint32_t count) {
 #endif
 }
 
-void totem_esb_benchmark_link_metric(uint8_t source, uint32_t session_id, uint8_t metric,
+void totem_esb_benchmark_link_metric(uint8_t source, uint64_t session_id, uint8_t metric,
                                      uint32_t value) {
 #if IS_ENABLED(CONFIG_TOTEM_ESB_BENCHMARK)
-    LOG_INF("BENCH_LINK source=%u session=%u metric=%u value=%u dongle_tick=%u", source,
-            session_id, metric, value, k_cycle_get_32());
+    LOG_INF("BENCH_LINK source=%u session=%llu metric=%u value=%u dongle_tick=%u", source,
+            (unsigned long long)session_id, metric, value, k_cycle_get_32());
 #else
     ARG_UNUSED(source);
     ARG_UNUSED(session_id);
     ARG_UNUSED(metric);
     ARG_UNUSED(value);
+#endif
+}
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_BENCHMARK) && IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+#define CRYPTO_BIN_COUNT 12
+#define CRYPTO_REPORT_SAMPLES 1024U
+
+struct crypto_benchmark_window {
+    uint32_t samples;
+    uint32_t failures;
+    uint64_t total_cycles;
+    uint32_t maximum_cycles;
+    uint32_t bins[CRYPTO_BIN_COUNT];
+};
+
+static struct crypto_benchmark_window crypto_windows[2][2];
+static struct k_spinlock crypto_benchmark_lock;
+
+static uint8_t crypto_bin(uint32_t cycles) {
+    uint8_t bin = 0;
+    uint32_t ceiling = 64;
+    while (bin < CRYPTO_BIN_COUNT - 1U && cycles > ceiling) {
+        ceiling <<= 1;
+        bin++;
+    }
+    return bin;
+}
+#endif
+
+void totem_esb_benchmark_crypto(uint8_t source, bool encrypt, size_t bytes,
+                                uint32_t cycles, int result) {
+#if IS_ENABLED(CONFIG_TOTEM_ESB_BENCHMARK) && IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (source >= ARRAY_SIZE(crypto_windows)) {
+        return;
+    }
+    uint8_t operation = encrypt ? 0U : 1U;
+    k_spinlock_key_t key = k_spin_lock(&crypto_benchmark_lock);
+    struct crypto_benchmark_window *window = &crypto_windows[source][operation];
+    window->samples++;
+    window->failures += result == 0 ? 0U : 1U;
+    window->total_cycles += cycles;
+    window->maximum_cycles = MAX(window->maximum_cycles, cycles);
+    window->bins[crypto_bin(cycles)]++;
+    if (window->samples < CRYPTO_REPORT_SAMPLES) {
+        k_spin_unlock(&crypto_benchmark_lock, key);
+        return;
+    }
+    struct crypto_benchmark_window snapshot = *window;
+    memset(window, 0, sizeof(*window));
+    k_spin_unlock(&crypto_benchmark_lock, key);
+
+    LOG_INF("BENCH_SEC op=%s source=%u bytes=%u samples=%u failures=%u "
+            "total_cycles=%llu max_cycles=%u bins=%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",
+            encrypt ? "encrypt" : "decrypt", source, (uint32_t)bytes,
+            snapshot.samples, snapshot.failures,
+            (unsigned long long)snapshot.total_cycles, snapshot.maximum_cycles,
+            snapshot.bins[0], snapshot.bins[1], snapshot.bins[2],
+            snapshot.bins[3], snapshot.bins[4], snapshot.bins[5],
+            snapshot.bins[6], snapshot.bins[7], snapshot.bins[8],
+            snapshot.bins[9], snapshot.bins[10], snapshot.bins[11]);
+#else
+    ARG_UNUSED(source);
+    ARG_UNUSED(encrypt);
+    ARG_UNUSED(bytes);
+    ARG_UNUSED(cycles);
+    ARG_UNUSED(result);
+#endif
+}
+
+void totem_esb_benchmark_security_drop(uint8_t source, const char *reason,
+                                       uint32_t sequence) {
+#if IS_ENABLED(CONFIG_TOTEM_ESB_BENCHMARK) && IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    LOG_INF("BENCH_SEC_DROP source=%u reason=%s seq=%u tick=%u", source, reason,
+            sequence, k_cycle_get_32());
+#else
+    ARG_UNUSED(source);
+    ARG_UNUSED(reason);
+    ARG_UNUSED(sequence);
 #endif
 }
 

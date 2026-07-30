@@ -1,0 +1,4 @@
+/* Config-only auxiliary shield for authenticated ESB v3. */
+
+/ {
+};

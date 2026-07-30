@@ -7,14 +7,30 @@
 #include "common.h"
 #include "app_esb.h"
 
+#include <stddef.h>
 #include <zephyr/sys/crc.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 
 #include <totem/esb_benchmark.h>
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+#include <totem/esb_v3_crypto.h>
+#endif
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+BUILD_ASSERT(offsetof(struct esb_command_payload, body) ==
+                 sizeof(struct esb_v3_wire_payload_header),
+             "Secure command header layout diverged from authenticated AAD");
+BUILD_ASSERT(offsetof(struct esb_event_payload, body) ==
+                 sizeof(struct esb_v3_wire_payload_header),
+             "Secure event header layout diverged from authenticated AAD");
+BUILD_ASSERT(sizeof(struct esb_msg_postfix) == TOTEM_ESB_V3_TAG_SIZE,
+             "Secure ESB postfix must contain exactly one CCM tag");
+#endif
 
 void zmk_split_esb_tx(struct zmk_split_esb_state *state) {
     size_t tx_buf_len = ring_buf_size_get(state->tx_buf);
@@ -34,7 +50,7 @@ void zmk_split_esb_tx(struct zmk_split_esb_state *state) {
     }
 
     size_t radio_len = sizeof(prefix) + prefix.payload_size
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
+#if ESB_MSG_HAS_POSTFIX
                        + sizeof(struct esb_msg_postfix)
 #endif
         ;
@@ -148,10 +164,55 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
     }
 }
 
-int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_size) {
+int zmk_split_esb_finalize_item(uint8_t *env, size_t env_len,
+                                bool downlink, struct esb_msg_postfix *postfix) {
+    if (env == NULL || env_len < sizeof(struct esb_msg_prefix) || postfix == NULL) {
+        return -EINVAL;
+    }
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (env_len < sizeof(struct esb_msg_prefix) +
+                      sizeof(struct esb_v3_wire_payload_header)) {
+        return -EMSGSIZE;
+    }
+    struct esb_v3_wire_payload_header *header =
+        (void *)(env + sizeof(struct esb_msg_prefix));
+    if (header->source == 0 ||
+        header->source >= CONFIG_ESB_PIPE_COUNT) {
+        return -EADDRNOTAVAIL;
+    }
+    enum totem_esb_v3_key_stage stage = TOTEM_ESB_V3_ACTIVE_KEY;
+    if ((!downlink &&
+         (header->wire_type == ESB_WIRE_EVENT_V3_HELLO ||
+          header->wire_type == ESB_WIRE_EVENT_V3_RECOVERY)) ||
+        (downlink && header->wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE)) {
+        stage = TOTEM_ESB_V3_ROOT_KEY;
+    } else if ((!downlink && header->wire_type == ESB_WIRE_EVENT_V3_READY) ||
+               (downlink &&
+                header->wire_type == ESB_WIRE_COMMAND_V3_SESSION_OK)) {
+        stage = TOTEM_ESB_V3_PENDING_KEY;
+    }
+    size_t aad_len =
+        sizeof(struct esb_msg_prefix) + sizeof(struct esb_v3_wire_payload_header);
+    size_t body_len = env_len - aad_len;
+    return totem_esb_v3_seal(
+        header->source - 1U,
+        downlink ? TOTEM_ESB_V3_DOWNLINK : TOTEM_ESB_V3_UPLINK, stage,
+        header->session_id, header->sequence, env, aad_len, env + aad_len,
+        body_len, postfix->tag);
+#elif IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
+    postfix->crc = crc32_ieee(env, env_len);
+    return 0;
+#else
+    ARG_UNUSED(downlink);
+    return 0;
+#endif
+}
+
+int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_size,
+                           bool downlink) {
     // RX buffer only has prefix + postfix
     while (ring_buf_size_get(rx_buf) > (sizeof(struct esb_msg_prefix)
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
+#if ESB_MSG_HAS_POSTFIX
             + sizeof(struct esb_msg_postfix)
 #endif
     )) {
@@ -185,7 +246,7 @@ int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_siz
         }
 
         if (ring_buf_size_get(rx_buf) < (payload_to_read
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
+#if ESB_MSG_HAS_POSTFIX
             + sizeof(struct esb_msg_postfix)
 #endif
         )) {
@@ -198,15 +259,53 @@ int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_siz
                       read == payload_to_read,
                       "Somehow read less than we expect from the RX buffer");
 
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_MSG_POSTFIX_CRC)
+#if ESB_MSG_HAS_POSTFIX
         struct esb_msg_postfix postfix;
         __ASSERT_EVAL((void)ring_buf_get(rx_buf, (uint8_t *)&postfix, sizeof(postfix)),
                       uint32_t read = ring_buf_get(rx_buf, (uint8_t *)&postfix, sizeof(postfix)),
                       read == sizeof(postfix),
                       "Somehow read less of the postfix than we expect from the RX buffer");
 
-        // LOG_HEXDUMP_DBG(&postfix, sizeof(postfix), "postfix");
-
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+        if (payload_to_read <
+            sizeof(struct esb_msg_prefix) +
+                sizeof(struct esb_v3_wire_payload_header)) {
+            return -EMSGSIZE;
+        }
+        struct esb_v3_wire_payload_header *header =
+            (void *)(env + sizeof(struct esb_msg_prefix));
+        if (header->source == 0 ||
+            header->source >= CONFIG_ESB_PIPE_COUNT) {
+            return -EADDRNOTAVAIL;
+        }
+        enum totem_esb_v3_key_stage stage = TOTEM_ESB_V3_ACTIVE_KEY;
+        if ((!downlink &&
+             (header->wire_type == ESB_WIRE_EVENT_V3_HELLO ||
+              header->wire_type == ESB_WIRE_EVENT_V3_RECOVERY)) ||
+            (downlink &&
+             header->wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE)) {
+            stage = TOTEM_ESB_V3_ROOT_KEY;
+        } else if ((!downlink &&
+                    header->wire_type == ESB_WIRE_EVENT_V3_READY) ||
+                   (downlink &&
+                    header->wire_type == ESB_WIRE_COMMAND_V3_SESSION_OK)) {
+            stage = TOTEM_ESB_V3_PENDING_KEY;
+        }
+        size_t aad_len = sizeof(struct esb_msg_prefix) +
+                         sizeof(struct esb_v3_wire_payload_header);
+        size_t body_len = payload_to_read - aad_len;
+        int crypto_err = totem_esb_v3_open(
+            header->source - 1U,
+            downlink ? TOTEM_ESB_V3_DOWNLINK : TOTEM_ESB_V3_UPLINK, stage,
+            header->session_id, header->sequence, env, aad_len, env + aad_len,
+            body_len, postfix.tag);
+        if (crypto_err != 0) {
+            totem_esb_benchmark_security_drop(
+                header->source - 1U,
+                crypto_err == -EACCES ? "auth" : "session", header->sequence);
+            return crypto_err;
+        }
+#else
         uint32_t crc = crc32_ieee(env, payload_to_read);
 
         if (crc != postfix.crc) {
@@ -214,6 +313,7 @@ int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_siz
                     crc, postfix.crc);
             return -EBADMSG;
         }
+#endif
 #endif
 
         return 0;

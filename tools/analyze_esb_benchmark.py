@@ -10,6 +10,8 @@ The firmware emits these machine-readable record families:
   BENCH_RX_INVALID pipe=1 error=-22 dongle_tick=...
   BENCH_TX source=0 msg=1 attempts=1 retransmissions=0 success=1 source_tick=...
   BENCH_USB source=0 session=... seq=2 ... rx_tick=... queue_enter_tick=... queue_done_tick=...
+  BENCH_SEC op=encrypt source=0 bytes=32 samples=256 failures=0 total_cycles=... max_cycles=... bins=...
+  BENCH_SEC_DROP source=0 reason=auth seq=3 tick=...
 
 Sequence integrity is calculated across every BENCH_RX packet because the wire
 sequence is shared by ZMK, heartbeat, and synthetic benchmark packets. Cadence
@@ -34,6 +36,7 @@ from typing import Iterable, Optional, TextIO
 
 UINT32_MASK = (1 << 32) - 1
 UINT32_HALF = 1 << 31
+UINT64_MASK = (1 << 64) - 1
 
 WIRE_NAMES = {
     0: "zmk",
@@ -56,7 +59,25 @@ LINK_METRIC_NAMES = {
     4: "producer_queue_overflow",
 }
 
+SECURITY_BIN_UPPER_BOUNDS = (
+    64,
+    128,
+    256,
+    512,
+    1024,
+    2048,
+    4096,
+    8192,
+    16384,
+    32768,
+    65536,
+    None,
+)
+
 KV_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=(-?(?:0[xX][0-9A-Fa-f]+|\d+))")
+SECURITY_OPERATION_RE = re.compile(r"\bop=(encrypt|decrypt)\b")
+SECURITY_BINS_RE = re.compile(r"\bbins=(\d+(?:,\d+){11})(?=\s|$)")
+SECURITY_DROP_REASON_RE = re.compile(r"\breason=([A-Za-z0-9_.:-]+)(?=\s|$)")
 
 
 @dataclass(frozen=True)
@@ -104,6 +125,28 @@ class UsbUnmatchedRecord:
     queue_enter_tick: int
     queue_done_tick: int
     result: int
+
+
+@dataclass(frozen=True)
+class SecurityRecord:
+    line_no: int
+    operation: str
+    source: int
+    byte_count: int
+    samples: int
+    failures: int
+    total_cycles: int
+    max_cycles: int
+    bins: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class SecurityDropRecord:
+    line_no: int
+    source: int
+    reason: str
+    sequence: int
+    tick: int
 
 
 def parse_int(value: str) -> int:
@@ -218,6 +261,74 @@ def duration_summary(
     return summary
 
 
+def histogram_percentile(
+    bins: tuple[int, ...], percent: float
+) -> dict[str, object]:
+    """Return the nearest-rank histogram bin containing a percentile."""
+    sample_count = sum(bins)
+    if sample_count == 0:
+        return {
+            "bin_index": None,
+            "upper_bound_cycles": None,
+            "overflow": False,
+        }
+
+    rank = max(1, math.ceil(sample_count * percent / 100.0))
+    cumulative = 0
+    for index, count in enumerate(bins):
+        cumulative += count
+        if cumulative >= rank:
+            upper_bound = SECURITY_BIN_UPPER_BOUNDS[index]
+            return {
+                "bin_index": index,
+                "upper_bound_cycles": upper_bound,
+                "overflow": upper_bound is None,
+            }
+
+    raise AssertionError("histogram rank exceeds sample count")
+
+
+def summarize_security_records(records: list[SecurityRecord]) -> dict[str, object]:
+    bins = tuple(
+        sum(record.bins[index] for record in records)
+        for index in range(len(SECURITY_BIN_UPPER_BOUNDS))
+    )
+    samples = sum(record.samples for record in records)
+    failures = sum(record.failures for record in records)
+    total_cycles = sum(record.total_cycles for record in records)
+    histogram_samples = sum(bins)
+
+    return {
+        "record_count": len(records),
+        "samples": samples,
+        "failures": failures,
+        "failure_rate": failures / samples if samples else None,
+        "total_cycles": total_cycles,
+        "mean_cycles": total_cycles / samples if samples else None,
+        "approx_p50": histogram_percentile(bins, 50),
+        "approx_p95": histogram_percentile(bins, 95),
+        "approx_p99": histogram_percentile(bins, 99),
+        "max_cycles": max((record.max_cycles for record in records), default=None),
+        "histogram_samples": histogram_samples,
+        "histogram_sample_delta": histogram_samples - samples,
+        "histogram": [
+            {
+                "bin_index": index,
+                "upper_bound_cycles": upper_bound,
+                "overflow": upper_bound is None,
+                "count": bins[index],
+            }
+            for index, upper_bound in enumerate(SECURITY_BIN_UPPER_BOUNDS)
+        ],
+        "reported_bytes_by_window": {
+            str(byte_count): count
+            for byte_count, count in sorted(
+                Counter(record.byte_count for record in records).items()
+            )
+        },
+    }
+
+
 def classify_sequence(records: list[RxRecord]) -> tuple[list[RxRecord], dict[str, int]]:
     """Mirror the central firmware's uint32 sequence acceptance rules."""
     accepted: list[RxRecord] = []
@@ -313,6 +424,8 @@ def analyze(
     tx_records: list[TxRecord] = []
     usb_records: list[UsbRecord] = []
     usb_unmatched_records: list[UsbUnmatchedRecord] = []
+    security_records: list[SecurityRecord] = []
+    security_drop_records: list[SecurityDropRecord] = []
     usb_queue_overflow: list[tuple[int, int]] = []
     invalid_errors: Counter[int] = Counter()
     invalid_pipes: Counter[int] = Counter()
@@ -344,6 +457,15 @@ def analyze(
         "queue_done_tick",
         "result",
     }
+    required_security = {
+        "source",
+        "bytes",
+        "samples",
+        "failures",
+        "total_cycles",
+        "max_cycles",
+    }
+    required_security_drop = {"source", "seq", "tick"}
 
     for line_count, line in enumerate(lines, 1):
         lower = line.lower()
@@ -387,9 +509,65 @@ def analyze(
             fields = parse_fields(line)
             if {"source", "session", "metric", "value"}.issubset(fields):
                 link_metric_latest[(fields["source"], fields["metric"])] = (
-                    fields["session"] & UINT32_MASK,
+                    fields["session"] & UINT64_MASK,
                     fields["value"] & UINT32_MASK,
                 )
+            else:
+                malformed_markers += 1
+            continue
+
+        if "BENCH_SEC_DROP" in line:
+            fields = parse_fields(line)
+            reason_match = SECURITY_DROP_REASON_RE.search(line)
+            if required_security_drop.issubset(fields) and reason_match:
+                security_drop_records.append(
+                    SecurityDropRecord(
+                        line_no=line_count,
+                        source=fields["source"],
+                        reason=reason_match.group(1),
+                        sequence=fields["seq"] & UINT32_MASK,
+                        tick=fields["tick"] & UINT32_MASK,
+                    )
+                )
+            else:
+                malformed_markers += 1
+            continue
+
+        if "BENCH_SEC" in line:
+            fields = parse_fields(line)
+            operation_match = SECURITY_OPERATION_RE.search(line)
+            bins_match = SECURITY_BINS_RE.search(line)
+            if (
+                required_security.issubset(fields)
+                and operation_match
+                and bins_match
+            ):
+                bins = tuple(parse_int(value) for value in bins_match.group(1).split(","))
+                numeric_values = (
+                    fields["source"],
+                    fields["bytes"],
+                    fields["samples"],
+                    fields["failures"],
+                    fields["total_cycles"],
+                    fields["max_cycles"],
+                    *bins,
+                )
+                if all(value >= 0 for value in numeric_values):
+                    security_records.append(
+                        SecurityRecord(
+                            line_no=line_count,
+                            operation=operation_match.group(1),
+                            source=fields["source"],
+                            byte_count=fields["bytes"],
+                            samples=fields["samples"],
+                            failures=fields["failures"],
+                            total_cycles=fields["total_cycles"],
+                            max_cycles=fields["max_cycles"],
+                            bins=bins,
+                        )
+                    )
+                else:
+                    malformed_markers += 1
             else:
                 malformed_markers += 1
             continue
@@ -424,7 +602,7 @@ def analyze(
                     UsbRecord(
                         line_no=line_count,
                         source=fields["source"],
-                        session_id=fields.get("session", 0) & UINT32_MASK,
+                        session_id=fields.get("session", 0) & UINT64_MASK,
                         sequence=fields["seq"] & UINT32_MASK,
                         position=fields["position"],
                         pressed=fields["pressed"],
@@ -445,7 +623,7 @@ def analyze(
                     RxRecord(
                         line_no=line_count,
                         source=fields["source"],
-                        session_id=fields.get("session", 0) & UINT32_MASK,
+                        session_id=fields.get("session", 0) & UINT64_MASK,
                         sequence=fields["seq"] & UINT32_MASK,
                         firmware_gap=fields["gap"],
                         source_tick=fields["source_tick"] & UINT32_MASK,
@@ -684,6 +862,42 @@ def analyze(
         },
     }
 
+    security_by_identity: dict[tuple[int, str], list[SecurityRecord]] = defaultdict(list)
+    for record in security_records:
+        security_by_identity[(record.source, record.operation)].append(record)
+
+    security_drop_reasons_by_source: dict[int, Counter[str]] = defaultdict(Counter)
+    for record in security_drop_records:
+        security_drop_reasons_by_source[record.source][record.reason] += 1
+
+    security_sources = sorted(
+        {source for source, _operation in security_by_identity}
+        | set(security_drop_reasons_by_source)
+    )
+    security_result = {
+        "bin_upper_bounds_cycles": list(SECURITY_BIN_UPPER_BOUNDS),
+        "by_source": {
+            str(source): {
+                "operations": {
+                    operation: summarize_security_records(records)
+                    for (record_source, operation), records in sorted(
+                        security_by_identity.items()
+                    )
+                    if record_source == source
+                },
+                "drop_count": sum(security_drop_reasons_by_source[source].values()),
+                "drop_reasons": dict(
+                    sorted(security_drop_reasons_by_source[source].items())
+                ),
+            }
+            for source in security_sources
+        },
+        "drop_count": len(security_drop_records),
+        "drop_reasons": dict(
+            sorted(Counter(record.reason for record in security_drop_records).items())
+        ),
+    }
+
     return {
         "input": {
             "line_count": line_count,
@@ -691,6 +905,8 @@ def analyze(
             "parsed_tx_records": len(tx_records),
             "parsed_usb_records": len(usb_records),
             "parsed_usb_unmatched_records": len(usb_unmatched_records),
+            "parsed_security_records": len(security_records),
+            "parsed_security_drop_records": len(security_drop_records),
             "malformed_benchmark_markers": malformed_markers,
             "dongle_clock_hz": dongle_clock_hz,
             "source_clock_hz": source_clock_hz,
@@ -704,6 +920,9 @@ def analyze(
             "usb_queue_records": len(usb_records),
             "usb_unmatched_reports": len(usb_unmatched_records),
             "usb_queue_overflows": len(usb_queue_overflow),
+            "security_samples": sum(record.samples for record in security_records),
+            "security_failures": sum(record.failures for record in security_records),
+            "security_drops": len(security_drop_records),
         },
         "sources": source_results,
         "invalid_rx": {
@@ -753,6 +972,7 @@ def analyze(
                 dongle_clock_hz,
             ),
         },
+        "security": security_result,
         "diagnostics": dict(sorted(diagnostics.items())),
         "interpretation": {
             "typical_definition": "median (p50)",
@@ -826,6 +1046,14 @@ def format_duration(summary: dict[str, object]) -> str:
     )
 
 
+def format_security_percentile(percentile_summary: dict[str, object]) -> str:
+    if percentile_summary["bin_index"] is None:
+        return "n/a"
+    if percentile_summary["overflow"]:
+        return f">{SECURITY_BIN_UPPER_BOUNDS[-2]} cycles"
+    return f"<={percentile_summary['upper_bound_cycles']} cycles"
+
+
 def print_text(result: dict[str, object]) -> None:
     input_info = result["input"]
     totals = result["totals"]
@@ -834,6 +1062,8 @@ def print_text(result: dict[str, object]) -> None:
         f"lines={input_info['line_count']} rx={input_info['parsed_rx_records']} "
         f"tx={input_info['parsed_tx_records']} usb={input_info['parsed_usb_records']} "
         f"usb_unmatched={input_info['parsed_usb_unmatched_records']} "
+        f"security={input_info['parsed_security_records']} "
+        f"security_drops={input_info['parsed_security_drop_records']} "
         f"malformed={input_info['malformed_benchmark_markers']}"
     )
     print(
@@ -900,6 +1130,28 @@ def print_text(result: dict[str, object]) -> None:
             + format_duration(usb_queue["rx_to_queue_done"])
         )
 
+    security = result["security"]
+    if security["by_source"]:
+        print()
+        print("Security benchmark:")
+        for source, source_data in security["by_source"].items():
+            print(f"  source {source}")
+            for operation, summary in source_data["operations"].items():
+                print(
+                    f"    {operation}: records={summary['record_count']} "
+                    f"samples={summary['samples']} failures={summary['failures']} "
+                    f"mean={format_number(summary['mean_cycles'])} cycles "
+                    f"p50~{format_security_percentile(summary['approx_p50'])} "
+                    f"p95~{format_security_percentile(summary['approx_p95'])} "
+                    f"p99~{format_security_percentile(summary['approx_p99'])} "
+                    f"max={format_number(summary['max_cycles'])} cycles"
+                )
+            if source_data["drop_count"]:
+                print(
+                    f"    drops: total={source_data['drop_count']} "
+                    f"reasons={source_data['drop_reasons']}"
+                )
+
     print()
     tx = result["tx"]
     print(
@@ -942,8 +1194,8 @@ def positive_float(value: str) -> float:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Analyze BENCH_RX/BENCH_TX/BENCH_USB records from Totem ESB RTT "
-            "logs. No clock frequency is assumed."
+            "Analyze BENCH_RX/BENCH_TX/BENCH_USB/BENCH_SEC records from Totem "
+            "ESB RTT logs. No clock frequency is assumed."
         )
     )
     parser.add_argument("log", help="RTT/log file, or - for stdin")
@@ -993,6 +1245,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         and result["input"]["parsed_tx_records"] == 0
         and result["input"]["parsed_usb_records"] == 0
         and result["input"]["parsed_usb_unmatched_records"] == 0
+        and result["input"]["parsed_security_records"] == 0
+        and result["input"]["parsed_security_drop_records"] == 0
     ):
         print("error: no benchmark records found", file=sys.stderr)
         return 2

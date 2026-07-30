@@ -21,3 +21,6 @@ config SHIELD_TOTEM_ESB_DONGLE
 
 config SHIELD_TOTEM_ESB_BENCHMARK
     def_bool $(shields_list_contains,totem_esb_benchmark)
+
+config SHIELD_TOTEM_ESB_V3
+    def_bool $(shields_list_contains,totem_esb_v3)

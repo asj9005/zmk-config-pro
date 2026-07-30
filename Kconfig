@@ -21,6 +21,54 @@ config TOTEM_ESB_PROSPECTOR
     depends on TOTEM_ESB_COMPAT && ZMK_SPLIT_ROLE_CENTRAL
     default n
 
+config TOTEM_ESB_V3
+    bool "Enable authenticated/encrypted Totem ESB v3 transport"
+    depends on TOTEM_ESB_COMPAT
+    default n
+    help
+      Replaces the v2 CRC32 postfix with AES-128-CCM encryption and a
+      BLE-sized 4-byte MIC. A two-nonce authenticated handshake establishes
+      a fresh session before ZMK events or commands are accepted.
+
+config TOTEM_ESB_V3_CI_TEST_KEYS
+    bool "Use public disposable ESB v3 CI test keys"
+    depends on TOTEM_ESB_V3
+    default n
+    help
+      Enables keys that are public in this repository. Firmware built with
+      this option is only for compile/protocol testing and is not secure.
+
+config TOTEM_ESB_V3_LOCAL_KEY_HEX
+    string "ESB v3 local peripheral link key (32 hex characters)"
+    depends on TOTEM_ESB_V3 && !ZMK_SPLIT_ROLE_CENTRAL
+    default "4d4f5d2cd993c6be0db2495606d229a1" if TOTEM_ESB_V3_CI_TEST_KEYS && SHIELD_TOTEM_ESB_LEFT
+    default "ed812b6ff48a2e17328b623983cb776c" if TOTEM_ESB_V3_CI_TEST_KEYS && SHIELD_TOTEM_ESB_RIGHT
+    default ""
+
+config TOTEM_ESB_V3_LEFT_KEY_HEX
+    string "ESB v3 dongle-to-left link key (32 hex characters)"
+    depends on TOTEM_ESB_V3 && ZMK_SPLIT_ROLE_CENTRAL
+    default "4d4f5d2cd993c6be0db2495606d229a1" if TOTEM_ESB_V3_CI_TEST_KEYS
+    default ""
+
+config TOTEM_ESB_V3_RIGHT_KEY_HEX
+    string "ESB v3 dongle-to-right link key (32 hex characters)"
+    depends on TOTEM_ESB_V3 && ZMK_SPLIT_ROLE_CENTRAL
+    default "ed812b6ff48a2e17328b623983cb776c" if TOTEM_ESB_V3_CI_TEST_KEYS
+    default ""
+
+config TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS
+    int "ESB v3 handshake probe interval in milliseconds"
+    depends on TOTEM_ESB_V3
+    default 2
+    range 1 100
+
+config TOTEM_ESB_V3_PRESESSION_EVENT_QUEUE_SIZE
+    int "Events retained while an ESB v3 session is negotiated"
+    depends on TOTEM_ESB_V3 && !ZMK_SPLIT_ROLE_CENTRAL
+    default 32
+    range 8 128
+
 config TOTEM_ESB_HEARTBEAT_INTERVAL_MS
     int "Peripheral heartbeat interval in milliseconds"
     depends on TOTEM_ESB_COMPAT
