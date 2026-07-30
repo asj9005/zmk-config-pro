@@ -904,7 +904,7 @@ static void process_rx_work_cb(struct k_work *work) {
             case -EBADMSG:
             case -EINVAL:
             case -EACCES:
-            case -ENOKEY:
+            case -ENOENT:
             case -EADDRNOTAVAIL:
                 totem_esb_benchmark_rx_invalid(pipe, item_err);
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP)

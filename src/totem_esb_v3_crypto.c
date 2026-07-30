@@ -448,7 +448,7 @@ int totem_esb_v3_seal(uint8_t source, enum totem_esb_v3_direction direction,
                       uint8_t tag[TOTEM_ESB_V3_TAG_SIZE]) {
     psa_key_id_t key = key_for(source, stage, nonce_context);
     if (key == 0 || body_len > CONFIG_ESB_MAX_PAYLOAD_LENGTH) {
-        return -ENOKEY;
+        return -ENOENT;
     }
 
     uint8_t nonce[TOTEM_ESB_V3_NONCE_SIZE];
@@ -484,7 +484,7 @@ int totem_esb_v3_open(uint8_t source, enum totem_esb_v3_direction direction,
                       const uint8_t tag[TOTEM_ESB_V3_TAG_SIZE]) {
     psa_key_id_t key = key_for(source, stage, nonce_context);
     if (key == 0 || body_len > CONFIG_ESB_MAX_PAYLOAD_LENGTH) {
-        return -ENOKEY;
+        return -ENOENT;
     }
 
     uint8_t nonce[TOTEM_ESB_V3_NONCE_SIZE];

@@ -36,7 +36,7 @@ struct esb_command_payload {
         struct {
             uint64_t peripheral_nonce;
             uint32_t request_sequence;
-        } challenge;
+        } __packed challenge;
     } body;
 #else
     struct zmk_split_transport_central_command cmd;
