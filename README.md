@@ -7,16 +7,18 @@ Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 Z
 | 프로필 | 왼쪽 | 오른쪽 | Prospector 동글 |
 | --- | --- | --- | --- |
 | 기존 BLE split | `totem_left` | `totem_right` | `totem_dongle prospector_adapter` |
-| ESB release | `totem_left totem_esb_left` | `totem_right totem_esb_right` | `totem_dongle prospector_adapter totem_esb_dongle` |
-| ESB benchmark | release 조합 + `totem_esb_benchmark` | release 조합 + `totem_esb_benchmark` | release 조합 + `totem_esb_benchmark` |
+| ESB v2 release(평문) | `totem_left totem_esb_left` | `totem_right totem_esb_right` | `totem_dongle prospector_adapter totem_esb_dongle` |
+| ESB v2 benchmark | v2 release 조합 + `totem_esb_benchmark` | v2 release 조합 + `totem_esb_benchmark` | v2 release 조합 + `totem_esb_benchmark` |
+| ESB Secure v3 후보 | v2 release 조합 + `totem_esb_v3` | v2 release 조합 + `totem_esb_v3` | v2 release 조합 + `totem_esb_v3` |
+| ESB Secure v3 benchmark | v3 조합 + `totem_esb_benchmark` | v3 조합 + `totem_esb_benchmark` | v3 조합 + `totem_esb_benchmark` |
 
-`build.yaml`에는 기존 BLE 3개, `settings_reset`, ESB release 3개, ESB benchmark 3개 등 총 10개 항목이 있다. 구현 commit `3cf5bb610187ab2e84330703c28fb9a79c5c97ec`의 [GitHub Actions run 30433480301](https://github.com/asj9005/zmk-config-pro/actions/runs/30433480301)에서 10개가 모두 빌드됐고, 병합된 `firmware` artifact에 UF2 10개가 들어 있음을 확인했다. Artifact를 내려받아 ZIP을 푼 뒤 다음 release 파일을 사용한다.
+`build.yaml`에는 기존 BLE 3개, `settings_reset`, ESB v2 release 3개, ESB v2 benchmark 3개와 v3 release/benchmark 6개 등 총 16개 항목이 있다. v2 기준선은 [GitHub Actions run 30433985080](https://github.com/asj9005/zmk-config-pro/actions/runs/30433985080)에서 10/10 빌드됐다. Artifact를 내려받아 ZIP을 푼 뒤 다음 v2 release 파일을 사용한다.
 
 - `totem_left_esb.uf2`
 - `totem_right_esb.uf2`
 - `totem_dongle_esb_prospector.uf2`
 
-Benchmark artifact는 각각 `_benchmark.uf2`로 끝나며 일상 사용용이 아니다. ZIP 자체는 플래시하지 않는다. 자세한 파일명, 빌드, 플래시 및 롤백 절차는 [ESB 빌드 및 플래시 문서](docs/esb-1k-build-flash.md)를 따른다.
+Benchmark artifact는 각각 `_benchmark.uf2`로 끝나며 일상 사용용이 아니다. 공개 Actions의 v3 artifact에는 저장소에 공개된 폐기용 test key가 들어 있으므로 보안용 또는 일상용으로 플래시하지 않는다. 실제 v3 firmware는 로컬에서 생성한 production key로 세 역할을 빌드해야 한다. ZIP 자체는 플래시하지 않는다. 자세한 절차는 [ESB v2 빌드 및 플래시](docs/esb-1k-build-flash.md)와 [Secure v3 빌드 및 플래시](docs/esb-v3-build-flash.md)를 따른다.
 
 ## “1K”의 의미
 
@@ -26,10 +28,12 @@ Fresh-event 검증은 부팅 때 생성되는 32-bit session ID와 source별 seq
 
 현재 상태:
 
-- ESB 전송 및 benchmark 코드 경로: 구현됨, 10개 CI 빌드 **성공**
+- ESB v2 전송 및 benchmark 코드 경로: 구현됨, 기준선 10개 CI 빌드 **성공**
+- Secure v3 코드 경로: 구현됨, 16-entry 전체 matrix의 compile/link 검증은 별도 기록
 - release debounce: press 1 ms, release 5 ms
 - Prospector 화면, peer 상태 및 battery event 코드 경로: 포함됨, 실기 **미측정**
-- 컴파일된 release/benchmark 동글 HID descriptor의 `bInterval=1`: **확인**
+- v2 기준선의 컴파일된 release/benchmark 동글 HID descriptor `bInterval=1`: **확인**
+- v3 동글 HID descriptor 및 실제 USB cadence: **미측정**
 - 실제 USB enumerate 및 USBPcap 1 ms cadence: **미측정**
 - 실제 ESB typical/p95/p99 latency: **미측정**
 - 양쪽 동시 입력과 source별 100,000-event loss: **미측정**
@@ -51,11 +55,14 @@ Nordic PRX의 hardware ACK-payload FIFO는 pipe별로 따로 비우는 API가 �
 
 세 ESB 역할은 `config/boards/shields/totem/totem_esb_addr.dtsi`의 주소 정의 하나를 공유한다. 주소를 바꿀 때는 세 개 prefix와 pipe 0/1/2 매핑을 유지하고 왼쪽, 오른쪽, 동글을 모두 다시 빌드해 함께 플래시한다.
 
-ESB 주소, CRC, ACK 및 session ID는 암호화나 인증이 아니다. 현재 transport에는 payload 암호화, 송신자 인증 및 replay 방지가 없다. 주소는 주변의 다른 ESB 세트와 우발적으로 충돌할 가능성을 낮추는 식별자일 뿐 비밀키가 아니다.
+ESB 주소, CRC, ACK 및 v2 session ID는 암호화나 인증이 아니다. 평문 ESB v2에는 payload 암호화, 송신자 인증 및 replay 방지가 없다. 주소는 주변의 다른 ESB 세트와 우발적으로 충돌할 가능성을 낮추는 식별자일 뿐 비밀키가 아니다.
+
+Secure v3 후보는 half별 128-bit PSK, AES-128-CCM/MIC4, 두 random nonce로 파생한 session key와 엄격한 sequence 검사를 추가한다. Active/pending traffic에서 MIC 인증이 실패하면 BLE처럼 기존 논리 link와 traffic key를 폐기하고 새 handshake를 요구한다. 이 처리는 error path에만 있어 정상 packet hot path의 암호 연산 수는 늘리지 않는다. Hardware 실측에서 v2 대비 반응성 승인 기준을 통과하기 전까지 일상용 1K firmware로 승인하지 않는다. RF jamming, 인증 실패를 이용한 재연결 DoS, traffic timing 분석, production UF2·SWD에서의 key 추출, relay 공격과 forward secrecy는 해결하지 않는다.
 
 ## 사용상 주의
 
 - ESB와 기존 BLE 역할 firmware를 한 세트 안에서 섞으면 통신하지 않는다.
+- 평문 ESB v2와 Secure v3 역할 firmware도 서로 통신하지 않는다. 세 장치를 같은 세대와 같은 key set으로 함께 플래시한다.
 - 최초 BLE↔ESB 전환 시 세 장치에 `settings_reset`을 적용한 뒤 역할별 firmware를 플래시한다.
 - PC에는 Prospector 동글을 연결한다. 왼쪽과 오른쪽 ESB peripheral은 USB host 출력용이 아니다.
 - ESB의 +8 dBm 출력, ACK/retry 및 저지연 설정은 기존 BLE보다 배터리 소비를 늘릴 수 있다. 실제 사용 시간은 **미측정**이다.
@@ -67,3 +74,5 @@ ESB 주소, CRC, ACK 및 session ID는 암호화나 인증이 아니다. 현재 
 - [ESB 1K 타당성 검토](docs/esb-1k-feasibility.md)
 - [ESB 빌드 및 플래시](docs/esb-1k-build-flash.md)
 - [ESB 1K benchmark](docs/esb-1k-benchmark.md)
+- [ESB Secure v3 보안 설계와 검증 상태](docs/esb-v3-security.md)
+- [ESB Secure v3 production 빌드 및 플래시](docs/esb-v3-build-flash.md)

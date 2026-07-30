@@ -99,10 +99,13 @@ struct esb_v3_central_peer {
     uint64_t active_central_nonce;
     uint64_t pending_session;
     uint64_t active_session;
+    uint64_t challenge_reset_session;
+    uint64_t recovery_peripheral_nonce;
     uint32_t request_sequence;
     uint32_t last_recovery_sequence;
     uint32_t down_sequence;
     int64_t challenge_queued_at;
+    int64_t pending_started_at;
     bool pending;
     atomic_t active;
 };
@@ -115,7 +118,7 @@ static int enqueue_v3_downlink(
     uint8_t source, enum esb_wire_command_type wire_type,
     const struct zmk_split_transport_central_command *cmd,
     uint64_t session_id, uint32_t sequence, uint64_t peripheral_nonce,
-    uint32_t request_sequence) {
+    uint32_t request_sequence, uint64_t reset_session) {
     uint8_t wire_source = source + 1U;
     size_t body_size = 0;
     if (wire_type == ESB_WIRE_COMMAND_ZMK) {
@@ -157,6 +160,7 @@ static int enqueue_v3_downlink(
     } else if (wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
         env.payload.body.challenge.peripheral_nonce = peripheral_nonce;
         env.payload.body.challenge.request_sequence = request_sequence;
+        env.payload.body.challenge.reset_session = reset_session;
     }
 
     size_t env_len = sizeof(env.prefix) + payload_size;
@@ -215,7 +219,7 @@ static int split_central_esb_send_command(
     uint32_t sequence = secure_peers[source].down_sequence + 1U;
     int err = enqueue_v3_downlink(
         source, ESB_WIRE_COMMAND_ZMK, &cmd,
-        secure_peers[source].active_session, sequence, 0, 0);
+        secure_peers[source].active_session, sequence, 0, 0, 0);
     if (err == 0) {
         secure_peers[source].down_sequence = sequence;
     }
@@ -519,6 +523,12 @@ void totem_esb_source_disconnected(uint8_t source) {
     secure_peers[source].pending = false;
     secure_peers[source].active_session = 0;
     secure_peers[source].pending_session = 0;
+    secure_peers[source].challenge_reset_session = 0;
+    secure_peers[source].pending_peripheral_nonce = 0;
+    secure_peers[source].central_nonce = 0;
+    secure_peers[source].request_sequence = 0;
+    secure_peers[source].challenge_queued_at = 0;
+    secure_peers[source].pending_started_at = 0;
     secure_peers[source].active_peripheral_nonce = 0;
     secure_peers[source].active_central_nonce = 0;
     totem_esb_v3_discard_pending(source);
@@ -570,7 +580,8 @@ static int queue_v3_challenge(uint8_t source) {
     struct esb_v3_central_peer *peer = &secure_peers[source];
     int err = enqueue_v3_downlink(
         source, ESB_WIRE_COMMAND_V3_CHALLENGE, NULL, peer->central_nonce, 0,
-        peer->pending_peripheral_nonce, peer->request_sequence);
+        peer->pending_peripheral_nonce, peer->request_sequence,
+        peer->challenge_reset_session);
     if (err == 0) {
         peer->challenge_queued_at = k_uptime_get();
     }
@@ -578,14 +589,16 @@ static int queue_v3_challenge(uint8_t source) {
 }
 
 static int begin_v3_pending_session(uint8_t source, uint64_t peripheral_nonce,
-                                    uint32_t request_sequence) {
+                                    uint32_t request_sequence,
+                                    uint64_t reset_session) {
     struct esb_v3_central_peer *peer = &secure_peers[source];
     if (peripheral_nonce == 0) {
         return -EINVAL;
     }
     if (peer->pending &&
         peer->pending_peripheral_nonce == peripheral_nonce &&
-        peer->request_sequence == request_sequence) {
+        peer->request_sequence == request_sequence &&
+        peer->challenge_reset_session == reset_session) {
         if (k_uptime_get() - peer->challenge_queued_at >= 10) {
             return queue_v3_challenge(source);
         }
@@ -612,18 +625,152 @@ static int begin_v3_pending_session(uint8_t source, uint64_t peripheral_nonce,
     peer->central_nonce = central_nonce;
     peer->pending_session = session_id;
     peer->request_sequence = request_sequence;
+    peer->challenge_reset_session = reset_session;
     peer->challenge_queued_at = 0;
+    peer->pending_started_at = k_uptime_get();
     return queue_v3_challenge(source);
 }
 
-static bool v3_recovery_sequence_is_fresh(struct esb_v3_central_peer *peer,
-                                          uint32_t sequence) {
+static int begin_or_repeat_v3_recovery_session(
+    uint8_t source, uint64_t peripheral_nonce, uint32_t request_sequence) {
+    struct esb_v3_central_peer *peer = &secure_peers[source];
+    if (peer->pending) {
+        if (peer->challenge_reset_session == 0 &&
+            peer->pending_peripheral_nonce == peripheral_nonce) {
+            /*
+             * An ACK payload already queued for this pending transcript can
+             * reach the half before this newer RECOVERY is processed. Keep
+             * the key, request and root CCM nonce fixed until READY instead
+             * of stranding the two sides on different pending sessions.
+             */
+            return queue_v3_challenge(source);
+        }
+        /*
+         * A HELLO for another boot nonce or an auth-failure reset already
+         * owns the pending key slot. Neither may be displaced by a delayed
+         * heartbeat from the active traffic session.
+         */
+        return 0;
+    }
+    return begin_v3_pending_session(
+        source, peripheral_nonce, request_sequence, 0);
+}
+
+static void expire_v3_pending_if_needed(uint8_t source) {
+    struct esb_v3_central_peer *peer = &secure_peers[source];
+    if (!peer->pending ||
+        k_uptime_get() - peer->pending_started_at <
+            CONFIG_TOTEM_ESB_V3_PENDING_TIMEOUT_MS) {
+        return;
+    }
+
+    bool reset_pending = peer->challenge_reset_session != 0;
+    LOG_WRN("ESB v3 source %u pending handshake expired", source);
+    peer->pending = false;
+    peer->pending_peripheral_nonce = 0;
+    peer->central_nonce = 0;
+    peer->pending_session = 0;
+    peer->request_sequence = 0;
+    peer->challenge_reset_session = 0;
+    peer->challenge_queued_at = 0;
+    peer->pending_started_at = 0;
+    totem_esb_v3_discard_pending(source);
+
+    /*
+     * On a central cold boot, a single captured normal HELLO/RECOVERY can
+     * otherwise pin the wrong boot nonce forever. Let the packet that
+     * observes expiry nominate a new root epoch. A MIC-reset transcript
+     * already belongs to the live root epoch, so preserve its high-water.
+     */
+    if (!atomic_get(&peer->active) && !reset_pending) {
+        peer->recovery_peripheral_nonce = 0;
+        peer->last_recovery_sequence = 0;
+    }
+}
+
+static void restart_v3_after_auth_failure(
+    uint8_t source, const struct esb_event_envelope *env) {
+    struct esb_v3_central_peer *peer = &secure_peers[source];
+    uint64_t peripheral_nonce = 0;
+    uint64_t reset_session = 0;
+    uint32_t request_sequence = 0;
+
+    /*
+     * common.c returns EACCES only after the clear session ID selected an
+     * existing key and CCM rejected its tag. Capture that exact key
+     * stage/session before teardown so a root-authenticated CHALLENGE can
+     * tell the half to abandon the same failed session immediately.
+     */
+    if (peer->pending &&
+        env->payload.wire_type == ESB_WIRE_EVENT_V3_READY &&
+        peer->pending_session == env->payload.session_id) {
+        peripheral_nonce = peer->pending_peripheral_nonce;
+        reset_session = peer->pending_session;
+        request_sequence = peer->request_sequence;
+    } else if (atomic_get(&peer->active) &&
+               peer->active_session == env->payload.session_id) {
+        peripheral_nonce = peer->active_peripheral_nonce;
+        reset_session = peer->active_session;
+        request_sequence = peer->last_recovery_sequence;
+    } else if (peer->pending &&
+               peer->pending_session == env->payload.session_id) {
+        peripheral_nonce = peer->pending_peripheral_nonce;
+        reset_session = peer->pending_session;
+        request_sequence = peer->request_sequence;
+    }
+
+    totem_esb_peer_auth_failed(source);
+
+    if (peripheral_nonce == 0 || reset_session == 0) {
+        LOG_ERR("ESB v3 source %u MIC failure had no recoverable transcript",
+                source);
+        return;
+    }
+
+    int err = begin_v3_pending_session(
+        source, peripheral_nonce, request_sequence, reset_session);
+    if (err != 0) {
+        /*
+         * The half's next root RECOVERY heartbeat remains the bounded
+         * fallback if the immediate challenge cannot be queued.
+         */
+        LOG_ERR("ESB v3 source %u immediate auth-failure rekey failed (%d)",
+                source, err);
+    }
+}
+
+static int accept_v3_recovery_sequence(
+    uint8_t source, struct esb_v3_central_peer *peer,
+    uint64_t peripheral_nonce, uint32_t sequence) {
+    /*
+     * Root RECOVERY nonces use the half's boot nonce, not the traffic
+     * session. Keep one high-water mark for the entire boot so a delayed
+     * packet from a retired traffic session cannot become fresh again after
+     * rekey. A central that has just booted may learn this nonce from the
+     * first authenticated RECOVERY; a half with a genuinely new boot nonce
+     * starts with HELLO and installs that nonce when READY is promoted.
+     */
+    if (peer->recovery_peripheral_nonce == 0) {
+        if (atomic_get(&peer->active) || peer->pending) {
+            return -ESTALE;
+        }
+        peer->recovery_peripheral_nonce = peripheral_nonce;
+        peer->last_recovery_sequence = 0;
+    }
+    if (peer->recovery_peripheral_nonce != peripheral_nonce) {
+        return -ESTALE;
+    }
     /*
      * A sender must rekey before wrap, so wrap is never a valid transition.
      * Strict monotonicity makes nonce reuse fail closed if a future sender
-     * regression accidentally emits sequence 1 under the same key.
+     * regression accidentally emits sequence 1 under the same root key.
      */
-    return sequence != 0 && sequence > peer->last_recovery_sequence;
+    if (sequence == 0 || sequence <= peer->last_recovery_sequence) {
+        totem_esb_benchmark_security_drop(source, "replay", sequence);
+        return -EALREADY;
+    }
+    peer->last_recovery_sequence = sequence;
+    return 0;
 }
 
 static void confirm_v3_active_session(uint8_t source) {
@@ -634,13 +781,20 @@ static void confirm_v3_active_session(uint8_t source) {
         return;
     }
     peer->pending = false;
+    peer->pending_peripheral_nonce = 0;
+    peer->central_nonce = 0;
     peer->pending_session = 0;
+    peer->request_sequence = 0;
+    peer->challenge_reset_session = 0;
+    peer->challenge_queued_at = 0;
+    peer->pending_started_at = 0;
     totem_esb_v3_discard_pending(source);
 }
 
 static int process_v3_control_event(uint8_t source,
                                     const struct esb_event_envelope *env) {
     struct esb_v3_central_peer *peer = &secure_peers[source];
+    expire_v3_pending_if_needed(source);
     switch (env->payload.wire_type) {
     case ESB_WIRE_EVENT_V3_HELLO:
         if (env->payload.sequence != 0 || env->payload.session_id == 0) {
@@ -654,30 +808,45 @@ static int process_v3_control_event(uint8_t source,
             peer->active_peripheral_nonce == env->payload.session_id) {
             return 0;
         }
-        return begin_v3_pending_session(source, env->payload.session_id, 0);
+        if (peer->pending && peer->challenge_reset_session != 0) {
+            if (peer->pending_peripheral_nonce ==
+                env->payload.session_id) {
+                /*
+                 * A half that was already waiting for a challenge can repeat
+                 * its HELLO before the immediate reset challenge reaches the
+                 * ACK FIFO. Preserve that transcript.
+                 */
+                return queue_v3_challenge(source);
+            }
+            /*
+             * Do not let a captured HELLO for another boot nonce displace
+             * the bounded MIC-failure reset window. If the half genuinely
+             * rebooted, its repeated HELLO is accepted after pending expiry.
+             */
+            return -ESTALE;
+        }
+        return begin_v3_pending_session(source, env->payload.session_id, 0, 0);
 
-    case ESB_WIRE_EVENT_V3_RECOVERY:
+    case ESB_WIRE_EVENT_V3_RECOVERY: {
         if (env->payload.sequence == 0 || env->payload.session_id == 0) {
             return -EINVAL;
+        }
+        int recovery_err = accept_v3_recovery_sequence(
+            source, peer, env->payload.session_id, env->payload.sequence);
+        if (recovery_err != 0) {
+            return recovery_err;
         }
         if (atomic_get(&peer->active) &&
             peer->active_peripheral_nonce == env->payload.session_id &&
             peer->active_session ==
                 env->payload.body.recovery.active_session) {
-            if (!v3_recovery_sequence_is_fresh(peer,
-                                               env->payload.sequence)) {
-                totem_esb_benchmark_security_drop(
-                    source, "replay", env->payload.sequence);
-                return -EALREADY;
-            }
-            peer->last_recovery_sequence = env->payload.sequence;
             confirm_v3_active_session(source);
             k_mutex_lock(&command_mutex, K_FOREVER);
             bool downlink_needs_rekey =
                 peer->down_sequence >= UINT32_MAX - 1U;
             k_mutex_unlock(&command_mutex);
             if (downlink_needs_rekey) {
-                return begin_v3_pending_session(
+                return begin_or_repeat_v3_recovery_session(
                     source, env->payload.session_id,
                     env->payload.sequence);
             }
@@ -688,8 +857,50 @@ static int process_v3_control_event(uint8_t source,
                 env->payload.body.recovery.link_metric.value);
             return 0;
         }
+        if (atomic_get(&peer->active)) {
+            /*
+             * The root packet is fresh, but it describes a traffic session
+             * that has already been retired. Consume its root sequence and
+             * drop it; allowing it to prepare another pending key would turn
+             * delayed old-session traffic into a rekey loop.
+             */
+            return -ESTALE;
+        }
+        if (!atomic_get(&peer->active) && peer->pending &&
+            peer->challenge_reset_session != 0 &&
+            peer->challenge_reset_session ==
+                env->payload.body.recovery.active_session &&
+            peer->pending_peripheral_nonce == env->payload.session_id) {
+            /*
+             * Do not replace an immediate MIC-failure recovery transcript
+             * with a second pending key if the half's old-session heartbeat
+             * reaches us before its ACK payload challenge does.
+             */
+            return queue_v3_challenge(source);
+        }
+        if (peer->pending && peer->challenge_reset_session != 0 &&
+            peer->pending_peripheral_nonce == env->payload.session_id) {
+            /*
+             * A different retired-session claim under the same boot nonce
+             * must not replace an in-progress MIC-failure reset transcript.
+             */
+            return -ESTALE;
+        }
+        if (peer->pending && peer->challenge_reset_session == 0 &&
+            peer->pending_peripheral_nonce != env->payload.session_id) {
+            /*
+             * A root-authenticated HELLO for a new boot nonce already owns
+             * this handshake. Do not let a captured RECOVERY from the prior
+             * boot replace it while READY is in flight.
+             */
+            return -ESTALE;
+        }
+        if (peer->pending && peer->challenge_reset_session == 0) {
+            return queue_v3_challenge(source);
+        }
         return begin_v3_pending_session(source, env->payload.session_id,
-                                        env->payload.sequence);
+                                        env->payload.sequence, 0);
+    }
 
     case ESB_WIRE_EVENT_V3_READY: {
         if (!peer->pending || env->payload.sequence != 0 ||
@@ -706,7 +917,7 @@ static int process_v3_control_event(uint8_t source,
         k_mutex_lock(&command_mutex, K_FOREVER);
         int err = enqueue_v3_downlink(
             source, ESB_WIRE_COMMAND_V3_SESSION_OK, NULL,
-            peer->pending_session, 0, 0, 0);
+            peer->pending_session, 0, 0, 0, 0);
         if (err != 0) {
             k_mutex_unlock(&command_mutex);
             return err;
@@ -725,7 +936,17 @@ static int process_v3_control_event(uint8_t source,
             peer->active_peripheral_nonce =
                 peer->pending_peripheral_nonce;
             peer->active_central_nonce = peer->central_nonce;
-            peer->last_recovery_sequence = peer->request_sequence;
+            if (peer->recovery_peripheral_nonce !=
+                peer->pending_peripheral_nonce) {
+                /*
+                 * READY for a HELLO-authenticated new boot nonce starts a new
+                 * root sequence space. Same-boot traffic rekeys preserve the
+                 * existing high-water mark established by RECOVERY.
+                 */
+                peer->recovery_peripheral_nonce =
+                    peer->pending_peripheral_nonce;
+                peer->last_recovery_sequence = peer->request_sequence;
+            }
             peer->down_sequence = 0;
             atomic_set(&peer->active, true);
             session_changed = true;
@@ -733,8 +954,13 @@ static int process_v3_control_event(uint8_t source,
         k_mutex_unlock(&command_mutex);
         if (session_changed) {
             update_source_session(source, peer->active_session, true);
-            totem_esb_peer_seen(source);
         }
+        /*
+         * A valid duplicate READY proves that the half is alive even if its
+         * SESSION_OK ACK payload has not arrived yet. Keep the promoted key
+         * through that bounded retry window.
+         */
+        totem_esb_peer_seen(source);
         return 0;
     }
     default:
@@ -751,7 +977,7 @@ static void process_rx_work_cb(struct k_work *work) {
             struct esb_event_envelope env = {0};
             int item_err = zmk_split_esb_get_item(rx_buf, (uint8_t *)&env,
                                                   sizeof(struct esb_event_envelope),
-                                                  false);
+                                                  false, pipe);
             switch (item_err) {
             case 0: {
                 if (!event_payload_size_is_valid(&env)) {
@@ -899,11 +1125,34 @@ static void process_rx_work_cb(struct k_work *work) {
                 totem_esb_benchmark_rx_invalid(pipe, item_err);
                 ring_buf_reset(rx_buf);
                 goto next_pipe;
+            case -EACCES:
+                totem_esb_benchmark_rx_invalid(pipe, item_err);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+                /*
+                 * The clear header is not trusted after CCM rejects its tag.
+                 * common.c has already constrained source to the RX pipe and
+                 * only returns EACCES after a matching key lookup.
+                 * Root-key HELLO/RECOVERY failures are pre-session probes and
+                 * are dropped without letting unauthenticated traffic tear
+                 * down an otherwise healthy active link.
+                 */
+                if (env.payload.source > 0 &&
+                    env.payload.source <=
+                        CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT &&
+                    pipe == env.payload.source &&
+                    env.payload.wire_type != ESB_WIRE_EVENT_V3_HELLO &&
+                    env.payload.wire_type != ESB_WIRE_EVENT_V3_RECOVERY) {
+                    uint8_t source = env.payload.source - 1U;
+                    LOG_ERR("ESB v3 MIC failure terminated source %u session",
+                            source);
+                    restart_v3_after_auth_failure(source, &env);
+                }
+#endif
+                break;
             case -EPROTO:
             case -EMSGSIZE:
             case -EBADMSG:
             case -EINVAL:
-            case -EACCES:
             case -ENOENT:
             case -EADDRNOTAVAIL:
                 totem_esb_benchmark_rx_invalid(pipe, item_err);

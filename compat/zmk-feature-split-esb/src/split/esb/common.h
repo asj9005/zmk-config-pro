@@ -36,6 +36,7 @@ struct esb_command_payload {
         struct {
             uint64_t peripheral_nonce;
             uint32_t request_sequence;
+            uint64_t reset_session;
         } __packed challenge;
     } body;
 #else
@@ -147,4 +148,4 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
 int zmk_split_esb_finalize_item(uint8_t *env, size_t env_len,
                                 bool downlink, struct esb_msg_postfix *postfix);
 int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_size,
-                           bool downlink);
+                           bool downlink, uint8_t expected_pipe);

@@ -41,6 +41,7 @@ void totem_esb_benchmark_tx(uint8_t source, uint16_t message_id, uint16_t attemp
 void totem_esb_transport_queue_pressure(bool producer_ring);
 uint32_t totem_esb_link_metric_value(uint8_t metric);
 void totem_esb_peer_seen(uint8_t source);
+void totem_esb_peer_auth_failed(uint8_t source);
 bool totem_esb_peer_is_connected(uint8_t source);
 uint8_t totem_esb_peer_connected_count(void);
 void totem_esb_notify_transport_status(void);

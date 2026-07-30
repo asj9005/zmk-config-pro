@@ -1,5 +1,22 @@
 on: [push, pull_request, workflow_dispatch]
 
+permissions:
+  contents: read
+
 jobs:
+  protocol-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify ESB v3 protocol models and tools
+        run: |
+          python3 -m unittest -v tests/test_esb_v3_protocol.py
+          python3 -m py_compile \
+            tests/test_esb_v3_protocol.py \
+            tools/generate_esb_v3_keys.py \
+            tools/analyze_esb_benchmark.py \
+            tools/analyze_usbpcap.py
+
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@904c9aec8822d79149d42c8a9a77e8828eb08f5a

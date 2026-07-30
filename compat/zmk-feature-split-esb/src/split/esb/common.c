@@ -209,7 +209,10 @@ int zmk_split_esb_finalize_item(uint8_t *env, size_t env_len,
 }
 
 int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_size,
-                           bool downlink) {
+                           bool downlink, uint8_t expected_pipe) {
+#if !IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    ARG_UNUSED(expected_pipe);
+#endif
     // RX buffer only has prefix + postfix
     while (ring_buf_size_get(rx_buf) > (sizeof(struct esb_msg_prefix)
 #if ESB_MSG_HAS_POSTFIX
@@ -275,7 +278,8 @@ int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_siz
         struct esb_v3_wire_payload_header *header =
             (void *)(env + sizeof(struct esb_msg_prefix));
         if (header->source == 0 ||
-            header->source >= CONFIG_ESB_PIPE_COUNT) {
+            header->source >= CONFIG_ESB_PIPE_COUNT ||
+            header->source != expected_pipe) {
             return -EADDRNOTAVAIL;
         }
         enum totem_esb_v3_key_stage stage = TOTEM_ESB_V3_ACTIVE_KEY;

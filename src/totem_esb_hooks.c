@@ -135,6 +135,26 @@ void totem_esb_peer_seen(uint8_t source) {
     }
 }
 
+void totem_esb_peer_auth_failed(uint8_t source) {
+    if (source >= ARRAY_SIZE(peers)) {
+        return;
+    }
+
+    /*
+     * Match BLE's fail-closed MIC policy for an established encrypted link:
+     * release any held keys, destroy the active/pending traffic keys, and
+     * require a fresh authenticated handshake before accepting more input.
+     * This path is never taken for successfully authenticated traffic.
+     */
+    bool was_connected = peers[source].seen;
+    peers[source].seen = false;
+    peers[source].last_seen = 0;
+    totem_esb_source_disconnected(source);
+    if (was_connected) {
+        publish_peer(source, false);
+    }
+}
+
 uint8_t totem_esb_peer_connected_count(void) {
     uint8_t count = 0;
     for (uint8_t source = 0; source < ARRAY_SIZE(peers); source++) {
@@ -169,6 +189,7 @@ static void peer_timeout_work_handler(struct k_work *work) {
 }
 #else
 void totem_esb_peer_seen(uint8_t source) { ARG_UNUSED(source); }
+void totem_esb_peer_auth_failed(uint8_t source) { ARG_UNUSED(source); }
 bool totem_esb_peer_is_connected(uint8_t source) {
     ARG_UNUSED(source);
     return false;

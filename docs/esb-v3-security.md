@@ -1,4 +1,4 @@
-# Totem + Prospector ESB Secure v3 설계
+# Totem + Prospector ESB Secure v3 설계와 검증 상태
 
 작성 기준일: 2026-07-30
 
@@ -6,7 +6,7 @@
 
 ## 문서 상태
 
-이 문서는 구현 전에 보안 경계와 성능 승인 기준을 고정하기 위한 설계 문서다. 이 문서에 적힌 v3 암호화, handshake, session key, replay 방지 및 key provisioning은 모두 **구현 예정**이며, 작성 시점에는 빌드 또는 실기 검증을 마친 기능이 아니다.
+이 문서는 구현 전에 고정한 보안 경계와 성능 승인 기준, 그리고 구현 후 검증 상태를 함께 기록한다. AES-128-CCM/MIC4, 두 nonce handshake, session key, replay 방지, production key provisioning과 benchmark 계측 경로는 firmware에 구현됐다. CI compile/link 성공과 실제 장치의 1K 성능 승인은 별도 단계이며, 실측하지 않은 값을 구현 결과로 바꾸어 쓰지 않는다.
 
 우선순위는 다음과 같다.
 
@@ -43,7 +43,7 @@ ESB 주소, Nordic radio CRC, ACK와 재전송은 보안 수단이 아니다. �
 
 ## 2. “기존 BLE 수준”의 의미
 
-기존 ZMK BLE split은 BLE link-layer의 AES-CCM 암호화와 128-bit key를 사용한다. 일반적인 Just Works pairing은 암호화와 무결성을 제공하지만 사용자가 숫자를 비교하거나 별도 인증 정보를 입력하지 않으므로 MITM에 대해 인증된 pairing으로 간주할 수 없다. BLE 암호화 packet의 MIC는 4 byte다.
+기존 ZMK BLE split은 BLE link-layer의 AES-CCM 암호화와 128-bit key를 사용한다. 일반적인 Just Works pairing은 암호화와 무결성을 제공하지만 사용자가 숫자를 비교하거나 별도 인증 정보를 입력하지 않으므로 MITM에 대해 인증된 pairing으로 간주할 수 없다. BLE 암호화 packet의 MIC는 4 byte다. Bluetooth LE Link Layer는 암호화된 data PDU의 인증 실패를 감지하면 해당 connection을 lost로 간주한다. v3도 active/pending traffic의 MIC 실패 한 번에 논리 link와 traffic key를 폐기하고 새 handshake를 요구한다. [Bluetooth Core Specification — Low Energy Link Layer Security](https://www.bluetooth.com/wp-content/uploads/Files/Specification/HTML/Core-54/out/en/low-energy-controller/low-energy-link-layer-security.html)
 
 v3는 BLE protocol을 ESB 위에 그대로 이식하지 않는다. 다음 보안 속성을 BLE 수준의 기준으로 삼는다.
 
@@ -71,7 +71,7 @@ v3는 다음 능력을 가진 근거리 무선 공격자를 가정한다.
 - 왼쪽 또는 오른쪽 source를 사칭
 - half나 dongle을 재부팅시킨 뒤 과거 capture를 다시 사용
 
-PSK를 알지 못하는 공격자는 암호화된 key body를 읽거나 유효한 MIC를 새로 만들 수 없어야 한다. 인증에 실패한 packet은 wire parser, sequence/session 상태, ZMK event queue 및 Prospector peer 상태에 영향을 주기 전에 폐기해야 한다.
+PSK를 알지 못하는 공격자는 암호화된 key body를 읽거나 유효한 MIC를 새로 만들 수 없어야 한다. 인증에 실패한 packet은 ZMK event나 battery/display 상태로 승인되지 않는다. Active 또는 pending traffic key로 검증하다 MIC가 실패하면 해당 논리 link의 눌린 key 상태, active/pending traffic key와 sequence 상태를 폐기하고 새 handshake 전까지 data를 수락하지 않는다.
 
 다음 공격자는 보호 범위 밖이다.
 
@@ -91,7 +91,8 @@ v3의 기본 profile은 다음으로 고정한다.
 - 장기 key: 왼쪽과 오른쪽에 각각 독립적인 128-bit PSK
 - session key derivation: AES-CMAC
 - implementation API: NCS 3.1.1 PSA Crypto
-- nRF52840 backend 우선 후보: CryptoCell 310/CC3XX
+- nRF52840 기본 backend: heap과 전역 driver lock이 없는 Oberon PSA
+- 검토 전용 대안: CryptoCell 310/CC3XX A/B benchmark
 
 4-byte MIC는 기존 BLE link-layer와 같은 tag 길이를 선택하여 packet당 airtime과 암호 처리량 증가를 최소화한다. 임의 위조 한 번의 성공 확률 상한은 약 `2^-32`이며 시도 횟수가 늘면 누적 위험도 증가한다. 따라서 MIC4는 무제한 공격에 대해 충분한 장기 보안 강도를 제공한다는 뜻이 아니라, 사용자가 요구한 BLE 수준과 1K 우선 조건의 절충안이다.
 
@@ -107,7 +108,7 @@ v3 packet은 보안 profile을 평문 v2와 혼동하지 않도록 별도 protoc
 - 암호화 및 인증: key position, pressed/released, battery 값, sensor/input data, command body
 - packet postfix: 4-byte CCM MIC
 
-Header를 AAD로 포함하므로 source, direction, type, sequence 또는 길이를 바꾸면 인증이 실패한다. Body만 암호화하므로 radio 수신 뒤 올바른 PSK와 nonce를 선택하는 데 필요한 최소 header는 cleartext로 남는다.
+Header를 AAD로 포함하므로 source, direction, type, sequence 또는 길이를 바꾸면 인증이 실패한다. Body만 암호화하므로 radio 수신 뒤 올바른 PSK와 nonce를 선택하는 데 필요한 최소 header는 cleartext로 남는다. 수신 측은 cleartext source가 실제 ESB RX pipe와 일치하는지 CCM key lookup 전에 확인하므로 다른 pipe를 tag 검증 경로로 사용할 수 없다.
 
 Nonce는 한 session 안에서 절대 재사용하지 않도록 source/direction domain, 64-bit session 식별자와 32-bit sequence를 조합한 13-byte 값을 사용한다. Uplink와 downlink는 direction domain이 다르므로 같은 sequence 값도 nonce가 충돌하지 않는다. Sequence가 wrap하기 전에 반드시 새 handshake를 수행하고 새 session key로 전환한다.
 
@@ -129,7 +130,8 @@ v3에서는 application CRC32를 CCM MIC로 대체한다. Nordic radio CRC16은 
 4. Dongle은 source, `half_nonce`, `dongle_nonce`를 묶어 인증한 `CHALLENGE`를 해당 pipe의 ACK payload로 보낸다.
 5. Half는 자신이 현재 기다리는 `half_nonce`와 일치하고 MIC가 유효한 challenge만 받아들인다.
 6. 양쪽은 PSK와 두 nonce에서 같은 128-bit session key와 64-bit session 식별자를 도출한다.
-7. Half가 새 session key로 인증된 `CONFIRM` 또는 첫 data packet을 보내면 dongle이 pending session을 active session으로 승격한다.
+7. Half가 pending session key로 인증된 `READY`를 보내면 dongle이 해당 pending session을 active로 승격한다.
+8. Dongle이 active session key로 인증된 `SESSION_OK`를 돌려보내고 half가 이를 검증하면 half도 session을 active로 승격한다. 그 전에는 일반 data packet을 보내거나 수락하지 않는다.
 
 Session key는 다음 AES-CMAC 식으로 도출한다.
 
@@ -149,11 +151,17 @@ session_key = CMAC(
 Dongle은 source별로 active session, pending handshake, 마지막으로 승인한 uplink sequence를 독립 관리한다. Half도 downlink sequence를 별도로 검증한다.
 
 - 같은 session/sequence packet은 중복으로 폐기한다.
-- 허용 window 밖의 과거 sequence는 폐기한다.
-- 인증 실패 packet은 session 전환이나 sequence 갱신을 일으키지 않는다.
+- `sequence <= last_sequence`인 중복·과거 packet은 폐기한다. 현재 구현은 느슨한 replay window를 두지 않는다.
+- Root-key `RECOVERY` sequence는 traffic session이 아니라 half의 현재 boot nonce에 묶인 별도 high-water로 관리한다. 이 값은 같은 boot 안의 traffic rekey와 peer timeout을 지나도 감소하지 않으며 `READY`가 과거 request 값으로 되돌리지 않는다. 이미 폐기한 traffic session을 가리키는 늦은 `RECOVERY`는 fresh root sequence만 소비한 뒤 새 pending session을 만들지 않고 폐기한다.
+- 한 번 ACK 대기열에 들어간 recovery challenge의 central nonce, request, reset session과 pending key는 `READY`까지 고정한다. 다음 `RECOVERY`가 먼저 도착해도 root high-water만 전진시키고 같은 challenge를 다시 넣는다. Half는 자신이 실제 보낸 범위 안에서 아직 소비하지 않은 request를 받아들이므로 ACK payload가 한 packet 늦게 도착해도 양쪽 pending key가 갈라지지 않는다.
+- Dongle은 인증된 duplicate `READY`도 peer liveness로 인정한다. Half가 `WAIT_SESSION_OK`에서 2초 동안 인증된 `SESSION_OK`를 받지 못하면 중앙이 pending key를 이미 폐기한 장기 RF 단절로 보고 새 boot nonce와 `HELLO`부터 다시 시작한다.
+- MIC-failure reset pending은 2초의 bounded window 동안 다른 boot nonce의 `HELLO`가 교체하지 못한다. Dongle의 모든 미확정 pending도 2초 안에 `READY`로 확인되지 않으면 폐기한다. 따라서 동글 재부팅 직후 먼저 도착한 과거 `HELLO`/`RECOVERY` 한 장이 잘못된 root epoch를 영구 점유하지 못하며, 현재 half의 반복 신호가 다음 후보가 된다.
+- Active/pending traffic의 MIC 실패는 기존 session과 pending handshake를 모두 폐기하고 fresh handshake가 끝날 때까지 fail closed한다. 이 실패 처리는 정상 packet hot path가 아니라 `-EACCES` error path에서만 실행된다.
+- Dongle은 teardown 직후 폐기한 session ID에 묶인 root-authenticated reset challenge를 해당 half의 ACK 대기열에 즉시 넣는다. Half는 그 session이 현재 active/pending이거나 아직 challenge를 기다리는 동일 boot nonce일 때만 reset을 받아들이며, 이후 event는 pre-session queue에 보존한다. Challenge queue가 막힌 경우 기존 root recovery heartbeat가 fallback이다.
+- Root-key `HELLO`/`RECOVERY`/`CHALLENGE` 인증 실패는 packet만 폐기한다. 이들은 encrypted data connection의 packet이 아니며, 임의 root probe 하나가 정상 active link를 즉시 끊게 하지 않는다.
 - 과거 `HELLO` replay만으로 현재 active session을 끊거나 교체하지 않는다.
-- Dongle은 새 session key로 유효한 `CONFIRM`을 받은 뒤에만 pending session을 active로 승격한다.
-- Half와 dongle 중 어느 한쪽이 재부팅되어도 양측이 제공한 새 random 값 때문에 과거 data packet과 과거 confirm은 새 session에서 유효하지 않아야 한다.
+- Dongle은 새 session key로 유효한 `READY`를 받은 뒤에만 pending session을 active로 승격하고, half는 유효한 `SESSION_OK`를 받은 뒤에만 승격한다.
+- Half와 dongle 중 어느 한쪽이 재부팅되어도 양측이 제공한 새 random 값 때문에 과거 data, `READY`와 `SESSION_OK`는 새 session에서 유효하지 않아야 한다.
 
 동일 nonce로 CCM을 다시 수행할 때 plaintext 또는 AAD가 달라지면 안 된다. 따라서 재전송하는 `HELLO`와 `CHALLENGE`는 같은 handshake 시도 동안 최초에 만든 wire image를 그대로 재사용하거나, 완전히 동일한 authenticated content만 재생성한다.
 
@@ -163,23 +171,22 @@ Session 전환 시 이전 session key와 pending key는 가능한 즉시 zeroize
 
 Half 재부팅 시 새 handshake가 끝나기 전의 key event를 평문으로 보내지 않는다. Dongle 재부팅 시에도 이전 session을 추측해 받아들이지 않고 source별 새 handshake를 요구한다.
 
-Handshake 중 짧은 tap이 유실되지 않도록 작은 bounded pre-session queue 또는 현재 key-state resync가 필요하다. 어떤 방법을 채택하든 queue overflow와 resync 횟수를 benchmark에서 관찰할 수 있어야 한다. 이 복구 경로가 확정되기 전에는 “동글 재부팅 직후 입력 무손실”을 주장하지 않는다.
+Half에는 handshake 중 새로 생성된 event를 보존하는 작은 bounded pre-session FIFO가 구현되어 있다. 다만 dongle이 MIC 실패를 감지한 직후부터 half가 reset challenge를 수신하기 전까지 구 session으로 이미 전송한 경계 event는 ESB hardware ACK를 받았더라도 application에서 승인되지 않으며 FIFO로 되돌릴 수 없다. 따라서 인증 실패·공격 경계에서 “입력 무손실”을 주장하지 않는다. 이 구간까지 무손실로 만들려면 application delivery ACK와 event journal 또는 명시적 key-state resync가 필요하며, 정상 hot path의 packet·RAM·latency 비용을 실측하기 전에는 도입하지 않는다.
 
 ## 6. Key provisioning과 artifact 정책
 
 Production PSK는 source code, Git history, build log, public GitHub Actions artifact에 넣지 않는다.
 
-예정 provisioning 구조는 다음과 같다.
+구현된 provisioning 구조는 다음과 같다.
 
-- Local generator가 cryptographically secure random 32 byte를 만든다.
-- 앞 16 byte는 왼쪽 PSK, 뒤 16 byte는 오른쪽 PSK로 사용한다.
+- Local generator가 cryptographically secure random 16-byte PSK를 왼쪽과 오른쪽에 각각 독립적으로 생성한다.
 - Production build는 gitignore된 local key configuration file을 명시적으로 전달해야만 성립한다.
 - Build system은 파일 형식과 길이를 검증하고 build directory 안에만 generated header를 만든다.
 - 왼쪽 image에는 왼쪽 PSK만, 오른쪽 image에는 오른쪽 PSK만 포함한다.
 - Dongle image에는 두 PSK가 모두 포함된다.
 - 실제 key 값은 command line, compiler diagnostic 또는 script stdout에 출력하지 않는다.
 
-공개 GitHub Actions에서는 production key를 사용하지 않는다. CI build 재현성 및 compile test를 위해 고정된 **폐기용 CI test key**만 허용하며, 생성되는 firmware와 artifact 이름에 `ci_test_only`를 명시한다. 이 image는 누구나 key를 알 수 있으므로 실제 키보드에 일상용으로 flash해서는 안 된다.
+공개 GitHub Actions에서는 production key를 사용하지 않는다. CI build 재현성 및 compile test를 위해 고정된 **폐기용 CI test key**만 허용하며, 생성되는 firmware와 artifact 이름에 `ci_only_..._testkey`를 명시한다. 이 image는 누구나 key를 알 수 있으므로 실제 키보드에 일상용으로 flash해서는 안 된다.
 
 Production UF2 자체에는 장치가 사용할 PSK가 포함되므로 민감한 파일로 취급한다. Public repository가 Actions secret으로 production build를 수행하더라도 결과 UF2를 public artifact로 올리면 key 보호가 되지 않는다. Production image는 local에서 만들거나 접근이 제한된 private artifact 저장소만 사용한다.
 
@@ -200,7 +207,7 @@ v3는 v2를 대체하는 단일 profile이 아니라 별도 후보 profile로 �
 - 동일한 synthetic event rate와 시험 시간
 - 비교 대상 commit, firmware, clock source와 측정 시작/종료 지점 기록
 
-CCM은 nRF52840의 CC3XX backend를 우선 검토하지만, 짧은 packet에서 driver lock과 PSA API의 고정 비용 때문에 software backend보다 항상 빠르다고 가정하지 않는다. 두 backend를 build 크기, RAM 및 실기 cycle 측정으로 비교하고 steady-state 비용이 더 낮은 검증 결과를 선택한다.
+20~40 byte hot path에서는 CC3XX driver lock과 고정 호출 비용이 지배적일 수 있으므로 v3 기본값은 heapless Oberon PSA다. CC3XX는 더 강한 보안을 제공하는 기능이 아니라 같은 primitive의 대체 backend이며, release 기본값으로 가정하지 않고 별도 A/B 후보로만 남긴다.
 
 ### 7.2 필수 승인 조건
 
@@ -238,7 +245,7 @@ CCM은 nRF52840의 CC3XX backend를 우선 검토하지만, 짧은 packet에서 
 
 ## 8. 구현 및 시험 계획
 
-예정 구현은 기존 ESB compatibility overlay 안에 작은 v3 crypto 계층과 별도 config profile을 추가하는 방식이다. ZMK 전체 또는 ESB module 전체를 새 fork로 복사하지 않는다.
+구현은 기존 ESB compatibility overlay 안에 작은 v3 crypto 계층과 별도 config profile을 추가하는 방식이다. ZMK 전체 또는 ESB module 전체를 새 fork로 복사하지 않았다.
 
 구현 단계에서 최소한 다음 시험을 추가한다.
 
@@ -247,14 +254,14 @@ CCM은 nRF52840의 CC3XX backend를 우선 검토하지만, 짧은 packet에서 
 - ciphertext, AAD, nonce와 MIC 각각의 1-bit 변조 거부
 - 왼쪽 packet을 오른쪽 key 또는 source로 해석했을 때 거부
 - 동일 session/sequence replay 거부
-- 이전 session packet과 confirm replay 거부
+- 이전 session packet과 `READY`/`SESSION_OK` replay 거부
 - 재전송용 동일 wire image의 결정성 확인
 - sequence wrap 전 강제 re-handshake
 - dongle/half 각각의 재부팅 복구
 - production key가 없을 때 local production build 실패
 - CI test key artifact의 명확한 표식 확인
 
-Release build에서는 per-packet logging을 끈다. Benchmark build에서는 전체 packet을 줄 단위로 무제한 출력해 timing을 바꾸지 않고, crypto cycle, authentication failure, replay, sequence gap, queue overflow 및 session 통계를 집계해 출력한다.
+Release build에서는 per-packet logging을 끈다. 현재 benchmark build는 `BENCH_RX/TX/USB`를 packet별로 RTT에 출력하므로 logging overhead와 RTT drop이 timing 및 관측값에 영향을 줄 수 있다. 따라서 원본 packet log와 함께 crypto cycle, authentication failure, replay, sequence gap, queue overflow 및 session 통계를 보존하고, 이 결과를 release hot-path 실측과 동일하게 해석하지 않는다.
 
 ## 9. 이번 v3에서 구현하지 않는 강화 후보
 
@@ -276,12 +283,23 @@ PSK-authenticated ECDH를 handshake에 추가하면 장기 PSK가 나중에 유�
 
 nRF52840의 APPROTECT, signed bootloader 및 firmware 서명은 runtime radio latency를 거의 늘리지 않을 수 있지만, 잘못 적용하면 field recovery와 개발용 SWD access를 잃거나 boot/update 구조를 바꿀 수 있다. 이는 무선 link 암호화와 별도의 supply-chain/physical-security 작업으로 분리하여 검토한다.
 
+### 9.5 Root-control failure budget
+
+`HELLO`/`RECOVERY`/`CHALLENGE`는 장기 PSK와 MIC4로 보호되지만, 잘못된 root tag 하나만으로 정상 active data link를 끊지는 않는다. 따라서 공격자가 root 형식 packet을 반복하면 software CCM 비용과 32-bit tag의 누적 시도 횟수가 늘어난다. Root-control에만 더 긴 MIC를 쓰거나 source별 token bucket/backoff와 전용 low-priority workqueue를 두면 정상 key data hot path의 packet 크기는 바꾸지 않고 이 위험을 줄일 가능성이 있다. 다만 공격 중 handshake/recovery 지연, queue 경합과 코드/RAM 증가를 실측해야 하므로 이번 profile에서는 구현하지 않고 별도 강화 후보로 남긴다.
+
+### 9.6 인증 실패 경계의 무손실 복구
+
+Application delivery ACK, 짧은 event journal과 authenticated key-state resync를 조합하면 MIC 실패 직후의 경계 tap까지 복구할 가능성이 있다. 그러나 event마다 추가 상태·ACK를 요구하면 최우선 조건인 fresh 1K 경로의 queueing과 airtime에 영향을 줄 수 있다. 이번 profile은 즉시 reset challenge와 기존 pre-session FIFO까지만 구현하고, 이 방식은 별도 성능 profile에서 v2/v3 p95·p99와 양쪽 동시 부하를 통과할 때만 검토한다.
+
 ## 10. 남는 보안 한계
 
 v3가 설계대로 동작해도 다음 제한은 남는다.
 
 - 32-bit MIC에는 누적 위조 확률 한계가 있다.
 - RF jamming과 충돌로 인한 입력 지연/손실은 암호화로 막지 못한다.
+- 공격자는 공개된 address/session header에 맞춘 잘못된 MIC를 보내 논리 link의 재협상을 유도하거나, root-control 형식의 packet을 반복해 software CCM과 system workqueue 시간을 소비시킬 수 있다. 전자는 BLE와 같은 fail-closed 정책의 가용성 대가이고 후자는 RF/CPU latency DoS 한계다. 인증 실패 순간의 in-flight key event는 유실될 수 있다.
+- Root `RECOVERY` high-water는 RAM 상태이므로 dongle 재부팅을 가로질러 과거 root packet의 재생을 기억하지 않는다. 재생된 packet은 fresh dongle nonce의 challenge까지만 유도할 수 있고 새 traffic session을 완성하려면 half의 pending key 인증이 필요하지만, 재부팅 직후의 handshake/CPU 가용성 공격 표면은 남는다.
+- Pending expiry는 단발 과거 packet의 영구 고착을 막지만, 공격자가 과거 root packet을 계속 재전송해 매 timeout마다 후보 경쟁을 반복하는 지속적 DoS는 막지 못한다. 이를 막는 강한 cross-reboot anti-replay에는 NVS에 저장한 monotonic epoch/ratchet이 필요하며 flash wear, 복구 절차와 latency를 별도 검증해야 하므로 이번 profile에는 넣지 않는다.
 - Packet timing, 길이, source와 traffic 양에서 typing pattern 일부를 추론할 수 있다.
 - Production UF2나 장치 flash에서 PSK를 추출한 공격자는 해당 link를 복호화하고 위조할 수 있다.
 - 하나의 장기 PSK에서 session key를 도출하므로 forward secrecy가 없다.
@@ -295,12 +313,12 @@ v3가 설계대로 동작해도 다음 제한은 남는다.
 
 | 항목 | 상태 |
 |---|---|
-| 보안 protocol과 위협 모델 | 이 문서에서 설계 |
-| AES-128-CCM/MIC4 firmware 구현 | 미구현 |
-| 양측 random handshake/session key | 미구현 |
-| Cross-session replay 방지 | 미구현 |
-| Local production key provisioning | 미구현 |
-| Public CI test-key profile | 미구현 |
+| 보안 protocol과 위협 모델 | 문서화 완료 |
+| AES-128-CCM/MIC4 firmware 구현 | 구현 완료, boot KAT 포함 |
+| 양측 random handshake/session key | 구현 완료 |
+| Cross-session replay 방지 | 구현 완료, strict monotonic sequence |
+| Local production key provisioning | 구현 완료 |
+| Public CI test-key profile | 구현 완료, `ci_only_*_testkey` 표기 |
 | v3 left/right/dongle build | 미측정 |
 | 기존 BLE/ESB v2 회귀 build | v3 변경 후 미측정 |
 | CCM typical/p95/p99 처리 시간 | 미측정 |
@@ -310,4 +328,4 @@ v3가 설계대로 동작해도 다음 제한은 남는다.
 | End-to-end v2 대비 latency delta | 미측정 |
 | Prospector 화면 및 battery 실기 | 미측정 |
 
-구현 완료, CI 성공, descriptor 확인과 실기 성능 승인은 서로 다른 단계다. 표의 미측정 항목을 채우기 전에는 v3가 기존 1K급 반응성을 유지한다고 결론내리지 않는다.
+구현 완료, CI compile/link 결과, descriptor 확인과 실기 성능 승인은 서로 다른 단계다. 표의 미측정 항목을 채우기 전에는 v3가 기존 1K급 반응성을 유지한다고 결론내리지 않는다. Production 빌드·플래시와 롤백 절차는 [Secure v3 빌드 및 플래시 문서](esb-v3-build-flash.md)를 따른다.

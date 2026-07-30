@@ -130,6 +130,7 @@ static uint32_t root_sequence;
 static uint32_t last_probe_sequence;
 static uint32_t accepted_challenge_request = UINT32_MAX;
 static uint32_t downlink_sequence;
+static int64_t wait_session_ok_started_at;
 static uint8_t heartbeat_metric;
 K_MUTEX_DEFINE(event_mutex);
 K_MSGQ_DEFINE(presession_events,
@@ -149,6 +150,26 @@ static void set_secure_state(enum esb_v3_peripheral_state next) {
     atomic_set(&secure_state, next);
 }
 
+static void clear_v3_traffic_session_locked(void) {
+    totem_esb_v3_discard_pending(peripheral_id - 1U);
+    totem_esb_v3_clear_active(peripheral_id - 1U);
+    central_nonce = 0;
+    wire_session_id = 0;
+    wire_sequence = 0;
+    accepted_challenge_request = UINT32_MAX;
+    downlink_sequence = 0;
+    wait_session_ok_started_at = 0;
+}
+
+static void reset_v3_session_locked(enum esb_v3_peripheral_state next,
+                                    uint64_t next_peripheral_nonce) {
+    set_secure_state(next);
+    clear_v3_traffic_session_locked();
+    peripheral_nonce = next_peripheral_nonce;
+    root_sequence = 0;
+    last_probe_sequence = 0;
+}
+
 static int begin_fresh_v3_handshake(void) {
     uint64_t fresh_nonce;
     int err = sys_csrand_get(&fresh_nonce, sizeof(fresh_nonce));
@@ -162,16 +183,30 @@ static int begin_fresh_v3_handshake(void) {
      * This mutex is only taken on boot/rekey, not for each state read.
      */
     k_mutex_lock(&event_mutex, K_FOREVER);
-    set_secure_state(ESB_V3_WAIT_CHALLENGE);
-    totem_esb_v3_discard_pending(peripheral_id - 1U);
-    peripheral_nonce = fresh_nonce;
-    central_nonce = 0;
-    wire_session_id = 0;
-    root_sequence = 0;
-    last_probe_sequence = 0;
-    accepted_challenge_request = UINT32_MAX;
+    reset_v3_session_locked(ESB_V3_WAIT_CHALLENGE, fresh_nonce);
     k_mutex_unlock(&event_mutex);
     return 0;
+}
+
+static void restart_v3_after_auth_failure(void) {
+    /*
+     * Fail closed before asking the RNG for a replacement nonce. If entropy
+     * is temporarily unavailable, handshake_work retries while NO_SESSION
+     * prevents any old-key traffic from being accepted or produced.
+     */
+    k_mutex_lock(&event_mutex, K_FOREVER);
+    reset_v3_session_locked(ESB_V3_NO_SESSION, 0);
+    k_mutex_unlock(&event_mutex);
+
+    int err = begin_fresh_v3_handshake();
+    if (err != 0) {
+        LOG_ERR("ESB v3 auth-failure rekey nonce generation failed (%d)", err);
+        k_work_reschedule(
+            &handshake_work,
+            K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+        return;
+    }
+    k_work_reschedule(&handshake_work, K_NO_WAIT);
 }
 
 static int enqueue_v3_frame(
@@ -527,11 +562,41 @@ ZMK_SPLIT_TRANSPORT_PERIPHERAL_REGISTER(esb_peripheral, &peripheral_api,
 static void handshake_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
     enum esb_v3_peripheral_state current = get_secure_state();
-    if (current == ESB_V3_WAIT_CHALLENGE ||
-        current == ESB_V3_NO_SESSION) {
+    if (current == ESB_V3_NO_SESSION) {
+        if (begin_fresh_v3_handshake() != 0) {
+            k_work_reschedule(
+                &handshake_work,
+                K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+            return;
+        }
+        current = ESB_V3_WAIT_CHALLENGE;
+    }
+    if (current == ESB_V3_WAIT_CHALLENGE) {
         (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_HELLO, NULL);
     } else if (current == ESB_V3_WAIT_SESSION_OK) {
-        (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_READY, NULL);
+        bool wait_expired;
+        k_mutex_lock(&event_mutex, K_FOREVER);
+        wait_expired =
+            get_secure_state() == ESB_V3_WAIT_SESSION_OK &&
+            k_uptime_get() - wait_session_ok_started_at >=
+                CONFIG_TOTEM_ESB_V3_SESSION_OK_TIMEOUT_MS;
+        k_mutex_unlock(&event_mutex);
+        if (wait_expired) {
+            /*
+             * The central may have discarded this pending key during a long
+             * RF outage. A fresh boot nonce is required because continuing
+             * to send READY can never recover when the peer has no key.
+             */
+            if (begin_fresh_v3_handshake() != 0) {
+                k_work_reschedule(
+                    &handshake_work,
+                    K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+                return;
+            }
+            (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_HELLO, NULL);
+        } else {
+            (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_READY, NULL);
+        }
     } else {
         return;
     }
@@ -689,6 +754,9 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
     const uint8_t source = peripheral_id - 1U;
     if (env->payload.wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
         uint32_t request = env->payload.body.challenge.request_sequence;
+        uint64_t reset_session =
+            env->payload.body.challenge.reset_session;
+        bool reset_requested = reset_session != 0;
         uint64_t received_central_nonce = env->payload.session_id;
         k_mutex_lock(&event_mutex, K_FOREVER);
         if (env->payload.sequence != 0 || received_central_nonce == 0 ||
@@ -701,34 +769,79 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
             k_mutex_unlock(&event_mutex);
             return -ENOTCONN;
         }
-        if ((current == ESB_V3_WAIT_CHALLENGE && request != 0) ||
-            (current == ESB_V3_ESTABLISHED &&
-             request != last_probe_sequence)) {
-            k_mutex_unlock(&event_mutex);
-            return -ESTALE;
-        }
-        if (current == ESB_V3_ESTABLISHED &&
-            request == accepted_challenge_request &&
-            received_central_nonce == central_nonce) {
-            /*
-             * This transcript already established the active key. Replaying
-             * it must never reset traffic sequences and reuse CCM nonces.
-             */
-            k_mutex_unlock(&event_mutex);
-            return 0;
-        }
-        if (current == ESB_V3_WAIT_SESSION_OK) {
-            if (request != accepted_challenge_request) {
+
+        if (reset_requested) {
+            bool reset_session_is_current =
+                current == ESB_V3_WAIT_CHALLENGE ||
+                totem_esb_v3_active_session(source) == reset_session ||
+                totem_esb_v3_pending_session(source) == reset_session;
+            if (!reset_session_is_current) {
                 k_mutex_unlock(&event_mutex);
                 return -ESTALE;
             }
-            if (received_central_nonce != central_nonce) {
+            /*
+             * The root-authenticated challenge proves the dongle discarded
+             * exactly our current active/pending session after a MIC failure.
+             * Preserve the boot nonce and root counter, but destroy both
+             * traffic keys before deriving the replacement.
+             */
+            clear_v3_traffic_session_locked();
+            set_secure_state(ESB_V3_WAIT_CHALLENGE);
+            current = ESB_V3_WAIT_CHALLENGE;
+        } else {
+            if (current == ESB_V3_WAIT_CHALLENGE) {
+                if (request != 0) {
+                    k_mutex_unlock(&event_mutex);
+                    return -ESTALE;
+                }
+            } else if (current == ESB_V3_ESTABLISHED) {
+                if (request == accepted_challenge_request) {
+                    /*
+                     * This transcript already established the active key.
+                     * Replaying it must never reset traffic sequences and
+                     * reuse CCM nonces; another nonce at the same request is
+                     * not a valid replacement either.
+                     */
+                    int duplicate_err =
+                        received_central_nonce == central_nonce ? 0 : -EALREADY;
+                    k_mutex_unlock(&event_mutex);
+                    return duplicate_err;
+                }
+                /*
+                 * ACK payloads are prepared after the triggering RECOVERY,
+                 * so a challenge for N can arrive on the packet carrying
+                 * N+1. Accept any still-unconsumed request that we actually
+                 * sent, not only the latest probe.
+                 */
+                if (request < accepted_challenge_request ||
+                    request > last_probe_sequence) {
+                    k_mutex_unlock(&event_mutex);
+                    return -ESTALE;
+                }
+            } else if (current == ESB_V3_WAIT_SESSION_OK) {
+                if (request == accepted_challenge_request) {
+                    if (received_central_nonce != central_nonce) {
+                        k_mutex_unlock(&event_mutex);
+                        return -EALREADY;
+                    }
+                    k_mutex_unlock(&event_mutex);
+                    (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_READY, NULL);
+                    return 0;
+                }
+                /*
+                 * A newer authenticated challenge can supersede an orphaned
+                 * pending transcript, but an old or never-sent request
+                 * cannot roll it back or jump ahead.
+                 */
+                if (request < accepted_challenge_request ||
+                    request > last_probe_sequence) {
+                    k_mutex_unlock(&event_mutex);
+                    return -ESTALE;
+                }
+            } else {
                 k_mutex_unlock(&event_mutex);
-                return -EALREADY;
+                return -ESTALE;
             }
-            k_mutex_unlock(&event_mutex);
-            (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_READY, NULL);
-            return 0;
         }
 
         uint64_t session_id;
@@ -736,11 +849,15 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
             source, peripheral_nonce, received_central_nonce, &session_id);
         if (err != 0) {
             k_mutex_unlock(&event_mutex);
+            if (reset_requested) {
+                k_work_reschedule(&handshake_work, K_NO_WAIT);
+            }
             return err;
         }
         central_nonce = received_central_nonce;
         wire_session_id = session_id;
         accepted_challenge_request = request;
+        wait_session_ok_started_at = k_uptime_get();
         set_secure_state(ESB_V3_WAIT_SESSION_OK);
         k_mutex_unlock(&event_mutex);
         (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_READY, NULL);
@@ -777,6 +894,7 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
         }
         wire_sequence = 0;
         downlink_sequence = 0;
+        wait_session_ok_started_at = 0;
         set_secure_state(ESB_V3_ESTABLISHED);
         k_mutex_unlock(&event_mutex);
         (void)k_work_cancel_delayable(&handshake_work);
@@ -858,7 +976,7 @@ static void process_rx_work_cb(struct k_work *work) {
             struct esb_command_envelope env = {0};
             int item_err = zmk_split_esb_get_item(rx_buf, (uint8_t *)&env,
                                                   sizeof(struct esb_command_envelope),
-                                                  true);
+                                                  true, pipe);
             switch (item_err) {
             case 0:
                 if (!command_payload_size_is_valid(&env)) {
@@ -898,6 +1016,23 @@ static void process_rx_work_cb(struct k_work *work) {
                 LOG_WRN("Discarding incomplete ESB command on pipe %d", pipe);
                 ring_buf_reset(rx_buf);
                 goto next_pipe;
+            case -EACCES:
+                totem_esb_benchmark_rx_invalid(pipe, item_err);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+                /*
+                 * A root-key CHALLENGE failure is a pre-session probe. Any
+                 * pending/active-key MIC failure on this half terminates the
+                 * logical encrypted link and starts a fresh handshake.
+                 */
+                if (env.payload.source == peripheral_id &&
+                    pipe == peripheral_id &&
+                    env.payload.wire_type !=
+                        ESB_WIRE_COMMAND_V3_CHALLENGE) {
+                    LOG_ERR("ESB v3 MIC failure terminated local session");
+                    restart_v3_after_auth_failure();
+                }
+#endif
+                break;
             default:
                 LOG_WRN("Issue fetching an item from the RX buffer: %d", item_err);
                 break;

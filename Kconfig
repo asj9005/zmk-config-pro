@@ -63,6 +63,27 @@ config TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS
     default 2
     range 1 100
 
+config TOTEM_ESB_V3_SESSION_OK_TIMEOUT_MS
+    int "ESB v3 SESSION_OK wait timeout in milliseconds"
+    depends on TOTEM_ESB_V3 && !ZMK_SPLIT_ROLE_CENTRAL
+    default 2000
+    range 250 30000
+    help
+      Starts a fresh HELLO with a new boot nonce if the peripheral remains
+      in WAIT_SESSION_OK for this long. This recovers after the central has
+      discarded a pending key during an extended RF outage.
+
+config TOTEM_ESB_V3_PENDING_TIMEOUT_MS
+    int "ESB v3 central pending-session timeout in milliseconds"
+    depends on TOTEM_ESB_V3 && ZMK_SPLIT_ROLE_CENTRAL
+    default 2000
+    range 250 30000
+    help
+      Discards an unconfirmed central pending key after this interval. This
+      prevents one replayed HELLO or RECOVERY from pinning the handshake
+      forever while still keeping a MIC-failure reset transcript fixed
+      during the bounded recovery window.
+
 config TOTEM_ESB_V3_PRESESSION_EVENT_QUEUE_SIZE
     int "Events retained while an ESB v3 session is negotiated"
     depends on TOTEM_ESB_V3 && !ZMK_SPLIT_ROLE_CENTRAL
