@@ -11,6 +11,8 @@
 
 #include <zmk/events/activity_state_changed.h>
 #include <totem/esb_benchmark.h>
+#include <totem/esb_prx_queue.h>
+#include <limits.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(app_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
@@ -170,8 +172,124 @@ static app_esb_mode_t m_mode;
 static bool m_active = false;
 static bool m_enabled = false;
 
+/* One hardware ACK per pipe leaves room for the other keyboard half. */
+BUILD_ASSERT(CONFIG_ESB_TX_FIFO_SIZE >= CONFIG_ESB_PIPE_COUNT,
+             "The ACK FIFO must reserve one slot for each ESB pipe");
+static struct totem_esb_prx_queue m_prx_queue;
+static struct totem_esb_prx_packet m_prx_hardware[CONFIG_ESB_PIPE_COUNT];
+static bool m_prx_hardware_valid[CONFIG_ESB_PIPE_COUNT];
+static bool m_prx_flush_pending[CONFIG_ESB_PIPE_COUNT];
+static void prx_maintenance_handler(struct k_work *work);
+K_WORK_DELAYABLE_DEFINE(m_prx_maintenance, prx_maintenance_handler);
+
+static struct onoff_manager *m_hf_manager;
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)
+static struct onoff_client m_hf_client;
+static bool m_hf_ready;
+static bool m_hf_requested;
+static bool m_hf_pending;
+static uint32_t m_hf_idle_since;
+static atomic_t m_hf_result = ATOMIC_INIT(INT_MIN);
+static void hf_clock_work_handler(struct k_work *work);
+K_WORK_DELAYABLE_DEFINE(m_hf_work, hf_clock_work_handler);
+#endif
+
 static int pull_packet_from_tx_msgq(void);
 static int pull_packet_from_tx_msgq_unlocked(void);
+
+static void schedule_hf_idle_unlocked(void) {
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)
+    if (m_mode == APP_ESB_MODE_PTX && m_current_tx_msg_id == 0 &&
+        k_msgq_num_used_get(&m_msgq_tx_payloads) == 0) {
+        m_hf_idle_since = k_uptime_get_32();
+        k_work_reschedule(&m_hf_work, K_MSEC(CONFIG_TOTEM_ESB_HF_IDLE_MS));
+    }
+#endif
+}
+
+static int service_prx_unlocked(void) {
+    uint32_t now = k_uptime_get_32();
+    uint32_t blocked = 0;
+    bool pending = false;
+    unsigned int expired =
+        totem_esb_prx_expire(&m_prx_queue, now, CONFIG_TOTEM_ESB_ACK_TTL_MS);
+
+    for (uint8_t pipe = 0; pipe < CONFIG_ESB_PIPE_COUNT; pipe++) {
+        int count = esb_get_ack_payload_count(pipe);
+        if (count < 0) {
+            return count;
+        }
+        if (count == 0) {
+            m_prx_hardware_valid[pipe] = false;
+        }
+        bool stale = m_prx_hardware_valid[pipe] &&
+            totem_esb_prx_expired(now, m_prx_hardware[pipe].enqueued_at,
+                                  CONFIG_TOTEM_ESB_ACK_TTL_MS);
+        if (m_prx_flush_pending[pipe] || stale) {
+            int err = esb_flush_ack_payloads(pipe);
+            if (err != 0) {
+                m_prx_flush_pending[pipe] = true;
+                blocked |= BIT(pipe);
+                pending = true;
+                continue;
+            }
+            expired += stale ? 1U : 0U;
+            m_prx_hardware_valid[pipe] = false;
+            m_prx_flush_pending[pipe] = false;
+            count = 0;
+        }
+        if (count != 0) {
+            blocked |= BIT(pipe);
+            pending = true;
+        }
+    }
+
+    int pipe;
+    while ((pipe = totem_esb_prx_next(&m_prx_queue, blocked)) >= 0) {
+        const struct totem_esb_prx_packet *packet =
+            totem_esb_prx_peek(&m_prx_queue, pipe);
+        struct esb_payload payload = {.pipe = pipe, .length = packet->length};
+        memcpy(payload.data, packet->data, packet->length);
+        int err = esb_write_payload(&payload);
+        if (err != 0) {
+            pending = true;
+            break;
+        }
+        m_prx_hardware[pipe] = *packet;
+        m_prx_hardware_valid[pipe] = true;
+        totem_esb_prx_pop(&m_prx_queue, pipe);
+        blocked |= BIT(pipe);
+        pending = true;
+    }
+    if (expired != 0) {
+        LOG_WRN("Expired %u undelivered ESB ACK commands", expired);
+    }
+    for (uint8_t p = 0; p < CONFIG_ESB_PIPE_COUNT; p++) {
+        pending |= m_prx_queue.count[p] != 0;
+    }
+    if (pending) {
+        /* Sustained traffic must not move the expiry deadline into the future. */
+        k_work_schedule(&m_prx_maintenance, K_MSEC(25));
+    }
+    return 0;
+}
+
+static void prx_maintenance_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+    k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+    bool active = m_active && m_mode == APP_ESB_MODE_PRX;
+    if (active) {
+        service_prx_unlocked();
+    }
+    k_spin_unlock(&m_tx_lock, key);
+    if (active) {
+        /* Match the serialization of the normal ESB IRQ callback on nRF52. */
+        unsigned int irq_key = irq_lock();
+        app_esb_event_t event = {.evt_type = APP_ESB_EVT_TX_SPACE_AVAILABLE};
+        m_callback(&event);
+        irq_unlock(irq_key);
+    }
+}
 
 static int pull_packet_from_tx_msgq(void) {
     k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
@@ -208,6 +326,7 @@ static void event_handler(struct esb_evt const *event) {
             remove_retry_entry_by_msg_id(m_current_tx_msg_id);
             m_current_tx_msg_id = 0;
             pull_packet_from_tx_msgq_unlocked();
+            schedule_hf_idle_unlocked();
             k_spin_unlock(&m_tx_lock, key);
             // Forward an event to the application
             m_event.evt_type = APP_ESB_EVT_TX_SUCCESS;
@@ -257,6 +376,7 @@ static void event_handler(struct esb_evt const *event) {
             remove_retry_entry_by_msg_id(failed_msg_id);
             m_current_tx_msg_id = 0;
             pull_packet_from_tx_msgq_unlocked();
+            schedule_hf_idle_unlocked();
             k_spin_unlock(&m_tx_lock, key);
             m_event.evt_type = APP_ESB_EVT_TX_FAIL;
             m_callback(&m_event);
@@ -285,18 +405,21 @@ static void event_handler(struct esb_evt const *event) {
 static int clocks_start(void) {
     int err;
     int res;
-    struct onoff_manager *clk_mgr;
-    struct onoff_client clk_cli;
+    struct onoff_client clk_cli = {0};
 
-    clk_mgr = z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
-    if (!clk_mgr) {
+    /* Boot-only wait. Runtime PTX clock requests use the callback below. */
+    if (k_is_in_isr()) {
+        return -EWOULDBLOCK;
+    }
+    m_hf_manager = z_nrf_clock_control_get_onoff(CLOCK_CONTROL_NRF_SUBSYS_HF);
+    if (!m_hf_manager) {
         LOG_ERR("Unable to get the Clock manager");
         return -ENXIO;
     }
 
     sys_notify_init_spinwait(&clk_cli.notify);
 
-    err = onoff_request(clk_mgr, &clk_cli);
+    err = onoff_request(m_hf_manager, &clk_cli);
     if (err < 0) {
         LOG_ERR("Clock request failed: %d", err);
         return err;
@@ -311,8 +434,92 @@ static int clocks_start(void) {
     } while (err);
 
     LOG_DBG("HF clock started");
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)
+    m_hf_ready = true;
+    m_hf_requested = true;
+#endif
     return 0;
 }
+
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)
+static void hf_clock_ready(struct onoff_manager *manager, struct onoff_client *client,
+                           uint32_t state, int result) {
+    ARG_UNUSED(manager);
+    ARG_UNUSED(client);
+    if ((state & ONOFF_FLAG_ERROR) && result >= 0) {
+        result = -EIO;
+    }
+    atomic_set(&m_hf_result, result);
+    k_work_reschedule(&m_hf_work, K_NO_WAIT);
+}
+
+static void hf_clock_work_handler(struct k_work *work) {
+    ARG_UNUSED(work);
+    bool request = false;
+    bool release = false;
+    k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+    if (m_mode != APP_ESB_MODE_PTX) {
+        k_spin_unlock(&m_tx_lock, key);
+        return;
+    }
+    if (m_hf_pending) {
+        int result = atomic_get(&m_hf_result);
+        if (result == INT_MIN) {
+            k_spin_unlock(&m_tx_lock, key);
+            return;
+        }
+        m_hf_pending = false;
+        m_hf_ready = result >= 0;
+        m_hf_requested = result >= 0;
+        if (result < 0) {
+            LOG_ERR("HF clock request failed: %d", result);
+            k_spin_unlock(&m_tx_lock, key);
+            k_work_reschedule(&m_hf_work, K_MSEC(100));
+            return;
+        }
+    }
+
+    bool queued = k_msgq_num_used_get(&m_msgq_tx_payloads) != 0;
+    if (m_active && m_enabled && queued) {
+        if (m_hf_ready) {
+            pull_packet_from_tx_msgq_unlocked();
+        } else {
+            m_hf_pending = true;
+            atomic_set(&m_hf_result, INT_MIN);
+            request = true;
+        }
+    } else if (m_hf_requested && m_hf_ready &&
+               m_current_tx_msg_id == 0 && esb_is_idle()) {
+        uint32_t elapsed = k_uptime_get_32() - m_hf_idle_since;
+        if (!m_enabled || elapsed >= CONFIG_TOTEM_ESB_HF_IDLE_MS) {
+            /* Senders observe not-ready before the request is released. */
+            m_hf_ready = false;
+            m_hf_requested = false;
+            release = true;
+        } else {
+            k_work_reschedule(&m_hf_work,
+                K_MSEC(CONFIG_TOTEM_ESB_HF_IDLE_MS - elapsed));
+        }
+    }
+    k_spin_unlock(&m_tx_lock, key);
+
+    /* Never wait for a clock, or call a possibly synchronous callback, locked. */
+    if (release) {
+        int err = onoff_release(m_hf_manager);
+        if (err < 0) {
+            LOG_ERR("HF clock release failed: %d", err);
+        }
+    }
+    if (request) {
+        sys_notify_init_callback(&m_hf_client.notify, hf_clock_ready);
+        int err = onoff_request(m_hf_manager, &m_hf_client);
+        if (err < 0) {
+            atomic_set(&m_hf_result, err);
+            k_work_reschedule(&m_hf_work, K_MSEC(100));
+        }
+    }
+}
+#endif
 
 static int esb_initialize(app_esb_mode_t mode) {
     int err;
@@ -356,7 +563,9 @@ static int esb_initialize(app_esb_mode_t mode) {
         return err;
     }
 
-    NVIC_SetPriority(RADIO_IRQn, 0);
+    /* Keep the SDK's Zephyr priority mapping: raw NVIC priority 0 bypasses
+     * BASEPRI/irq_lock and corrupts the driver's FIFO and event critical sections.
+     */
 
     if (mode == APP_ESB_MODE_PRX) {
         err = esb_start_rx();
@@ -374,27 +583,17 @@ static int pull_packet_from_tx_msgq_unlocked(void) {
     struct queued_payload queued;
 
     if (m_mode == APP_ESB_MODE_PRX) {
-        while (k_msgq_peek(&m_msgq_tx_payloads, &queued) == 0) {
-            ret = esb_write_payload(&queued.payload);
-            if (ret == 0) {
-                // PRX queues this as an ACK payload for queued.payload.pipe.
-                // Keep RX running; esb_start_tx() is invalid in PRX mode.
-                k_msgq_get(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
-                continue;
-            }
-            if (ret == -ENOMEM) {
-                // Hardware ACK FIFO is full. Keep the app-queue head and
-                // refill when a PRX TX-success event frees a slot.
-                return ret;
-            }
-
-            LOG_WRN("Unable to queue PRX ACK payload (err %d, pipe %u, len %u)", ret,
-                    queued.payload.pipe, queued.payload.length);
-            return ret;
-        }
-        return 0;
+        return service_prx_unlocked();
     }
 
+#if !IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)
+    if (!m_hf_ready) {
+        if (k_msgq_num_used_get(&m_msgq_tx_payloads) != 0) {
+            k_work_reschedule(&m_hf_work, K_NO_WAIT);
+        }
+        return -EAGAIN;
+    }
+#endif
     if (!esb_is_idle()) {
         return -EBUSY;
     }
@@ -442,6 +641,7 @@ int zmk_split_esb_init(app_esb_mode_t mode, app_esb_callback_t callback) {
     int ret;
     m_callback = callback;
     m_mode = mode;
+    totem_esb_prx_queue_init(&m_prx_queue);
     ret = clocks_start();
     if (ret < 0) {
         return ret;
@@ -477,6 +677,9 @@ int zmk_split_esb_set_enable(bool enabled) {
             m_current_tx_msg_id = 0;
         }
         pull_packet_from_tx_msgq();
+        k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+        schedule_hf_idle_unlocked();
+        k_spin_unlock(&m_tx_lock, key);
 #endif
         return 0;
     } else {
@@ -485,6 +688,9 @@ int zmk_split_esb_set_enable(bool enabled) {
 #else
         m_active = false;
         esb_disable();
+        k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+        schedule_hf_idle_unlocked();
+        k_spin_unlock(&m_tx_lock, key);
 #endif
         return 0;
     }
@@ -499,6 +705,27 @@ int zmk_split_esb_send(app_esb_data_t *tx_packet) {
     }
     if (tx_packet->pipe >= CONFIG_ESB_PIPE_COUNT) {
         return -EINVAL;
+    }
+
+    if (m_mode == APP_ESB_MODE_PRX) {
+        struct totem_esb_prx_packet packet = {
+            .pipe = tx_packet->pipe, .length = tx_packet->len,
+            .msg_id = tx_packet->msg_id, .enqueued_at = k_uptime_get_32(),
+        };
+        memcpy(packet.data, tx_packet->data, packet.length);
+        k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+        if (m_active) {
+            service_prx_unlocked();
+        }
+        bool duplicate = m_prx_hardware_valid[packet.pipe] &&
+            !m_prx_flush_pending[packet.pipe] &&
+            totem_esb_prx_same(&packet, &m_prx_hardware[packet.pipe]);
+        int ret = duplicate ? 1 : totem_esb_prx_offer(&m_prx_queue, &packet);
+        if (m_active) {
+            service_prx_unlocked();
+        }
+        k_spin_unlock(&m_tx_lock, key);
+        return ret >= 0 ? 0 : (ret == -ENOSPC ? -ENOMSG : ret);
     }
 
     int ret = 0;
@@ -539,6 +766,24 @@ int zmk_split_esb_send(app_esb_data_t *tx_packet) {
     }
     k_spin_unlock(&m_tx_lock, key);
     return ret;
+}
+
+int zmk_split_esb_flush_pipe(uint8_t pipe) {
+    if (m_mode != APP_ESB_MODE_PRX || pipe >= CONFIG_ESB_PIPE_COUNT) {
+        return -EINVAL;
+    }
+    k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
+    totem_esb_prx_clear_pipe(&m_prx_queue, pipe);
+    m_prx_hardware_valid[pipe] = false;
+    m_prx_flush_pending[pipe] = true;
+    int err = m_active ? esb_flush_ack_payloads(pipe) : -EBUSY;
+    if (err == 0) {
+        m_prx_flush_pending[pipe] = false;
+    }
+    k_spin_unlock(&m_tx_lock, key);
+    /* An in-flight ACK cannot be revoked. Hold new commands behind this barrier. */
+    k_work_reschedule(&m_prx_maintenance, K_MSEC(1));
+    return err == -EBUSY ? 0 : err;
 }
 
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_USE_TIMESLOT)

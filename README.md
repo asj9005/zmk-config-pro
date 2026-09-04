@@ -45,11 +45,13 @@ Fresh-event 검증은 부팅 때 생성되는 32-bit session ID와 source별 seq
 
 `CONFIG_ESB_PIPE_COUNT=3`이며 pipe 0은 예약되어 있다. Pipe 1은 왼쪽, pipe 2는 오른쪽의 uplink와 해당 하프로 돌아가는 PRX ACK payload를 함께 담당한다. 동글은 독립적인 downlink를 선제 송신하지 못하며, command는 대상 half의 다음 uplink/heartbeat에 대한 ACK payload로 전달된다. Command application retry는 현재 0이다.
 
-Nordic PRX의 hardware ACK-payload FIFO는 pipe별로 따로 비우는 API가 없다. 이미 FIFO에 들어간 command의 대상 half가 전송 전에 꺼지면 그 entry가 남아 다른 half의 reverse command를 지연시킬 수 있다. Half→dongle key uplink 자체에는 해당하지 않는 제한이지만 실제 장치에서 확인해야 한다.
+고정한 Nordic SDK에 pipe별 ACK 수 확인/취소 API를 추가했다. 각 half는 hardware ACK-payload FIFO를 한 칸만 사용하며, 소프트웨어 큐도 half별 한도를 두고 순환 처리한다. 동일한 대기 응답은 합치고, 기본 1.5초 동안 전달되지 않은 응답은 만료시킨다. 세션을 폐기할 때는 해당 half의 producer/software/hardware 큐를 정리한다. 이미 무선으로 전달된 응답을 취소할 수는 없으므로 v3의 세션·sequence 검증도 유지한다.
 
 왼쪽과 오른쪽은 별도 pipe를 쓰지만 하나의 RF channel과 하나의 동글 radio를 공유한다. TDMA나 CSMA는 없다. 고정 retry 충돌을 줄이기 위해 hardware retry delay를 왼쪽 500 µs, 오른쪽 800 µs로 다르게 두었지만, 양쪽 동시 fresh 1K와 무손실을 보장하지 않는다. RF channel hopping도 PTX/PRX 동기화가 없어 비활성화되어 있다.
 
-각 half는 부팅마다 하드웨어 entropy로 non-zero random session ID를 만든다. Dongle은 session 변경이나 peer timeout 때 이전에 눌린 것으로 남은 key를 release하고 sequence 상태를 재설정한다. 이는 재부팅 복구 및 stuck key 완화용이며 보안 nonce나 인증 수단은 아니다.
+각 half는 부팅마다 하드웨어 entropy로 non-zero random session ID를 만든다. Dongle은 session 변경이나 peer timeout 때 이전에 눌린 것으로 남은 key를 release하고 sequence 상태를 재설정한다. 추가로 half가 38개 키의 현재 상태를 5-byte bitmap으로 보내 release 유실과 재연결 후 held key를 복구한다. Snapshot은 기존 edge와 같은 FIFO/sequence를 사용하며 기본 250ms heartbeat마다, 큐 overflow 후, v3 연결 전 입력 큐가 모두 배출된 뒤 전송한다. v3 snapshot에도 기존 CCM 인증 및 replay 검사를 적용한다. 완전히 유실된 짧은 tap의 과거 동작은 현재 상태만으로 복원할 수 없다.
+
+RADIO 우선순위는 SDK/Zephyr 설정을 유지하며 raw NVIC priority 0으로 덮어쓰지 않는다. PTX는 송신 큐가 비고 기본 10ms 동안 유휴 상태이면 HFCLK 요청을 해제하고, 다음 송신 전에 비동기로 다시 확보한다. v3 미접속 탐색 간격은 2ms부터 최대 1초까지 늘어나며 키 입력 또는 무선 ACK 성공 시 즉시 빠른 탐색으로 복귀한다. 첫 입력 지연과 대기전류는 실제 장치에서 확인해야 한다. 자세한 변경 및 검증 범위는 [ESB 안정성 패치](docs/esb-reliability-patch.md)를 참고한다.
 
 ## 주소와 보안
 
@@ -76,3 +78,4 @@ Secure v3 후보는 half별 128-bit PSK, AES-128-CCM/MIC4, 두 random nonce로 �
 - [ESB 1K benchmark](docs/esb-1k-benchmark.md)
 - [ESB Secure v3 보안 설계와 검증 상태](docs/esb-v3-security.md)
 - [ESB Secure v3 production 빌드 및 플래시](docs/esb-v3-build-flash.md)
+- [ESB 안정성 패치와 회귀 테스트](docs/esb-reliability-patch.md)

@@ -32,6 +32,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <zmk/physical_layouts.h>
 
 #include <totem/esb_benchmark.h>
+#include <totem/esb_key_state.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 #include <totem/esb_v3_crypto.h>
 #endif
@@ -55,6 +56,9 @@ BUILD_ASSERT(RX_BUFFER_SIZE <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
              "ESB peripheral event exceeds the configured payload");
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT + 1 <= CONFIG_ESB_PIPE_COUNT,
              "Pipe 0 is reserved and every peripheral requires its own pipe");
+BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX > 0 &&
+                 CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX <= 256,
+             "Key snapshots require 1 to 256 positions");
 
 RING_BUF_DECLARE(tx_buf, TX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS);
 static struct k_spinlock tx_ring_lock;
@@ -74,6 +78,39 @@ static struct zmk_split_esb_state state = {
 
 static void begin_tx(void) {
     zmk_split_esb_tx(&state);
+}
+
+/* Drop a retired peer's commands at every queue level. Other pipes keep their
+ * relative order. The radio driver defers hardware cleanup if an ACK is active.
+ */
+static void drop_source_commands(uint8_t source) {
+    uint8_t pipe = source + 1U;
+    k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
+    size_t remaining = ring_buf_size_get(&tx_buf);
+    while (remaining > 0) {
+        struct esb_msg_prefix prefix;
+        if (ring_buf_peek(&tx_buf, (uint8_t *)&prefix, sizeof(prefix)) != sizeof(prefix)) {
+            ring_buf_reset(&tx_buf);
+            break;
+        }
+        size_t frame_size = ESB_MSG_EXTRA_SIZE + prefix.payload_size;
+        uint8_t frame[TX_BUFFER_SIZE];
+        if (memcmp(prefix.magic_prefix, ZMK_SPLIT_ESB_ENVELOPE_MAGIC_PREFIX,
+                   sizeof(prefix.magic_prefix)) != 0 ||
+            frame_size > sizeof(frame) || frame_size > remaining ||
+            ring_buf_get(&tx_buf, frame, frame_size) != frame_size) {
+            ring_buf_reset(&tx_buf);
+            break;
+        }
+        remaining -= frame_size;
+        struct esb_msg_meta meta;
+        memcpy(&meta, &frame[frame_size - sizeof(meta)], sizeof(meta));
+        if (meta.pipe != pipe) {
+            ring_buf_put(&tx_buf, frame, frame_size);
+        }
+    }
+    zmk_split_esb_flush_pipe(pipe);
+    k_spin_unlock(&tx_ring_lock, key);
 }
 
 static ssize_t get_payload_data_size(const struct zmk_split_transport_central_command *cmd) {
@@ -456,6 +493,11 @@ static bool event_payload_size_is_valid(const struct esb_event_envelope *env) {
     if (env->payload.wire_type == ESB_WIRE_EVENT_BENCHMARK) {
         return env->prefix.payload_size == header_size;
     }
+    if (env->payload.wire_type == ESB_WIRE_EVENT_KEY_STATE) {
+        return env->prefix.payload_size == header_size + sizeof(env->payload.body.key_state) &&
+               totem_esb_key_state_valid(env->payload.body.key_state.keys,
+                                         CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX);
+    }
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     if (env->payload.wire_type == ESB_WIRE_EVENT_V3_HELLO ||
         env->payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
@@ -497,7 +539,7 @@ static bool event_payload_size_is_valid(const struct esb_event_envelope *env) {
 
 static void release_source_keys(uint8_t source) {
     uint8_t *source_keys = key_pos_states[source];
-    for (uint8_t position = 0; position < CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX;
+    for (uint16_t position = 0; position < CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX;
          position++) {
         if ((source_keys[position / 8] >> (position % 8)) & 1U) {
             raise_zmk_position_state_changed((struct zmk_position_state_changed){
@@ -509,6 +551,15 @@ static void release_source_keys(uint8_t source) {
         }
     }
     memset(source_keys, 0, sizeof(key_pos_states[source]));
+}
+
+static void emit_snapshot_key(void *context, uint8_t position, bool pressed) {
+    uint8_t source = *(uint8_t *)context;
+    struct zmk_split_transport_peripheral_event event = {
+        .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT,
+        .data.key_position_event = {.position = position, .pressed = pressed},
+    };
+    zmk_split_transport_central_peripheral_event_handler(&esb_central, source, event);
 }
 
 void totem_esb_source_disconnected(uint8_t source) {
@@ -531,9 +582,12 @@ void totem_esb_source_disconnected(uint8_t source) {
     secure_peers[source].pending_started_at = 0;
     secure_peers[source].active_peripheral_nonce = 0;
     secure_peers[source].active_central_nonce = 0;
+    drop_source_commands(source);
     totem_esb_v3_discard_pending(source);
     totem_esb_v3_clear_active(source);
     k_mutex_unlock(&command_mutex);
+#else
+    drop_source_commands(source);
 #endif
 }
 
@@ -551,6 +605,9 @@ static void update_source_session(
     }
 
     if (seq->session_initialized) {
+#if !IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+        drop_source_commands(source);
+#endif
         release_source_keys(source);
         seq->session_changes++;
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
@@ -915,6 +972,10 @@ static int process_v3_control_event(uint8_t source,
          * steady-state uplink receive path.
          */
         k_mutex_lock(&command_mutex, K_FOREVER);
+        if (!atomic_get(&peer->active) ||
+            peer->active_session != peer->pending_session) {
+            drop_source_commands(source);
+        }
         int err = enqueue_v3_downlink(
             source, ESB_WIRE_COMMAND_V3_SESSION_OK, NULL,
             peer->pending_session, 0, 0, 0, 0);
@@ -1078,6 +1139,13 @@ static void process_rx_work_cb(struct k_work *work) {
                     pressed, accepted_for_zmk);
 
                 if (!accepted_for_zmk) {
+                    if (accept && env.payload.wire_type == ESB_WIRE_EVENT_KEY_STATE &&
+                        &esb_central == active_transport) {
+                        totem_esb_key_state_reconcile(
+                            key_pos_states[source], env.payload.body.key_state.keys,
+                            CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX,
+                            emit_snapshot_key, &source);
+                    }
                     break;
                 }
 

@@ -17,6 +17,14 @@ jobs:
             tools/generate_esb_v3_keys.py \
             tools/analyze_esb_benchmark.py \
             tools/analyze_usbpcap.py
+      - name: Compile and execute firmware recovery tests
+        env:
+          CC: cc
+        run: |
+          python3 -m unittest -v \
+            tests/test_esb_firmware.py \
+            tests/test_esb_clock_runtime.py \
+            tests/test_esb_ack_runtime.py
 
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@904c9aec8822d79149d42c8a9a77e8828eb08f5a

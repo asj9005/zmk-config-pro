@@ -60,4 +60,9 @@ int zmk_split_esb_set_enable(bool enabled);
 
 int zmk_split_esb_send(app_esb_data_t *tx_packet);
 
+/* Purge this PRX pipe's queued commands. A currently transmitting ACK may finish;
+ * subsequent commands wait until its hardware queue has been cleared.
+ */
+int zmk_split_esb_flush_pipe(uint8_t pipe);
+
 #endif

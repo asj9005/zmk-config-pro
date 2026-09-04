@@ -5,6 +5,7 @@ zephyr_library()
 
 set(TOTEM_WEST_TOPDIR "${APPLICATION_SOURCE_DIR}/../..")
 set(TOTEM_ESB_MODULE_DIR "${TOTEM_WEST_TOPDIR}/zmk-feature-split-esb")
+set(TOTEM_NRF_MODULE_DIR "${TOTEM_WEST_TOPDIR}/nrf")
 set(TOTEM_PROSPECTOR_MODULE_DIR "${TOTEM_WEST_TOPDIR}/prospector-zmk-module")
 set(TOTEM_ZMK_CENTRAL_H "${APPLICATION_SOURCE_DIR}/include/zmk/split/central.h")
 
@@ -46,6 +47,13 @@ if(EXISTS "${TOTEM_ZMK_CENTRAL_H}")
 endif()
 
 if(CONFIG_TOTEM_ESB_COMPAT)
+    # The pinned SDK needs per-pipe ACK cleanup to preserve the other half's
+    # RX/PID state when an offline peer's pending response expires.
+    foreach(TOTEM_NRF_FILE include/esb.h subsys/esb/esb.c)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/sdk-nrf/${TOTEM_NRF_FILE}"
+            "${TOTEM_NRF_MODULE_DIR}/${TOTEM_NRF_FILE}")
+    endforeach()
     if(NOT EXISTS "${TOTEM_ESB_MODULE_DIR}/src/split/esb/central.c")
         message(FATAL_ERROR "Pinned zmk-feature-split-esb project was not found")
     endif()
@@ -124,6 +132,9 @@ if(CONFIG_TOTEM_ESB_COMPAT)
             PERIPHERAL_COUNT=${CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT})
     endif()
 else()
+    foreach(TOTEM_NRF_FILE include/esb.h subsys/esb/esb.c)
+        totem_restore_pinned_file("${TOTEM_NRF_MODULE_DIR}/${TOTEM_NRF_FILE}")
+    endforeach()
     # An ESB configure overlays three files in the pinned Prospector checkout.
     # Restore them before any subsequent standard BLE build in this workspace.
     totem_restore_pinned_file(

@@ -73,6 +73,15 @@ config TOTEM_ESB_V3_SESSION_OK_TIMEOUT_MS
       in WAIT_SESSION_OK for this long. This recovers after the central has
       discarded a pending key during an extended RF outage.
 
+config TOTEM_ESB_V3_HANDSHAKE_MAX_INTERVAL_MS
+    int "Maximum ESB v3 offline probe interval in milliseconds"
+    depends on TOTEM_ESB_V3 && !ZMK_SPLIT_ROLE_CENTRAL
+    default 1000
+    range 100 5000
+    help
+      Back off unsuccessful HELLO/READY probes up to this interval. A key
+      transition or handshake progress resumes the initial fast interval.
+
 config TOTEM_ESB_V3_PENDING_TIMEOUT_MS
     int "ESB v3 central pending-session timeout in milliseconds"
     depends on TOTEM_ESB_V3 && ZMK_SPLIT_ROLE_CENTRAL
@@ -101,6 +110,25 @@ config TOTEM_ESB_PEER_TIMEOUT_MS
     depends on TOTEM_ESB_COMPAT && ZMK_SPLIT_ROLE_CENTRAL
     default 1500
     range 250 30000
+
+config TOTEM_ESB_ACK_TTL_MS
+    int "Lifetime of a queued ESB downlink in milliseconds"
+    depends on TOTEM_ESB_COMPAT
+    default 1500
+    range 500 30000
+    help
+      Expire undelivered ACK payloads so an offline half cannot pin shared
+      radio FIFO space. Handshake messages are retried by their state machine.
+
+config TOTEM_ESB_HF_IDLE_MS
+    int "PTX high-frequency clock idle grace period in milliseconds"
+    depends on TOTEM_ESB_COMPAT
+    default 10
+    range 1 1000
+    help
+      Keep the clock running across typing bursts, then release the PTX
+      request once the hardware and software queues are idle. PRX keeps its
+      clock running to receive asynchronous peripheral packets.
 
 config TOTEM_ESB_BENCHMARK
     bool "Enable ESB sequence/latency benchmark logging"
