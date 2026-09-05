@@ -21,6 +21,16 @@ config TOTEM_ESB_PROSPECTOR
     depends on TOTEM_ESB_COMPAT && ZMK_SPLIT_ROLE_CENTRAL
     default n
 
+config TOTEM_ESB_DIAGNOSTICS
+    bool "Print ESB initialization and link counters to the console"
+    depends on TOTEM_ESB_COMPAT
+    select PRINTK
+    default n
+    help
+      Reports startup results and aggregate link counters every five seconds.
+      Does not print keys or packet contents. Enable only in diagnostic builds;
+      console output changes timing and is not a latency benchmark.
+
 config TOTEM_ESB_V3
     bool "Enable authenticated/encrypted Totem ESB v3 transport"
     depends on TOTEM_ESB_COMPAT

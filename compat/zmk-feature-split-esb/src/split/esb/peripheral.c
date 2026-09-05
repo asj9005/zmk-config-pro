@@ -33,6 +33,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <zmk/physical_layouts.h>
 
 #include <totem/esb_benchmark.h>
+#include <totem/esb_diagnostics.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 #include <totem/esb_backoff.h>
 #include <totem/esb_v3_crypto.h>
@@ -1062,16 +1063,19 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
 
 static int zmk_split_esb_peripheral_init(void) {
     int ret;
+    totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, -EINPROGRESS);
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     ret = totem_esb_v3_crypto_init();
     if (ret != 0) {
         LOG_ERR("Refusing to start plaintext fallback after crypto failure (%d)",
                 ret);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
     ret = begin_fresh_v3_handshake();
     if (ret != 0) {
         LOG_ERR("Secure ESB boot nonce generation failed (%d)", ret);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
 #else
@@ -1086,6 +1090,7 @@ static int zmk_split_esb_peripheral_init(void) {
     ret = zmk_split_esb_init(APP_ESB_MODE_PTX, zmk_split_esb_on_ptx_esb_callback);
     if (ret < 0) {
         LOG_ERR("zmk_split_esb_init failed (ret %d)", ret);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
@@ -1096,6 +1101,7 @@ static int zmk_split_esb_peripheral_init(void) {
     k_work_schedule(&benchmark_work, K_USEC(CONFIG_TOTEM_ESB_BENCHMARK_PERIOD_US));
 #endif
     k_work_submit(&notify_status_work);
+    totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, 0);
     return 0;
 }
 
@@ -1128,6 +1134,15 @@ static void process_rx_work_cb(struct k_work *work) {
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
                 {
                     int secure_err = process_v3_downlink(&env);
+                    if (secure_err == 0) {
+                        /* Count authenticated, accepted handshake receptions. */
+                        if (env.payload.wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
+                            totem_esb_diag_event(TOTEM_DIAG_CHALLENGE, 0);
+                        } else if (env.payload.wire_type ==
+                                   ESB_WIRE_COMMAND_V3_SESSION_OK) {
+                            totem_esb_diag_event(TOTEM_DIAG_SESSION_OK, 0);
+                        }
+                    }
                     if (secure_err != 0 && secure_err != -EALREADY) {
                         totem_esb_benchmark_rx_invalid(pipe, secure_err);
                     }

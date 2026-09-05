@@ -32,6 +32,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <zmk/physical_layouts.h>
 
 #include <totem/esb_benchmark.h>
+#include <totem/esb_diagnostics.h>
 #include <totem/esb_key_state.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 #include <totem/esb_v3_crypto.h>
@@ -429,11 +430,13 @@ static void notify_status_work_cb(struct k_work *_work) { notify_transport_statu
 static K_WORK_DEFINE(notify_status_work, notify_status_work_cb);
 
 static int zmk_split_esb_central_init(void) {
+    totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, -EINPROGRESS);
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     int crypto_err = totem_esb_v3_crypto_init();
     if (crypto_err != 0) {
         LOG_ERR("Refusing to start plaintext fallback after crypto failure (%d)",
                 crypto_err);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, crypto_err);
         return crypto_err;
     }
 #endif
@@ -443,9 +446,11 @@ static int zmk_split_esb_central_init(void) {
     int ret = zmk_split_esb_init(APP_ESB_MODE_PRX, zmk_split_esb_on_prx_esb_callback);
     if (ret) {
         LOG_ERR("zmk_split_esb_init failed (err %d)", ret);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
     k_work_submit(&notify_status_work);
+    totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, 0);
     return 0;
 }
 
@@ -1064,6 +1069,14 @@ static void process_rx_work_cb(struct k_work *work) {
                     env.payload.wire_type == ESB_WIRE_EVENT_V3_RECOVERY ||
                     env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
                     int control_err = process_v3_control_event(source, &env);
+                    if (control_err == 0) {
+                        /* Count authenticated, accepted handshake receptions. */
+                        if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO) {
+                            totem_esb_diag_event(TOTEM_DIAG_HELLO, 0);
+                        } else if (env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
+                            totem_esb_diag_event(TOTEM_DIAG_READY, 0);
+                        }
+                    }
                     if (control_err != 0 && control_err != -EALREADY) {
                         totem_esb_benchmark_rx_invalid(pipe, control_err);
                     }

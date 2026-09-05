@@ -11,6 +11,7 @@
 
 #include <zmk/events/activity_state_changed.h>
 #include <totem/esb_benchmark.h>
+#include <totem/esb_diagnostics.h>
 #include <totem/esb_prx_queue.h>
 #include <limits.h>
 
@@ -524,6 +525,7 @@ static void hf_clock_work_handler(struct k_work *work) {
 static int esb_initialize(app_esb_mode_t mode) {
     int err;
     struct esb_config config = ESB_DEFAULT_CONFIG;
+    totem_esb_diag_stage(TOTEM_DIAG_RADIO, -EINPROGRESS);
 
     config.protocol = ESB_PROTOCOL_ESB_DPL;
     config.retransmit_delay = CONFIG_ZMK_SPLIT_ESB_PROTO_TX_RETRANSMIT_DELAY;
@@ -545,21 +547,25 @@ static int esb_initialize(app_esb_mode_t mode) {
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP) */
 
     if (err) {
+        totem_esb_diag_stage(TOTEM_DIAG_RADIO, err);
         return err;
     }
 
     err = esb_set_base_address_0(esb_base_addr_0);
     if (err) {
+        totem_esb_diag_stage(TOTEM_DIAG_RADIO, err);
         return err;
     }
 
     err = esb_set_base_address_1(esb_base_addr_1);
     if (err) {
+        totem_esb_diag_stage(TOTEM_DIAG_RADIO, err);
         return err;
     }
 
     err = esb_set_prefixes(esb_addr_prefix, ARRAY_SIZE(esb_addr_prefix));
     if (err) {
+        totem_esb_diag_stage(TOTEM_DIAG_RADIO, err);
         return err;
     }
 
@@ -570,10 +576,12 @@ static int esb_initialize(app_esb_mode_t mode) {
     if (mode == APP_ESB_MODE_PRX) {
         err = esb_start_rx();
         if (err) {
+            totem_esb_diag_stage(TOTEM_DIAG_RADIO, err);
             return err;
         }
     }
 
+    totem_esb_diag_stage(TOTEM_DIAG_RADIO, 0);
     return 0;
 }
 
@@ -642,7 +650,9 @@ int zmk_split_esb_init(app_esb_mode_t mode, app_esb_callback_t callback) {
     m_callback = callback;
     m_mode = mode;
     totem_esb_prx_queue_init(&m_prx_queue);
+    totem_esb_diag_stage(TOTEM_DIAG_CLOCK, -EINPROGRESS);
     ret = clocks_start();
+    totem_esb_diag_stage(TOTEM_DIAG_CLOCK, ret);
     if (ret < 0) {
         return ret;
     }

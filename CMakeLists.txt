@@ -71,6 +71,7 @@ if(CONFIG_TOTEM_ESB_COMPAT)
 
     zephyr_include_directories(include)
     zephyr_library_sources(src/totem_esb_hooks.c)
+    zephyr_library_sources_ifdef(CONFIG_TOTEM_ESB_DIAGNOSTICS src/esb_diagnostics.c)
 
     if(CONFIG_TOTEM_ESB_V3)
         function(totem_esb_v3_hex_key_to_initializer KEY_HEX OUTPUT_VARIABLE)
