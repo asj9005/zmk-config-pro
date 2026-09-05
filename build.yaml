@@ -58,6 +58,12 @@ include:
     shield: totem_left totem_esb_left totem_esb_v3
     cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y
     artifact-name: ci_only_totem_left_esb_v3_diagnostic_testkey
+  # Controlled startup comparison: identical to the left diagnostic except
+  # for the main stack. Keep the original diagnostic available for A/B checks.
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_MAIN_STACK_SIZE=4096
+    artifact-name: ci_only_totem_left_esb_v3_stackprobe_testkey
   - board: xiao_ble//zmk
     shield: totem_right totem_esb_right totem_esb_v3
     cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y
