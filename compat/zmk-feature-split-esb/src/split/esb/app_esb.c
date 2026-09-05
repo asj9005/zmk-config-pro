@@ -251,7 +251,9 @@ static int service_prx_unlocked(void) {
             totem_esb_prx_peek(&m_prx_queue, pipe);
         struct esb_payload payload = {.pipe = pipe, .length = packet->length};
         memcpy(payload.data, packet->data, packet->length);
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_WRITE, -EINPROGRESS);
         int err = esb_write_payload(&payload);
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_WRITE, err);
         if (err != 0) {
             pending = true;
             break;
@@ -359,7 +361,9 @@ static void event_handler(struct esb_evt const *event) {
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP)
                 esb_rf_ch_hop();
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP) */
+                totem_esb_diag_tx_step(TOTEM_DIAG_TX_START, -EINPROGRESS);
                 int retry_err = esb_start_tx();
+                totem_esb_diag_tx_step(TOTEM_DIAG_TX_START, retry_err);
                 if (retry_err == 0) {
                     LOG_WRN("Retrying msg %u immediately (%u application retries left)",
                             failed_msg_id, retry_left - 1U);
@@ -420,7 +424,9 @@ static int clocks_start(void) {
 
     sys_notify_init_spinwait(&clk_cli.notify);
 
+    totem_esb_diag_tx_step(TOTEM_DIAG_HF_REQUEST, -EINPROGRESS);
     err = onoff_request(m_hf_manager, &clk_cli);
+    totem_esb_diag_tx_step(TOTEM_DIAG_HF_REQUEST, err);
     if (err < 0) {
         LOG_ERR("Clock request failed: %d", err);
         return err;
@@ -450,6 +456,9 @@ static void hf_clock_ready(struct onoff_manager *manager, struct onoff_client *c
     if ((state & ONOFF_FLAG_ERROR) && result >= 0) {
         result = -EIO;
     }
+#if defined(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+    totem_esb_diag_tx_step(TOTEM_DIAG_HF_CALLBACK, result);
+#endif
     atomic_set(&m_hf_result, result);
     k_work_reschedule(&m_hf_work, K_NO_WAIT);
 }
@@ -466,6 +475,9 @@ static void hf_clock_work_handler(struct k_work *work) {
     if (m_hf_pending) {
         int result = atomic_get(&m_hf_result);
         if (result == INT_MIN) {
+#if defined(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+            totem_esb_diag_tx_step(TOTEM_DIAG_HF_WAIT, -EAGAIN);
+#endif
             k_spin_unlock(&m_tx_lock, key);
             return;
         }
@@ -513,7 +525,13 @@ static void hf_clock_work_handler(struct k_work *work) {
     }
     if (request) {
         sys_notify_init_callback(&m_hf_client.notify, hf_clock_ready);
+#if defined(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+        totem_esb_diag_tx_step(TOTEM_DIAG_HF_REQUEST, -EINPROGRESS);
+#endif
         int err = onoff_request(m_hf_manager, &m_hf_client);
+#if defined(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+        totem_esb_diag_tx_step(TOTEM_DIAG_HF_REQUEST, err);
+#endif
         if (err < 0) {
             atomic_set(&m_hf_result, err);
             k_work_reschedule(&m_hf_work, K_MSEC(100));
@@ -599,17 +617,21 @@ static int pull_packet_from_tx_msgq_unlocked(void) {
         if (k_msgq_num_used_get(&m_msgq_tx_payloads) != 0) {
             k_work_reschedule(&m_hf_work, K_NO_WAIT);
         }
+        totem_esb_diag_tx_step(TOTEM_DIAG_HF_WAIT, -EAGAIN);
         return -EAGAIN;
     }
 #endif
     if (!esb_is_idle()) {
+        totem_esb_diag_tx_step(TOTEM_DIAG_RADIO_BUSY, -EBUSY);
         return -EBUSY;
     }
 
     if (k_msgq_peek(&m_msgq_tx_payloads, &queued) == 0) {
         struct esb_payload *tx_payload = &queued.payload;
         m_current_tx_msg_id = queued.msg_id;
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_WRITE, -EINPROGRESS);
         ret = esb_write_payload(tx_payload);
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_WRITE, ret);
 
         if (ret == -ENOMEM) {
             /*
@@ -618,7 +640,9 @@ static int pull_packet_from_tx_msgq_unlocked(void) {
              * fails.
              */
             esb_flush_tx();
+            totem_esb_diag_tx_step(TOTEM_DIAG_TX_WRITE, -EINPROGRESS);
             ret = esb_write_payload(tx_payload);
+            totem_esb_diag_tx_step(TOTEM_DIAG_TX_WRITE, ret);
             if (ret != 0) {
                 m_current_tx_msg_id = 0;
                 return ret;
@@ -630,7 +654,9 @@ static int pull_packet_from_tx_msgq_unlocked(void) {
             return ret;
         } else {
             // LOG_DBG("Payload len: %d", tx_payload.length);
+            totem_esb_diag_tx_step(TOTEM_DIAG_TX_START, -EINPROGRESS);
             esb_ret = esb_start_tx();
+            totem_esb_diag_tx_step(TOTEM_DIAG_TX_START, esb_ret);
             if (esb_ret < 0) {
                 LOG_ERR("esb_start_tx failed (%d)", esb_ret);
                 esb_flush_tx();
@@ -707,13 +733,17 @@ int zmk_split_esb_set_enable(bool enabled) {
 }
 
 int zmk_split_esb_send(app_esb_data_t *tx_packet) {
+    totem_esb_diag_tx_step(TOTEM_DIAG_TX_SEND, -EINPROGRESS);
     if (tx_packet == NULL || tx_packet->data == NULL) {
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_SEND, -EINVAL);
         return -EINVAL;
     }
     if (tx_packet->len == 0 || tx_packet->len > CONFIG_ESB_MAX_PAYLOAD_LENGTH) {
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_SEND, -EMSGSIZE);
         return -EMSGSIZE;
     }
     if (tx_packet->pipe >= CONFIG_ESB_PIPE_COUNT) {
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_SEND, -EINVAL);
         return -EINVAL;
     }
 
@@ -735,6 +765,8 @@ int zmk_split_esb_send(app_esb_data_t *tx_packet) {
             service_prx_unlocked();
         }
         k_spin_unlock(&m_tx_lock, key);
+        totem_esb_diag_tx_step(TOTEM_DIAG_TX_SEND,
+                               ret >= 0 ? 0 : (ret == -ENOSPC ? -ENOMSG : ret));
         return ret >= 0 ? 0 : (ret == -ENOSPC ? -ENOMSG : ret);
     }
 
@@ -751,6 +783,8 @@ int zmk_split_esb_send(app_esb_data_t *tx_packet) {
     tx_payload->length = tx_packet->len;
     k_spinlock_key_t key = k_spin_lock(&m_tx_lock);
     ret = k_msgq_put(&m_msgq_tx_payloads, &queued, K_NO_WAIT);
+    /* SEND records queue admission, not over-the-air completion. */
+    totem_esb_diag_tx_step(TOTEM_DIAG_TX_SEND, ret);
 
     if (ret == 0) {
         if (m_mode == APP_ESB_MODE_PTX) {

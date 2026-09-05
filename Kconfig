@@ -40,6 +40,20 @@ config TOTEM_ESB_V3
       BLE-sized 4-byte MIC. A two-nonce authenticated handshake establishes
       a fresh session before ZMK events or commands are accepted.
 
+config TOTEM_ESB_DIAGNOSTIC_USB_START
+    bool "Wait for a USB console before starting peripheral ESB diagnostics"
+    depends on TOTEM_ESB_DIAGNOSTICS && TOTEM_ESB_V3
+    depends on !ZMK_SPLIT_ROLE_CENTRAL && !ZMK_SPLIT_ESB_USE_TIMESLOT
+    depends on USB_DEVICE_STACK && UART_CONSOLE && UART_LINE_CTRL
+    default n
+    help
+      Diagnostic-only startup isolation for a half whose USB enumeration fails.
+      Start ESB on a dedicated 4096-byte thread only after the USB console DTR
+      is asserted. Reject input until transport initialization completes and
+      pause briefly at initialization checkpoints so USB can deliver logs.
+      This changes initialization order, stack and timing; it is not a fix or
+      a battery-only firmware. It does not bypass encryption or key checks.
+
 config TOTEM_ESB_V3_CI_TEST_KEYS
     bool "Use public disposable ESB v3 CI test keys"
     depends on TOTEM_ESB_V3

@@ -16,6 +16,13 @@
 #include <zephyr/sys/crc.h>
 #include <zephyr/sys/ring_buffer.h>
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/sys/printk.h>
+#endif
+
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
@@ -63,6 +70,10 @@ K_MUTEX_DEFINE(event_mutex);
 static struct esb_key_state_payload local_key_state;
 static void key_state_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(key_state_work, key_state_work_cb);
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+static atomic_t diagnostic_transport_ready;
+#endif
 
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS)
 struct ring_buf rx_bufs[CONFIG_ESB_PIPE_COUNT];
@@ -591,6 +602,12 @@ static int report_event_locked(const struct zmk_split_transport_peripheral_event
 
 static int
 split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_event *event) {
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+    /* USB diagnostics deliberately postpone radio/crypto initialization. */
+    if (!atomic_get(&diagnostic_transport_ready)) {
+        return -EAGAIN;
+    }
+#endif
     k_mutex_lock(&event_mutex, K_FOREVER);
     bool key_event = event->type ==
                      ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT;
@@ -1072,7 +1089,9 @@ static int zmk_split_esb_peripheral_init(void) {
         totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
+    totem_esb_diag_stage(TOTEM_DIAG_BOOT_NONCE, -EINPROGRESS);
     ret = begin_fresh_v3_handshake();
+    totem_esb_diag_stage(TOTEM_DIAG_BOOT_NONCE, ret);
     if (ret != 0) {
         LOG_ERR("Secure ESB boot nonce generation failed (%d)", ret);
         totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
@@ -1093,6 +1112,10 @@ static int zmk_split_esb_peripheral_init(void) {
         totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+    /* Publish readiness only after every synchronous initialization succeeded. */
+    atomic_set(&diagnostic_transport_ready, 1);
+#endif
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     k_work_schedule(&handshake_work, K_NO_WAIT);
 #endif
@@ -1105,7 +1128,45 @@ static int zmk_split_esb_peripheral_init(void) {
     return 0;
 }
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+K_THREAD_STACK_DEFINE(diagnostic_start_stack, 4096);
+static struct k_thread diagnostic_start_thread;
+
+static void diagnostic_start_thread_cb(void *unused1, void *unused2, void *unused3) {
+    ARG_UNUSED(unused1);
+    ARG_UNUSED(unused2);
+    ARG_UNUSED(unused3);
+    const struct device *console = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    if (!device_is_ready(console)) {
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, -ENODEV);
+        return;
+    }
+
+    printk("ESB_DIAG USB_START waiting_for_dtr source=%u\n", peripheral_id);
+    uint32_t dtr = 0;
+    while (uart_line_ctrl_get(console, UART_LINE_CTRL_DTR, &dtr) != 0 || !dtr) {
+        k_msleep(100);
+    }
+    k_msleep(1000);
+    printk("ESB_DIAG USB_START transport_init source=%u stack=4096\n", peripheral_id);
+    /* Let the independent USB queues deliver the marker before crypto starts. */
+    k_msleep(200);
+    int ret = zmk_split_esb_peripheral_init();
+    printk("ESB_DIAG USB_START transport_return source=%u result=%d\n", peripheral_id, ret);
+}
+
+static int diagnostic_start_init(void) {
+    k_thread_create(&diagnostic_start_thread, diagnostic_start_stack,
+                    K_THREAD_STACK_SIZEOF(diagnostic_start_stack),
+                    diagnostic_start_thread_cb, NULL, NULL, NULL,
+                    K_PRIO_PREEMPT(5), 0, K_NO_WAIT);
+    return 0;
+}
+
+SYS_INIT(diagnostic_start_init, APPLICATION, 99);
+#else
 SYS_INIT(zmk_split_esb_peripheral_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif
 
 static void process_rx_work_cb(struct k_work *work) {
     for (int pipe = 0; pipe < CONFIG_ESB_PIPE_COUNT; pipe++) {
