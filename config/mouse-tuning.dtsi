@@ -1,0 +1,52 @@
+#include "mouse-tuning.h"
+
+&mmv {
+    acceleration-exponent = <TOTEM_MOUSE_ACCEL_EXPONENT>;
+    time-to-max-speed-ms = <TOTEM_MOUSE_TIME_TO_MAX_MS>;
+    trigger-period-ms = <TOTEM_MOUSE_TRIGGER_PERIOD_MS>;
+    delay-ms = <0>;
+};
+
+/* Fast is deliberately first: the first active override wins. */
+&mmv_input_listener {
+    fast {
+        layers = <Acc>;
+        input-processors = <&zip_xy_scaler TOTEM_MOUSE_FAST_NUM TOTEM_MOUSE_FAST_DEN>;
+    };
+    precise {
+        layers = <Prec>;
+        input-processors = <&zip_xy_scaler TOTEM_MOUSE_SLOW_NUM TOTEM_MOUSE_SLOW_DEN>;
+    };
+};
+
+/ {
+    mouse_wheel_scaler: mouse_wheel_scaler {
+        compatible = "zmk,input-processor-scaler";
+        #input-processor-cells = <2>;
+        type = <INPUT_EV_REL>;
+        codes = <INPUT_REL_WHEEL>;
+        track-remainders;
+    };
+    mouse_hwheel_scaler: mouse_hwheel_scaler {
+        compatible = "zmk,input-processor-scaler";
+        #input-processor-cells = <2>;
+        type = <INPUT_EV_REL>;
+        codes = <INPUT_REL_HWHEEL>;
+        track-remainders;
+    };
+};
+
+&msc_input_listener {
+    fast {
+        layers = <Acc>;
+        input-processors =
+            <&mouse_wheel_scaler TOTEM_MOUSE_FAST_WHEEL_NUM TOTEM_MOUSE_FAST_WHEEL_DEN>,
+            <&mouse_hwheel_scaler TOTEM_MOUSE_FAST_HWHEEL_NUM TOTEM_MOUSE_FAST_HWHEEL_DEN>;
+    };
+    precise {
+        layers = <Prec>;
+        input-processors =
+            <&mouse_wheel_scaler TOTEM_MOUSE_SLOW_WHEEL_NUM TOTEM_MOUSE_SLOW_WHEEL_DEN>,
+            <&mouse_hwheel_scaler TOTEM_MOUSE_SLOW_HWHEEL_NUM TOTEM_MOUSE_SLOW_HWHEEL_DEN>;
+    };
+};

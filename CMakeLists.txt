@@ -3,6 +3,11 @@
 
 zephyr_library()
 
+# Keymap behaviors run on the central (also in the retained BLE builds).
+if((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_auto_base.c)
+endif()
+
 set(TOTEM_WEST_TOPDIR "${APPLICATION_SOURCE_DIR}/../..")
 set(TOTEM_ESB_MODULE_DIR "${TOTEM_WEST_TOPDIR}/zmk-feature-split-esb")
 set(TOTEM_NRF_MODULE_DIR "${TOTEM_WEST_TOPDIR}/nrf")

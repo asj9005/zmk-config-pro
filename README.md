@@ -79,3 +79,4 @@ Secure v3 후보는 half별 128-bit PSK, AES-128-CCM/MIC4, 두 random nonce로 �
 - [ESB Secure v3 보안 설계와 검증 상태](docs/esb-v3-security.md)
 - [ESB Secure v3 production 빌드 및 플래시](docs/esb-v3-build-flash.md)
 - [ESB 안정성 패치와 회귀 테스트](docs/esb-reliability-patch.md)
+- [마우스 속도·E/R 반응 조정과 시험 순서](docs/mouse-tuning.md)
