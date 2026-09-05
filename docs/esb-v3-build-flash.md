@@ -45,25 +45,46 @@ Key file을 잃으면 기존 image에서 안전하게 복구하는 절차는 제
 
 ## 4. 로컬 west workspace
 
-ZMK가 요구하는 Zephyr SDK/toolchain, Python, Git과 `west`가 설치된 PowerShell을 사용한다. 저장소 밖의 별도 west workspace에서 작업하며, dependency와 build output을 원본 저장소에 섞지 않는다.
+ZMK가 요구하는 Zephyr SDK/toolchain, Python, Git과 `west`가 설치된 PowerShell을 사용한다. 저장소 밖의 별도 west workspace에서 작업하며, dependency와 build output을 원본 저장소에 섞지 않는다. 키와 production build output은 OneDrive 등 동기화 폴더 밖에 보관한다.
+
+아래 명령은 **실제로 빌드할 수정 사항이 커밋된 로컬 저장소 루트**에서 시작한다. 기존 기반 브랜치를 다시 내려받으면 PR의 마우스 조정이 빠질 수 있으므로 현재 체크아웃을 복제하고 커밋 일치를 확인한다. 미커밋 변경이 있으면 먼저 정리한다. 새 workspace 경로를 사용하며 기존 workspace를 삭제하거나 덮어쓰지 않는다.
 
 ```powershell
-$workspace = Join-Path $env:USERPROFILE 'zmk-esb-v3-workspace'
-New-Item -ItemType Directory -Force -Path $workspace | Out-Null
+$sourceRepo = (Resolve-Path .).Path
+$sourceCommit = git -C $sourceRepo rev-parse HEAD
+if ($LASTEXITCODE -ne 0) { throw '소스 저장소의 커밋을 확인하지 못했습니다.' }
+$sourceChanges = git -C $sourceRepo status --porcelain
+if ($LASTEXITCODE -ne 0 -or $sourceChanges) {
+  throw '소스 저장소 상태를 확인하고 변경 사항을 커밋한 뒤 다시 실행하세요.'
+}
 
-git clone --branch feature/totem-prospector-esb-secure-v3 `
-  https://github.com/asj9005/zmk-config-pro.git "$workspace\config"
+$workspace = Join-Path $env:USERPROFILE 'zmk-esb-v3-workspace'
+if (Test-Path -LiteralPath $workspace) { throw '새 workspace 경로를 지정하세요.' }
+New-Item -ItemType Directory -Path $workspace | Out-Null
+git clone --no-hardlinks -- $sourceRepo "$workspace\config"
+if ($LASTEXITCODE -ne 0) { throw '소스 복제가 실패했습니다.' }
+$copiedCommit = git -C "$workspace\config" rev-parse HEAD
+if ($LASTEXITCODE -ne 0 -or $copiedCommit -ne $sourceCommit) {
+  throw '복제된 소스 커밋이 원본과 다릅니다.'
+}
 
 Set-Location $workspace
-west init -l config
+west init -l --mf config/west.yml config
+if ($LASTEXITCODE -ne 0) { throw 'west 초기화가 실패했습니다.' }
 west update --fetch-opt=--filter=tree:0
+if ($LASTEXITCODE -ne 0) { throw '의존성 준비가 실패했습니다.' }
 west zephyr-export
+if ($LASTEXITCODE -ne 0) { throw 'Zephyr 등록이 실패했습니다.' }
 
 $repo = (Resolve-Path .\config).Path
 $keyDir = Join-Path $env:USERPROFILE 'totem-esb-v3-keys'
 ```
 
-이 저장소의 CMake compatibility layer는 configure 중 pinned ESB/Prospector checkout을 overlay한다. 같은 west workspace에서 여러 역할을 병렬 빌드하지 말고 아래 명령을 순차 실행한다.
+저장소의 manifest는 루트의 `west.yml`이 아니라 `config/west.yml`이다. `--mf config/west.yml`을 생략하면 초기화가 실패한다. 위 구성에서 `$workspace\config`는 저장소 루트이며 `$repo\config`가 실제 ZMK 설정 폴더다.
+
+이 저장소의 CMake compatibility layer는 configure 중 pinned ESB/Prospector checkout을 overlay한다. 같은 west workspace에서 여러 역할을 병렬 빌드하지 말고 아래 명령을 순차 실행한다. Production 빌드 로그와 `.config`에도 키가 포함될 수 있으므로 비공개 로컬 파일로 취급하고 원문을 공개하지 않는다.
+
+Production 빌드에는 `CONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n`을 명시한다. 이 옵션만으로 입력한 키가 개인키임을 보장하지는 않는다. 빌드 전에 세 keyconf의 키가 32자리 16진수인지, 왼쪽·오른쪽 키가 서로 다르고 각각 동글의 대응 키와 일치하는지, 공개 테스트키와 다른지 확인한다. 원문 대신 일치 여부나 fingerprint만 기록한다. 키 파일 일부만 존재하면 새 세트를 자동 생성하거나 기존 파일을 덮어쓰지 않는다.
 
 ## 5. Production release 빌드
 
@@ -72,6 +93,7 @@ $keyDir = Join-Path $env:USERPROFILE 'totem-esb-v3-keys'
 ```powershell
 west build -p always -s zmk/app -d build/totem_left_esb_v3 -b "xiao_ble//zmk" -- `
   "-DSHIELD=totem_left totem_esb_left totem_esb_v3" `
+  "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DEXTRA_CONF_FILE=$keyDir\left.keyconf" `
   "-DZMK_CONFIG=$repo\config" `
   "-DZMK_EXTRA_MODULES=$repo"
@@ -84,6 +106,7 @@ west build -p always -s zmk/app -d build/totem_left_esb_v3 -b "xiao_ble//zmk" --
 ```powershell
 west build -p always -s zmk/app -d build/totem_right_esb_v3 -b "xiao_ble//zmk" -- `
   "-DSHIELD=totem_right totem_esb_right totem_esb_v3" `
+  "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DEXTRA_CONF_FILE=$keyDir\right.keyconf" `
   "-DZMK_CONFIG=$repo\config" `
   "-DZMK_EXTRA_MODULES=$repo"
@@ -97,6 +120,7 @@ west build -p always -s zmk/app -d build/totem_right_esb_v3 -b "xiao_ble//zmk" -
 west build -p always -s zmk/app -d build/totem_dongle_esb_v3_prospector `
   -b "xiao_ble//zmk" -S studio-rpc-usb-uart -- `
   "-DSHIELD=totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3" `
+  "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DEXTRA_CONF_FILE=$keyDir\dongle.keyconf" `
   "-DCONFIG_ZMK_STUDIO=y" `
   "-DZMK_CONFIG=$repo\config" `
@@ -116,7 +140,7 @@ CONFIG_USB_HID_POLL_INTERVAL_MS=1        # dongle
 CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT=2 # dongle
 ```
 
-Production key 문자열을 log에 출력하거나 `.config`를 공개하지 않는다.
+Production key 문자열을 log에 출력하거나 `.config`를 공개하지 않는다. 생성 헤더·ELF·object·UF2에도 키가 들어가므로 build 폴더 전체를 비공개로 보관한다. Windows에서는 파일의 쓰기 속성만으로 접근 제어가 보장되지 않으므로 키 폴더의 ACL도 확인한다.
 
 ## 6. Secure benchmark 빌드
 
@@ -126,18 +150,21 @@ Release 조합 뒤에 `totem_esb_benchmark`를 추가하고 같은 production ke
 west build -p always -s zmk/app -d build/totem_left_esb_v3_benchmark `
   -b "xiao_ble//zmk" -- `
   "-DSHIELD=totem_left totem_esb_left totem_esb_v3 totem_esb_benchmark" `
+  "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DEXTRA_CONF_FILE=$keyDir\left.keyconf" `
   "-DZMK_CONFIG=$repo\config" "-DZMK_EXTRA_MODULES=$repo"
 
 west build -p always -s zmk/app -d build/totem_right_esb_v3_benchmark `
   -b "xiao_ble//zmk" -- `
   "-DSHIELD=totem_right totem_esb_right totem_esb_v3 totem_esb_benchmark" `
+  "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DEXTRA_CONF_FILE=$keyDir\right.keyconf" `
   "-DZMK_CONFIG=$repo\config" "-DZMK_EXTRA_MODULES=$repo"
 
 west build -p always -s zmk/app -d build/totem_dongle_esb_v3_prospector_benchmark `
   -b "xiao_ble//zmk" -- `
   "-DSHIELD=totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3 totem_esb_benchmark" `
+  "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DEXTRA_CONF_FILE=$keyDir\dongle.keyconf" `
   "-DZMK_CONFIG=$repo\config" "-DZMK_EXTRA_MODULES=$repo"
 ```
