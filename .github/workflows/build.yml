@@ -20,13 +20,15 @@ jobs:
       - name: Compile and execute firmware recovery tests
         env:
           CC: cc
+          ESB_REQUIRE_C_COMPILER: "1"
         run: |
           python3 -m unittest -v \
             tests/test_esb_firmware.py \
             tests/test_esb_clock_runtime.py \
             tests/test_esb_ack_runtime.py \
             tests/test_esb_startup_runtime.py \
-            tests/test_auto_base.py
+            tests/test_auto_base.py \
+            tests/test_owned_swapper.py
 
   build:
     uses: zmkfirmware/zmk/.github/workflows/build-user-config.yml@904c9aec8822d79149d42c8a9a77e8828eb08f5a

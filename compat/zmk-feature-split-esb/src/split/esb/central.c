@@ -34,6 +34,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <totem/esb_benchmark.h>
 #include <totem/esb_diagnostics.h>
 #include <totem/esb_key_state.h>
+#include <totem/owned_swapper.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 #include <totem/esb_v3_crypto.h>
 #endif
@@ -556,6 +557,9 @@ static void release_source_keys(uint8_t source) {
         }
     }
     memset(source_keys, 0, sizeof(key_pos_states[source]));
+    /* A hold-tap release above can start a latched behavior. Clear
+     * this source's swapper after all synthetic releases complete. */
+    totem_owned_swapper_source_reset(source);
 }
 
 static void emit_snapshot_key(void *context, uint8_t position, bool pressed) {

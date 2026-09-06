@@ -5,7 +5,12 @@ zephyr_library()
 
 # Keymap behaviors run on the central (also in the retained BLE builds).
 if((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
-    target_sources(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_auto_base.c)
+    target_sources(app PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_auto_base.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_owned_swapper.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/owned_swapper_replay_listener.c)
+    target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/owned-swapper-order.cmake)
 endif()
 
 set(TOTEM_WEST_TOPDIR "${APPLICATION_SOURCE_DIR}/../..")
@@ -28,6 +33,22 @@ function(totem_restore_pinned_file UPSTREAM_FILE)
         configure_file("${UPSTREAM_BACKUP}" "${UPSTREAM_FILE}" COPYONLY)
     endif()
 endfunction()
+
+# Owned Alt updates HID state directly, so its display notification must also
+# be observed in retained BLE central builds. Restore the pinned widget when
+# another keymap/configuration does not use this behavior in the same workspace.
+set(TOTEM_MODIFIER_WIDGET
+    "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/modifier_indicator.c")
+if(EXISTS "${TOTEM_MODIFIER_WIDGET}")
+    if(((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL) AND
+       CONFIG_DT_HAS_TOTEM_BEHAVIOR_OWNED_SWAPPER_ENABLED)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/layouts/operator/modifier_indicator.c"
+            "${TOTEM_MODIFIER_WIDGET}")
+    else()
+        totem_restore_pinned_file("${TOTEM_MODIFIER_WIDGET}")
+    endif()
+endif()
 
 # The pinned upstream ESB module edits this ZMK header in place. Always make
 # configuration deterministic so an ESB build cannot contaminate a later BLE

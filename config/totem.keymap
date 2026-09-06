@@ -56,10 +56,9 @@
         };
 
         swapper: swapper {
-            compatible = "zmk,behavior-tri-state";
+            compatible = "totem,behavior-owned-swapper";
             label = "SWAPPER";
             #binding-cells = <0>;
-            bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
 
             ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
         };
