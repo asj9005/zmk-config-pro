@@ -136,6 +136,12 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
             }
 
             struct ring_buf *rx_buf = &state->rx_bufs[event->pipe];
+            if (ring_buf_capacity_get(rx_buf) == 0) {
+                /* Unused pipes intentionally have no backing storage. Reject
+                 * them before touching the ring or scheduling RX work. */
+                totem_esb_benchmark_rx_invalid(event->pipe, -EADDRNOTAVAIL);
+                break;
+            }
 
             if (ring_buf_space_get(rx_buf) < event->data_length) {
                 state->rx_overflow_count[event->pipe]++;

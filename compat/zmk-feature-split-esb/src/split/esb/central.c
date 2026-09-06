@@ -67,7 +67,15 @@ static struct k_spinlock tx_ring_lock;
 
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_EVENT_BUFFER_ITEMS)
 struct ring_buf rx_bufs[CONFIG_ESB_PIPE_COUNT];
-uint8_t rx_bufs_data[CONFIG_ESB_PIPE_COUNT][RX_RING_BUF_SIZE];
+/* Pipe 0 is reserved. Keep each real peer's capacity, without backing storage
+ * for a pipe whose frames would always fail the source check. */
+uint8_t rx_bufs_data[CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT][RX_RING_BUF_SIZE];
+
+static void init_rx_buffers(void) {
+    for (uint8_t pipe = 1; pipe <= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT; pipe++) {
+        ring_buf_init(&rx_bufs[pipe], RX_RING_BUF_SIZE, rx_bufs_data[pipe - 1U]);
+    }
+}
 
 static void process_rx_cb(uint8_t pipe);
 
@@ -441,9 +449,7 @@ static int zmk_split_esb_central_init(void) {
         return crypto_err;
     }
 #endif
-    for (int i = 0; i < CONFIG_ESB_PIPE_COUNT; i++) {
-        ring_buf_init(&rx_bufs[i], RX_RING_BUF_SIZE, rx_bufs_data[i]);
-    }
+    init_rx_buffers();
     int ret = zmk_split_esb_init(APP_ESB_MODE_PRX, zmk_split_esb_on_prx_esb_callback);
     if (ret) {
         LOG_ERR("zmk_split_esb_init failed (err %d)", ret);
@@ -1041,7 +1047,7 @@ static int process_v3_control_event(uint8_t source,
 
 static void process_rx_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
-    for (int pipe = 0; pipe < CONFIG_ESB_PIPE_COUNT; pipe++) {
+    for (int pipe = 1; pipe <= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT; pipe++) {
         struct ring_buf *rx_buf = &state.rx_bufs[pipe];
         while (ring_buf_size_get(rx_buf) > ESB_MSG_WIRE_MIN_SIZE) {
             struct esb_event_envelope env = {0};
@@ -1189,16 +1195,6 @@ static void process_rx_work_cb(struct k_work *work) {
 
                 zmk_split_transport_central_peripheral_event_handler(
                     &esb_central, source, env.payload.body.event);
-                if (ev.type ==
-                    ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_BATTERY_EVENT) {
-                    /*
-                     * Prospector uses one deferred state slot for peripheral
-                     * UI events. Replay both authoritative sources, spaced by
-                     * the display-sync worker, so simultaneous battery reports
-                     * cannot leave one circle stale.
-                     */
-                    totem_esb_schedule_display_sync();
-                }
                 break;
             }
             case -EAGAIN:

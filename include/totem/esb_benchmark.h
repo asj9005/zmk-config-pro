@@ -46,4 +46,3 @@ bool totem_esb_peer_is_connected(uint8_t source);
 uint8_t totem_esb_peer_connected_count(void);
 void totem_esb_notify_transport_status(void);
 void totem_esb_source_disconnected(uint8_t source);
-void totem_esb_schedule_display_sync(void);

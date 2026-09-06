@@ -250,7 +250,26 @@ int main(void) {
     reset(); press(0); release(0); position(14, 0, false); no_owned_keys(); cases++;
 
     reset(); press(0); press(0); assert(tab_presses == 1 && explicit_modifier_counts[2] == 1);
-    release(0); release(0); assert(tab_releases == 1);
+    release(0);
+    unsigned int sends_after_release = send_calls;
+    release(0); assert(tab_releases == 1 && send_calls == sends_after_release && !queued);
+    position(14, 0, true); no_owned_keys(); cases++;
+
+    /* A duplicate physical release must preserve an already pending report's
+     * deadline and backoff instead of sending and scheduling it again. */
+    reset(); press(0); fail_endpoint = true; release(0);
+    assert(swapper.active && !swapper.pressed && !tab_down && swapper.report_pending && queued);
+    sends_after_release = send_calls;
+    int64_t retry_after_release = swapper.retry_at;
+    int64_t scheduled_after_release = scheduled_at;
+    uint32_t backoff_after_release = swapper.retry_ms;
+    now++;
+    release(0);
+    assert(tab_releases == 1 && send_calls == sends_after_release);
+    assert(swapper.report_pending && queued && swapper.retry_at == retry_after_release);
+    assert(scheduled_at == scheduled_after_release && swapper.retry_ms == backoff_after_release);
+    fail_endpoint = false; callback_at(scheduled_at);
+    assert(!swapper.report_pending && !queued && !sent_tab && sent_mods == MOD_LALT);
     position(14, 0, true); no_owned_keys(); cases++;
 
     reset(); press(0); release(0);

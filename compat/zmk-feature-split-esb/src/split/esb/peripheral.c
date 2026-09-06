@@ -79,13 +79,18 @@ static atomic_t transport_ready;
 
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS)
 struct ring_buf rx_bufs[CONFIG_ESB_PIPE_COUNT];
-uint8_t rx_bufs_data[CONFIG_ESB_PIPE_COUNT][RX_RING_BUF_SIZE];
+/* ACK commands are accepted only on this half's own pipe. */
+uint8_t rx_bufs_data[RX_RING_BUF_SIZE];
 
 static const uint8_t peripheral_id = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID;
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID > 0,
              "Pipe 0 is reserved; peripheral IDs start at 1");
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID < CONFIG_ESB_PIPE_COUNT,
              "Peripheral ID must map to a configured ESB pipe");
+
+static void init_rx_buffers(void) {
+    ring_buf_init(&rx_bufs[peripheral_id], RX_RING_BUF_SIZE, rx_bufs_data);
+}
 
 static void process_rx_cb(uint8_t pipe);
 
@@ -1111,9 +1116,7 @@ static int zmk_split_esb_peripheral_init(void) {
         wire_session_id = 1;
     }
 #endif
-    for (int i = 0; i < CONFIG_ESB_PIPE_COUNT; i++) {
-        ring_buf_init(&rx_bufs[i], RX_RING_BUF_SIZE, rx_bufs_data[i]);
-    }
+    init_rx_buffers();
     ret = zmk_split_esb_init(APP_ESB_MODE_PTX, zmk_split_esb_on_ptx_esb_callback);
     if (ret < 0) {
         LOG_ERR("zmk_split_esb_init failed (ret %d)", ret);
@@ -1192,6 +1195,9 @@ SYS_INIT(zmk_split_esb_peripheral_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY
 
 static void process_rx_work_cb(struct k_work *work) {
     for (int pipe = 0; pipe < CONFIG_ESB_PIPE_COUNT; pipe++) {
+        if (pipe != peripheral_id) {
+            continue;
+        }
         struct ring_buf *rx_buf = &state.rx_bufs[pipe];
         while (ring_buf_size_get(rx_buf) > ESB_MSG_WIRE_MIN_SIZE) {
             struct esb_command_envelope env = {0};

@@ -393,13 +393,12 @@ static void event_handler(struct esb_evt const *event) {
             while (esb_read_rx_payload(&rx_payload) == 0) {
                 // LOG_DBG("Chunk %d, pipe: %d, len: %d",
                 //     rx_payload.pid, rx_payload.pipe, rx_payload.length);
-                uint8_t buf[CONFIG_ESB_MAX_PAYLOAD_LENGTH];
-                memcpy(buf, rx_payload.data, rx_payload.length);
                 // LOG_DBG("Packet len: %d", rx_payload.length);
-                // LOG_HEXDUMP_INF(buf, rx_payload.length, "rx_payload");
                 m_event.evt_type = APP_ESB_EVT_RX;
                 m_event.pipe = rx_payload.pipe;
-                m_event.buf = buf;
+                /* The callback copies into its RX ring synchronously, before
+                 * esb_read_rx_payload reuses this local payload. */
+                m_event.buf = rx_payload.data;
                 m_event.data_length = rx_payload.length;
                 m_callback(&m_event);
             }

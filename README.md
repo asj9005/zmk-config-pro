@@ -1,6 +1,6 @@
 # Totem + Prospector ZMK firmware
 
-Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 ZMK 설정이다. 기존 BLE split 빌드를 롤백용으로 보존하고, Nordic ESB 2.4 GHz split transport를 사용하는 저지연 프로필을 별도로 제공한다. 기존 keymap, tri-state, hold-tap, sticky key, combo, mouse/pointing 동작은 공통 `config/totem.keymap`을 사용한다.
+Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 ZMK 설정이다. 기존 BLE split 빌드를 롤백용으로 보존하고, Nordic ESB 2.4 GHz split transport를 사용하는 저지연 프로필을 별도로 제공한다. Alt-Tab, hold-tap, sticky key, combo, mouse/pointing 동작은 공통 `config/totem.keymap`을 사용한다. Alt-Tab은 이 저장소의 owned swapper로 구현하며 이전 tri-state 의존성은 제거했다.
 
 ## 빌드 구분
 
@@ -12,7 +12,7 @@ Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 Z
 | ESB Secure v3 후보 | v2 release 조합 + `totem_esb_v3` | v2 release 조합 + `totem_esb_v3` | v2 release 조합 + `totem_esb_v3` |
 | ESB Secure v3 benchmark | v3 조합 + `totem_esb_benchmark` | v3 조합 + `totem_esb_benchmark` | v3 조합 + `totem_esb_benchmark` |
 
-`build.yaml`에는 기존 BLE 3개, `settings_reset`, ESB v2 release 3개, ESB v2 benchmark 3개와 v3 release/benchmark 6개 등 총 16개 항목이 있다. v2 기준선은 [GitHub Actions run 30433985080](https://github.com/asj9005/zmk-config-pro/actions/runs/30433985080)에서 10/10 빌드됐다. Artifact를 내려받아 ZIP을 푼 뒤 다음 v2 release 파일을 사용한다.
+`build.yaml`에는 BLE, `settings_reset`, ESB v2/v3와 진단 비교본을 포함한 26개 항목이 있다. 빌드 도구도 성공한 이미지 digest와 action SHA로 고정한다([의존성 관리](docs/dependency-management.md)). v2 기준선은 [GitHub Actions run 30433985080](https://github.com/asj9005/zmk-config-pro/actions/runs/30433985080)에서 10/10 빌드됐다. 다음 파일은 평문 v2 기준선이며 현재 개인키 v3 목표와 구분한다.
 
 - `totem_left_esb.uf2`
 - `totem_right_esb.uf2`
@@ -29,15 +29,15 @@ Fresh-event 검증은 부팅 때 생성되는 32-bit session ID와 source별 seq
 현재 상태:
 
 - ESB v2 전송 및 benchmark 코드 경로: 구현됨, 기준선 10개 CI 빌드 **성공**
-- Secure v3 코드 경로: 구현됨, 16-entry 전체 matrix의 compile/link 검증은 별도 기록
+- Secure v3 코드 경로: 구현됨, 이전 9014a3f의 26개 전체 matrix 성공. 이후 최적화의 검증은 해당 커밋 CI에서 확인
 - release debounce: press 1 ms, release 5 ms
-- Prospector 화면, peer 상태 및 battery event 코드 경로: 포함됨, 실기 **미측정**
+- Prospector 화면, peer 상태 및 battery event 코드 경로: 포함됨. 기존 ram25 동글의 자연 타이핑·화면·동글 재연결 기본 시험 통과
 - v2 기준선의 컴파일된 release/benchmark 동글 HID descriptor `bInterval=1`: **확인**
 - v3 동글 HID descriptor 및 실제 USB cadence: **미측정**
 - 실제 USB enumerate 및 USBPcap 1 ms cadence: **미측정**
 - 실제 ESB typical/p95/p99 latency: **미측정**
 - 양쪽 동시 입력과 source별 100,000-event loss: **미측정**
-- 실제 Prospector 화면 및 좌우 battery 표시: **미측정**
+- 실제 Prospector WPM·modifier·레이어 표시: 기존 ram25 기본 시험 통과. 재연결 후 왼쪽 battery `-` 문제와 새 최적화의 장치 시험은 남음
 
 컴파일 성공 또는 descriptor 설정 확인은 실기 1K 달성과 별개다. 측정되지 않은 결과를 실측값처럼 사용하지 않는다.
 
@@ -80,3 +80,5 @@ Secure v3 후보는 half별 128-bit PSK, AES-128-CCM/MIC4, 두 random nonce로 �
 - [ESB Secure v3 production 빌드 및 플래시](docs/esb-v3-build-flash.md)
 - [ESB 안정성 패치와 회귀 테스트](docs/esb-reliability-patch.md)
 - [마우스 속도·E/R 반응 조정과 시험 순서](docs/mouse-tuning.md)
+- [외부 모듈과 빌드 도구 고정](docs/dependency-management.md)
+- [동작·메모리 최적화와 검증 범위](docs/firmware-optimization.md)

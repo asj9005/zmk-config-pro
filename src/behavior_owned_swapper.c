@@ -248,7 +248,7 @@ static int owned_swapper_released(struct zmk_behavior_binding *binding,
     k_mutex_lock(&swapper_mutex, K_FOREVER);
     /* A delayed release from the old session must not release a newer Tab. */
     if (!swapper_source_activation_blocked(event_source(event), event.timestamp) &&
-        swapper.active && swapper.position == event.position &&
+        swapper.active && swapper.pressed && swapper.position == event.position &&
         swapper.source == event_source(event)) {
         swapper.pressed = false;
         swapper_release_tab(event.timestamp);

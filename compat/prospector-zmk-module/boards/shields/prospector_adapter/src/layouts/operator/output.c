@@ -14,7 +14,6 @@
 #include "display_colors.h"
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
-static enum zmk_transport active_transport = ZMK_TRANSPORT_USB;
 
 static void set_btn_state(lv_obj_t *btn, bool active, uint32_t active_color,
                           uint32_t inactive_color) {
@@ -37,7 +36,8 @@ static void set_btn_state(lv_obj_t *btn, bool active, uint32_t active_color,
     }
 }
 
-static void update_output_widget(struct zmk_widget_output *widget) {
+static void update_output_widget(struct zmk_widget_output *widget,
+                                 enum zmk_transport active_transport) {
     bool is_usb = active_transport == ZMK_TRANSPORT_USB;
     set_btn_state(widget->usb_btn, is_usb, DISPLAY_COLOR_USB_ACTIVE_BG,
                   DISPLAY_COLOR_USB_INACTIVE_BG);
@@ -47,18 +47,22 @@ static void update_output_widget(struct zmk_widget_output *widget) {
                   DISPLAY_COLOR_BLE_INACTIVE_BG);
 }
 
-static int endpoint_changed_listener(const zmk_event_t *eh) {
-    ARG_UNUSED(eh);
-    active_transport = zmk_endpoint_get_selected().transport;
-
+static void output_update_cb(enum zmk_transport active_transport) {
     struct zmk_widget_output *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
-        update_output_widget(widget);
+        update_output_widget(widget, active_transport);
     }
-    return ZMK_EV_EVENT_BUBBLE;
 }
 
-ZMK_LISTENER(widget_output_endpoint, endpoint_changed_listener);
+static enum zmk_transport output_get_state(const zmk_event_t *eh) {
+    ARG_UNUSED(eh);
+    return zmk_endpoint_get_selected().transport;
+}
+
+/* Endpoint events may run on the system queue. Confine LVGL changes to the
+ * display queue, coalescing transitions to the final selected transport. */
+ZMK_DISPLAY_WIDGET_LISTENER(widget_output_endpoint, enum zmk_transport,
+                           output_update_cb, output_get_state)
 ZMK_SUBSCRIPTION(widget_output_endpoint, zmk_endpoint_changed);
 
 static lv_obj_t *create_toggle_btn(lv_obj_t *parent, const char *text, int x) {
@@ -107,11 +111,8 @@ int zmk_widget_output_init(struct zmk_widget_output *widget, lv_obj_t *parent) {
     widget->slots[0] = create_slot(widget->obj, "L", 0);
     widget->slots[1] = create_slot(widget->obj, "R", 59);
 
-    if (sys_slist_is_empty(&widgets)) {
-        active_transport = zmk_endpoint_get_selected().transport;
-    }
-    update_output_widget(widget);
     sys_slist_append(&widgets, &widget->node);
+    widget_output_endpoint_init();
     return 0;
 }
 

@@ -149,7 +149,7 @@ if(CONFIG_TOTEM_ESB_COMPAT)
         totem_overlay_pinned_file(
             "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/src/split/bluetooth/central_status_changed_observer.c"
             "${TOTEM_PROSPECTOR_MODULE_DIR}/src/split/bluetooth/central_status_changed_observer.c")
-        foreach(TOTEM_OPERATOR_FILE output.c output.h)
+        foreach(TOTEM_OPERATOR_FILE output.c output.h battery_circles.c wpm_meter.c)
             totem_overlay_pinned_file(
                 "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}"
                 "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}")
@@ -162,11 +162,11 @@ else()
     foreach(TOTEM_NRF_FILE include/esb.h subsys/esb/esb.c)
         totem_restore_pinned_file("${TOTEM_NRF_MODULE_DIR}/${TOTEM_NRF_FILE}")
     endforeach()
-    # An ESB configure overlays three files in the pinned Prospector checkout.
+    # Restore ESB widget changes before a standard BLE build in this workspace.
     # Restore them before any subsequent standard BLE build in this workspace.
     totem_restore_pinned_file(
         "${TOTEM_PROSPECTOR_MODULE_DIR}/src/split/bluetooth/central_status_changed_observer.c")
-    foreach(TOTEM_OPERATOR_FILE output.c output.h)
+    foreach(TOTEM_OPERATOR_FILE output.c output.h battery_circles.c wpm_meter.c)
         totem_restore_pinned_file(
             "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}")
     endforeach()
