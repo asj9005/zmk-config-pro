@@ -78,6 +78,10 @@ include:
     cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y
     artifact-name: ci_only_totem_right_esb_v3_diagnostic_testkey
   - board: xiao_ble//zmk
+    shield: totem_right totem_esb_right totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000
+    artifact-name: ci_only_totem_right_esb_v3_startdelay_testkey
+  - board: xiao_ble//zmk
     shield: totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3
     snippet: studio-rpc-usb-uart
     cmake-args: -DCONFIG_ZMK_STUDIO=y -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y
