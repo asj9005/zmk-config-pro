@@ -25,6 +25,7 @@ jobs:
             tests/test_esb_firmware.py \
             tests/test_esb_clock_runtime.py \
             tests/test_esb_ack_runtime.py \
+            tests/test_esb_startup_runtime.py \
             tests/test_auto_base.py
 
   build:

@@ -20,6 +20,8 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/uart.h>
+#endif
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
 #include <zephyr/sys/printk.h>
 #endif
 
@@ -71,8 +73,8 @@ static struct esb_key_state_payload local_key_state;
 static void key_state_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(key_state_work, key_state_work_cb);
 
-#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
-static atomic_t diagnostic_transport_ready;
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+static atomic_t transport_ready;
 #endif
 
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS)
@@ -602,12 +604,6 @@ static int report_event_locked(const struct zmk_split_transport_peripheral_event
 
 static int
 split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_event *event) {
-#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
-    /* USB diagnostics deliberately postpone radio/crypto initialization. */
-    if (!atomic_get(&diagnostic_transport_ready)) {
-        return -EAGAIN;
-    }
-#endif
     k_mutex_lock(&event_mutex, K_FOREVER);
     bool key_event = event->type ==
                      ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT;
@@ -621,15 +617,27 @@ split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_ev
                 local_key_state.keys[position / 8U] &= (uint8_t)~mask;
             }
         }
+    }
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (!atomic_get(&transport_ready)) {
+        /* Preserve startup edges without touching crypto or waking radio work. */
+        int err = k_msgq_put(&presession_events, event, K_NO_WAIT);
+        if (err != 0) {
+            totem_esb_transport_queue_pressure(true);
+            err = -ENOSPC;
+        }
+        k_mutex_unlock(&event_mutex);
+        return err;
+    }
+    if (key_event) {
         if (get_secure_state() != ESB_V3_ESTABLISHED) {
             /* Resume fast discovery immediately when the user starts typing. */
             totem_esb_backoff_reset(&handshake_backoff,
                                     CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
             k_work_reschedule(&handshake_work, K_NO_WAIT);
         }
-#endif
     }
+#endif
     int err = report_event_locked(event);
     if (key_event && err != 0) {
         /* The local bitmap survives even when the edge queue is full. */
@@ -1112,11 +1120,9 @@ static int zmk_split_esb_peripheral_init(void) {
         totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
-#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
-    /* Publish readiness only after every synchronous initialization succeeded. */
-    atomic_set(&diagnostic_transport_ready, 1);
-#endif
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    /* Publish readiness only after every synchronous initialization succeeded. */
+    atomic_set(&transport_ready, 1);
     k_work_schedule(&handshake_work, K_NO_WAIT);
 #endif
     k_work_schedule(&heartbeat_work, K_MSEC(CONFIG_TOTEM_ESB_HEARTBEAT_INTERVAL_MS));
@@ -1128,14 +1134,15 @@ static int zmk_split_esb_peripheral_init(void) {
     return 0;
 }
 
-#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
-K_THREAD_STACK_DEFINE(diagnostic_start_stack, 4096);
-static struct k_thread diagnostic_start_thread;
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+K_THREAD_STACK_DEFINE(peripheral_start_stack, 4096);
+static struct k_thread peripheral_start_thread;
 
-static void diagnostic_start_thread_cb(void *unused1, void *unused2, void *unused3) {
+static void peripheral_start_thread_cb(void *unused1, void *unused2, void *unused3) {
     ARG_UNUSED(unused1);
     ARG_UNUSED(unused2);
     ARG_UNUSED(unused3);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
     const struct device *console = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
     if (!device_is_ready(console)) {
         totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, -ENODEV);
@@ -1151,19 +1158,29 @@ static void diagnostic_start_thread_cb(void *unused1, void *unused2, void *unuse
     printk("ESB_DIAG USB_START transport_init source=%u stack=4096\n", peripheral_id);
     /* Let the independent USB queues deliver the marker before crypto starts. */
     k_msleep(200);
+#elif IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+    printk("ESB_DIAG AUTO_START transport_init source=%u stack=4096\n", peripheral_id);
+#endif
     int ret = zmk_split_esb_peripheral_init();
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
     printk("ESB_DIAG USB_START transport_return source=%u result=%d\n", peripheral_id, ret);
+#elif IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+    printk("ESB_DIAG AUTO_START transport_return source=%u result=%d\n", peripheral_id, ret);
+#else
+    ARG_UNUSED(ret);
+#endif
 }
 
-static int diagnostic_start_init(void) {
-    k_thread_create(&diagnostic_start_thread, diagnostic_start_stack,
-                    K_THREAD_STACK_SIZEOF(diagnostic_start_stack),
-                    diagnostic_start_thread_cb, NULL, NULL, NULL,
+static int peripheral_start_init(void) {
+    /* Keep secure startup off the main init stack and shared workqueues. */
+    k_thread_create(&peripheral_start_thread, peripheral_start_stack,
+                    K_THREAD_STACK_SIZEOF(peripheral_start_stack),
+                    peripheral_start_thread_cb, NULL, NULL, NULL,
                     K_PRIO_PREEMPT(5), 0, K_NO_WAIT);
     return 0;
 }
 
-SYS_INIT(diagnostic_start_init, APPLICATION, 99);
+SYS_INIT(peripheral_start_init, APPLICATION, 99);
 #else
 SYS_INIT(zmk_split_esb_peripheral_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
 #endif

@@ -49,7 +49,7 @@ config TOTEM_ESB_DIAGNOSTIC_USB_START
     help
       Diagnostic-only startup isolation for a half whose USB enumeration fails.
       Start ESB on a dedicated 4096-byte thread only after the USB console DTR
-      is asserted. Reject input until transport initialization completes and
+      is asserted. Preserve early input until transport initialization completes and
       pause briefly at initialization checkpoints so USB can deliver logs.
       This changes initialization order, stack and timing; it is not a fix or
       a battery-only firmware. It does not bypass encryption or key checks.
