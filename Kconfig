@@ -54,6 +54,17 @@ config TOTEM_ESB_DIAGNOSTIC_USB_START
       This changes initialization order, stack and timing; it is not a fix or
       a battery-only firmware. It does not bypass encryption or key checks.
 
+config TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS
+    int "Delay peripheral ESB diagnostic startup in milliseconds"
+    depends on TOTEM_ESB_DIAGNOSTICS && TOTEM_ESB_V3
+    depends on !ZMK_SPLIT_ROLE_CENTRAL && !TOTEM_ESB_DIAGNOSTIC_USB_START
+    default 0
+    range 0 10000
+    help
+      Delay secure transport initialization once on its dedicated startup thread.
+      This isolates startup timing without requiring USB console DTR or changing
+      initialization checkpoints. Leave at zero outside controlled diagnostics.
+
 config TOTEM_ESB_V3_CI_TEST_KEYS
     bool "Use public disposable ESB v3 CI test keys"
     depends on TOTEM_ESB_V3

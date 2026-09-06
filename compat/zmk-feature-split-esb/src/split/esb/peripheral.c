@@ -1159,6 +1159,11 @@ static void peripheral_start_thread_cb(void *unused1, void *unused2, void *unuse
     /* Let the independent USB queues deliver the marker before crypto starts. */
     k_msleep(200);
 #elif IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+#if CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS > 0
+    printk("ESB_DIAG DELAY_START delay_ms=%u\n",
+           (unsigned int)CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS);
+    k_msleep(CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS);
+#endif
     printk("ESB_DIAG AUTO_START transport_init source=%u stack=4096\n", peripheral_id);
 #endif
     int ret = zmk_split_esb_peripheral_init();
