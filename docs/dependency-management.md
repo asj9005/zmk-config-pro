@@ -25,7 +25,7 @@
 - cache: `caa296126883cff596d87d8935842f9db880ef25` (v5)
 - upload-artifact 및 merge: `043fb46d1a93c77aae656e7c1c64a875d1fc6a0a` (v7)
 
-새 CI는 `west list -f '{name} {revision} {sha} {url}'`로 활성 의존성의 지정 revision과 실제 SHA를 기록하고 도구 버전도 남긴다. 내려받지 않는 비활성 BabbleSim 의존성은 조회하지 않는다. GitHub 호스트 runner 자체와 외부 저장소의 가용성까지 영구 고정하거나 UF2의 bit-for-bit 재현성을 증명한 것은 아니다. 호스트 runner 이미지·실제 의존성 revision·생성된 설정과 파일 해시는 성공한 각 빌드에서 확인한다.
+새 CI는 `tools/record_build_revisions.py`로 활성 의존성의 지정 revision과 실제 Git HEAD를 기록하고 도구 버전도 남긴다. 내려받지 않는 비활성 BabbleSim 의존성과 Git 저장소가 아닌 복사된 manifest 설정 폴더는 제외한다. GitHub 호스트 runner 자체와 외부 저장소의 가용성까지 영구 고정하거나 UF2의 bit-for-bit 재현성을 증명한 것은 아니다. 호스트 runner 이미지·실제 의존성 revision·생성된 설정과 파일 해시는 성공한 각 빌드에서 확인한다.
 
 ## 개인키 빌드
 

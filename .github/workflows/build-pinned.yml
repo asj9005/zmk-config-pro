@@ -133,12 +133,14 @@ jobs:
         working-directory: ${{ env.base_dir }}
         run: west update --fetch-opt=--filter=tree:0
 
+      - name: Test dependency revision recording
+        if: matrix.shield == 'settings_reset'
+        run: python3 -m unittest -v tests/test_build_revisions.py
+
       - name: Record resolved dependency revisions
         working-directory: ${{ env.base_dir }}
         run: |
-          # Only active projects are cloned by west update. Include their
-          # actual SHA without requiring inactive BabbleSim/tool projects.
-          west list -f '{name} {revision} {sha} {url}'
+          python3 "${GITHUB_WORKSPACE}/tools/record_build_revisions.py"
           west --version
           cmake --version
           python3 --version
