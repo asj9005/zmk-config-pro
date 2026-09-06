@@ -12,9 +12,11 @@ jobs:
       - name: Verify ESB v3 protocol models and tools
         run: |
           python3 -m unittest -v tests/test_esb_v3_protocol.py
+          python3 -m unittest -v tests/test_esb_v3_private_build.py
           python3 -m py_compile \
             tests/test_esb_v3_protocol.py \
             tools/generate_esb_v3_keys.py \
+            tools/verify_esb_v3_private_build.py \
             tools/analyze_esb_benchmark.py \
             tools/analyze_usbpcap.py
       - name: Compile and execute firmware recovery tests
