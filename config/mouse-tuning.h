@@ -2,9 +2,9 @@
 #ifndef TOTEM_MOUSE_TUNING_H
 #define TOTEM_MOUSE_TUNING_H
 
-/* Keep the old 600 / 300^2 initial acceleration, then continue to 1200. */
-#define ZMK_POINTING_DEFAULT_MOVE_VAL 1200
-#define TOTEM_MOUSE_TIME_TO_MAX_MS 424
+/* Keep the old 600 / 300^2 initial acceleration, then continue to 1600. */
+#define ZMK_POINTING_DEFAULT_MOVE_VAL 1600
+#define TOTEM_MOUSE_TIME_TO_MAX_MS 490
 #define TOTEM_MOUSE_ACCEL_EXPONENT 2
 #define TOTEM_MOUSE_TRIGGER_PERIOD_MS 16
 #define TOTEM_MOUSE_TAPPING_TERM_MS 180
