@@ -30,7 +30,8 @@ static int auto_base_pressed(struct zmk_behavior_binding *binding,
     /* A listener can fail after changing state: always attempt the release. */
     int release_err =
         raise_zmk_keycode_state_changed_from_encoded(binding->param1, false, event.timestamp);
-    int layer_err = zmk_keymap_layer_to(0, false);
+    /* Match &to 0: Mouse may have been locked active by the thumb's &to. */
+    int layer_err = zmk_keymap_layer_to(0, true);
 
     if (press_err < 0) {
         LOG_ERR("Auto Base key press failed: %d", press_err);

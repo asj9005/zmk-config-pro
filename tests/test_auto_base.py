@@ -1,6 +1,7 @@
 """Compile the production Auto Base callbacks with deterministic ZMK API fakes.
 
-This checks callback ordering/error handling, not Zephyr scheduling or USB timing.
+This checks callback ordering/error handling and pinned ZMK layer-lock semantics,
+not Zephyr scheduling or USB timing.
 The firmware build separately validates the devicetree and behavior registration.
 """
 
@@ -55,7 +56,7 @@ class ActualAutoBaseRuntimeTest(unittest.TestCase):
             result = subprocess.run([str(test_exe)], check=True, capture_output=True,
                                     encoding="utf-8", errors="replace",
                                     env=environment, timeout=10)
-            self.assertIn("8 Auto Base callback cases passed", result.stdout)
+            self.assertIn("9 Auto Base callback cases passed", result.stdout)
 
 
 if __name__ == "__main__":
