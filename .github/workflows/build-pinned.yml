@@ -61,7 +61,7 @@ jobs:
     container:
       image: zmkfirmware/zmk-build-arm@sha256:edb1c953438c6f720ddb79c3762f3972013b7fbbaf4fff3592fc869983e7afc5
     needs: matrix
-    name: Build
+    name: Build (${{ matrix.artifact-name || matrix.shield || matrix.board }})
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.matrix.outputs.build_matrix) }}
@@ -136,7 +136,9 @@ jobs:
       - name: Record resolved dependency revisions
         working-directory: ${{ env.base_dir }}
         run: |
-          west manifest --freeze
+          # Only active projects are cloned by west update. Include their
+          # actual SHA without requiring inactive BabbleSim/tool projects.
+          west list -f '{name} {revision} {sha} {url}'
           west --version
           cmake --version
           python3 --version
