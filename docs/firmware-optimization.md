@@ -1,12 +1,16 @@
 # 동작을 보존하는 펌웨어 최적화
 
-이번 변경은 최고속도 추가 조정을 보류한 상태에서 진행했다. 마우스 수치(1600/490ms), E/R의 tap-preferred + hold-while-undecided 180ms, 콤보 50ms와 Base 복귀 규칙은 유지한다. 1600의 새 사용감 검증은 아직 완료되지 않았다.
+초기 최적화에서는 마우스 1600/490ms를 유지했다. 후속 이동 조정은 저장소가 관리하는 `&mmv`로 기존 1600의 2차 곡선을 처음 200ms까지 그대로 사용하고, 200~490ms에 최대 1200의 2차 추가 가속을 더해 최종 상한을 2800(1.75배)으로 높인다. E 3.5배·R 0.125배, tap-preferred + hold-while-undecided 180ms, 콤보 50ms, 스크롤과 Base 복귀 규칙은 유지한다. [새 곡선](mouse-tuning.md)의 실물 사용감은 아직 검증 전이다.
 
 ## ESB 수신
 
 동글은 실제 좌우 peer의 RX ring만 할당하고 예약 pipe 0의 저장소를 제거한다. 각 half는 자기 pipe의 RX ring 하나만 할당한다. 유효 pipe별 기존 용량을 줄이지 않으며 미할당 pipe는 수신 callback에서 거부한다. RX worker도 유효 pipe만 방문한다.
 
 RADIO 수신 callback은 데이터가 유효한 동안 즉시 RX ring에 복사하므로, 그 전에 사용하던 중간 배열과 복사를 제거했다. 암호화·인증·재시도·입력 순서·스냅샷 복구 방식은 유지한다. 실제 메모리 절감량은 새 firmware의 linker 결과로 확인한다.
+
+RF 설정은 기존 2Mbps, +8dBm 송신 출력, hopping 비활성화를 유지한다. 송신 출력을 올리거나 수신 감도를 변경하는 조정은 포함하지 않는다.
+
+동글의 key-state 추적에 선행 눌림이 없는 wire release를 거르는 orphan-up 방어를 추가한다. 이런 release가 상대 이동 behavior로 전달되면 정지 상태에서 반대 방향 속도가 생길 수 있는 조건부 결함이 소스에서 확인됐다. Snapshot 합성 전이와 source 단절 해제는 기존 경로를 유지한다. 이 결함이 사용자가 보고한 간헐적인 약 1초 키 반복이나 고착의 실제 원인인지는 미확정이며, 해결 여부도 실물 검증 전이다. 상세 범위는 [입력 복구](esb-reliability-patch.md)를 참고한다.
 
 ## Prospector 화면
 
@@ -26,7 +30,7 @@ owned swapper는 같은 owner의 중복 release에 불필요한 HID 재전송이
 
 ## 검증 범위
 
-호스트 회귀는 실제 C 소스로 RX 저장소·pipe 선택·callback buffer 수명, 화면 listener의 초기화·이벤트 합쳐짐·실행 queue, Alt-Tab 중복 release를 검사한다. Zephyr scheduler, 실제 RADIO, USB와 LVGL 화면은 호스트 fake로 대체하므로 하드웨어 시험을 대신하지 않는다.
+호스트 회귀는 실제 C 소스로 RX 저장소·pipe 선택·callback buffer 수명, 화면 listener의 초기화·이벤트 합쳐짐·실행 queue, Alt-Tab 중복 release를 검사한다. 후속 회귀는 곡선 helper의 초반 일치·부호·상한과 central wire dispatch의 orphan-up·snapshot·단절 처리를 검사한다. Zephyr scheduler, 실제 RADIO, USB와 LVGL 화면은 호스트 fake로 대체하므로 하드웨어 시험을 대신하지 않는다.
 
 전체 BLE/v2/v3 빌드와 실제 linker 메모리 수치는 해당 커밋의 CI 결과로 확인한다. 새 최적화 펌웨어의 장치 검증은 업로드 후 입력·키 해제·재연결·WPM/배터리/레이어 표시를 확인해야 한다. 빌드 성공만으로 무선 지연이나 실사용 안정성 향상을 단정하지 않는다.
 

@@ -1,10 +1,14 @@
 #include "mouse-tuning.h"
 
 &mmv {
+    compatible = "totem,behavior-mouse-move";
     acceleration-exponent = <TOTEM_MOUSE_ACCEL_EXPONENT>;
     time-to-max-speed-ms = <TOTEM_MOUSE_TIME_TO_MAX_MS>;
     trigger-period-ms = <TOTEM_MOUSE_TRIGGER_PERIOD_MS>;
     delay-ms = <0>;
+    acceleration-boost-start-ms = <TOTEM_MOUSE_BOOST_START_MS>;
+    acceleration-boost-numerator = <TOTEM_MOUSE_BOOST_NUM>;
+    acceleration-boost-denominator = <TOTEM_MOUSE_BOOST_DEN>;
 };
 
 /* Fast is deliberately first: the first active override wins. */

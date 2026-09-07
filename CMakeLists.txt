@@ -7,6 +7,7 @@ zephyr_library()
 if((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     target_sources(app PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_auto_base.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_mouse_move.c
         ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_owned_swapper.c
         ${CMAKE_CURRENT_SOURCE_DIR}/src/owned_swapper_replay_listener.c)
     target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

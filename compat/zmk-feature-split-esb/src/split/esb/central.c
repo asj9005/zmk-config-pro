@@ -577,6 +577,44 @@ static void emit_snapshot_key(void *context, uint8_t position, bool pressed) {
     zmk_split_transport_central_peripheral_event_handler(&esb_central, source, event);
 }
 
+/* Only wire edges enter here. Snapshot reconciliation already commits its
+ * bitmap before emitting, so its synthetic transitions use emit_snapshot_key.
+ */
+static void dispatch_wire_zmk_event(
+    uint8_t source, const struct zmk_split_transport_peripheral_event *event) {
+    if (event->type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
+        uint32_t position = event->data.key_position_event.position;
+        if (position < CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX) {
+            uint8_t *source_keys = key_pos_states[source];
+            uint8_t mask = 1U << (position % 8);
+            bool was_pressed = (source_keys[position / 8] & mask) != 0;
+            if (event->data.key_position_event.pressed) {
+                if (was_pressed) {
+                    LOG_WRN("Repeated press on source %u position %u; injecting release",
+                            source, position);
+                    raise_zmk_position_state_changed((struct zmk_position_state_changed){
+                        .source = source,
+                        .position = position,
+                        .state = false,
+                        .timestamp = k_uptime_get(),
+                    });
+                }
+                source_keys[position / 8] |= mask;
+            } else {
+                /* A lost press can leave a release with no matching down.
+                 * Relative mouse behaviors subtract their speed on every up;
+                 * forwarding this would start motion from an already idle key.
+                 */
+                if (!was_pressed) {
+                    return;
+                }
+                source_keys[position / 8] &= (uint8_t)~mask;
+            }
+        }
+    }
+    zmk_split_transport_central_peripheral_event_handler(&esb_central, source, *event);
+}
+
 void totem_esb_source_disconnected(uint8_t source) {
     if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT) {
         return;
@@ -1172,29 +1210,7 @@ static void process_rx_work_cb(struct k_work *work) {
                     break;
                 }
 
-                struct zmk_split_transport_peripheral_event ev = env.payload.body.event;
-                if (ev.type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT &&
-                    position < CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX) {
-                    uint8_t *source_keys = key_pos_states[source];
-                    if (pressed) {
-                        if ((source_keys[position / 8] >> (position % 8)) & 1U) {
-                            LOG_WRN("Repeated press on source %u position %u; injecting release",
-                                    source, position);
-                            raise_zmk_position_state_changed((struct zmk_position_state_changed){
-                                .source = source,
-                                .position = position,
-                                .state = false,
-                                .timestamp = k_uptime_get(),
-                            });
-                        }
-                        source_keys[position / 8] |= 1U << (position % 8);
-                    } else {
-                        source_keys[position / 8] &= ~(1U << (position % 8));
-                    }
-                }
-
-                zmk_split_transport_central_peripheral_event_handler(
-                    &esb_central, source, env.payload.body.event);
+                dispatch_wire_zmk_event(source, &env.payload.body.event);
                 break;
             }
             case -EAGAIN:

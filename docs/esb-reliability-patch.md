@@ -13,6 +13,12 @@
 
 무선 연결이 복구되고 snapshot이 도착하면 상태를 맞출 수 있다. 250ms는 송신 예약 주기이며 장애 중 복구 시간의 보장값이 아니다. Press와 release가 모두 유실된 짧은 tap이나 과거 combo/hold-tap의 정확한 타이밍은 현재 bitmap으로 복원할 수 없다.
 
+### 선행 눌림이 없는 해제 방어
+
+Central이 추적하는 해당 source·position이 이미 해제 상태이면, 새 wire release를 ZMK behavior에 전달하지 않는다. 눌림 edge가 유실된 뒤 해제만 도착하는 경우, 상대 이동 behavior는 매 해제마다 속도를 빼므로 정지 상태에서 반대 방향 이동이 시작될 수 있다. 이 orphan-up 경로는 소스에서 확인한 조건부 결함이다. 정상 press/release와 기존 중복 press 복구는 유지하며, 상태를 먼저 갱신하는 snapshot의 합성 전이와 source 단절 해제에는 wire-edge 필터를 적용하지 않는다.
+
+사용자가 보고한 간헐적인 약 1초 키 반복·고착이 이 경로 때문에 발생했는지는 아직 확인되지 않았다. 방어 코드와 host 회귀만으로 실제 증상의 원인을 확정하거나 해결됐다고 판단하지 않는다. 마우스 곡선 조정과 별개로 장치에서 재현·해제·재연결을 확인해야 한다. RF는 기존 2Mbps/+8dBm과 hopping 비활성화를 유지한다.
+
 ## 인터럽트와 ACK 큐
 
 `NVIC_SetPriority(RADIO_IRQn, 0)`을 제거해 Zephyr `irq_lock()`과 SDK 내부 FIFO 보호가 유효하도록 한다.
@@ -39,6 +45,8 @@ python3 -m unittest -v tests/test_esb_v3_protocol.py
 ```
 
 클록 runtime 테스트는 실제 firmware의 clock callback 두 개를 추출해 비동기 완료·유휴 해제·송신과 해제의 경합·실패 후 재시도를 검사한다. ACK runtime 테스트는 실제 SDK 함수 두 개를 추출해 pipe별 취소 및 진행 중 ACK 보호를 검사한다. 두 테스트의 드라이버와 IRQ는 deterministic fake이다.
+
+`tests/test_esb_key_dispatch_runtime.py`는 실제 central의 wire dispatch·snapshot·source 해제 helper를 추출해 orphan release와 정상 전이, 상태 복구를 검사한다. ZMK 경계는 fake이며, orphan-up 방어를 제거한 대조 변형이 해당 시나리오에서 실패하는지도 확인한다. 실제 키 반복의 원인을 재현한 하드웨어 시험은 아니다.
 
 Host C 테스트는 nRF52840 RADIO, Zephyr scheduler, PSA backend를 실행하지 않는다. 전체 firmware compile/link는 GitHub Actions의 BLE/v2/v3 16-entry matrix로 확인한다. 실물 검증에서는 다음을 확인한다.
 

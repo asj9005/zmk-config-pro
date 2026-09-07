@@ -30,6 +30,8 @@ jobs:
             tests/test_esb_ack_runtime.py \
             tests/test_esb_startup_runtime.py \
             tests/test_esb_rx_runtime.py \
+            tests/test_esb_key_dispatch_runtime.py \
+            tests/test_pointing_curve_runtime.py \
             tests/test_auto_base.py \
             tests/test_owned_swapper.py \
             tests/test_prospector_runtime.py

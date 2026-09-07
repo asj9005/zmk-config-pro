@@ -9,6 +9,11 @@
 #define TOTEM_MOUSE_TRIGGER_PERIOD_MS 16
 #define TOTEM_MOUSE_TAPPING_TERM_MS 180
 
+/* Preserve the base curve for 200 ms, then reach 1600 * 7/4 = 2800 at 490 ms. */
+#define TOTEM_MOUSE_BOOST_START_MS 200
+#define TOTEM_MOUSE_BOOST_NUM 7
+#define TOTEM_MOUSE_BOOST_DEN 4
+
 /* Initial approximation of AHK speed 20 / 3 at Windows speed 10, EPP off. */
 #define TOTEM_MOUSE_FAST_NUM 7
 #define TOTEM_MOUSE_FAST_DEN 2
