@@ -2,17 +2,17 @@
 #ifndef TOTEM_MOUSE_TUNING_H
 #define TOTEM_MOUSE_TUNING_H
 
-/* Slow the initial curve by 25% from the previous 1600 reference. */
-#define ZMK_POINTING_DEFAULT_MOVE_VAL 1200
-#define TOTEM_MOUSE_TIME_TO_MAX_MS 490
+/* With the longer ramp, initial acceleration is about 59% of 1200 / 490^2. */
+#define ZMK_POINTING_DEFAULT_MOVE_VAL 2400
+#define TOTEM_MOUSE_TIME_TO_MAX_MS 900
 #define TOTEM_MOUSE_ACCEL_EXPONENT 2
 #define TOTEM_MOUSE_TRIGGER_PERIOD_MS 16
 #define TOTEM_MOUSE_TAPPING_TERM_MS 180
 
-/* Add the steep late curve after 300 ms; reach 1200 * 3 = 3600 at 490 ms. */
-#define TOTEM_MOUSE_BOOST_START_MS 300
-#define TOTEM_MOUSE_BOOST_NUM 3
-#define TOTEM_MOUSE_BOOST_DEN 1
+/* Add the late curve after 500 ms; reach 2400 * 15/8 = 4500 at 900 ms. */
+#define TOTEM_MOUSE_BOOST_START_MS 500
+#define TOTEM_MOUSE_BOOST_NUM 15
+#define TOTEM_MOUSE_BOOST_DEN 8
 
 /* Initial approximation of AHK speed 20 / 3 at Windows speed 10, EPP off. */
 #define TOTEM_MOUSE_FAST_NUM 7

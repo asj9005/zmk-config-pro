@@ -386,6 +386,8 @@ static int enqueue_v3_frame(
     k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
     if (ring_buf_space_get(&tx_buf) < frame_size) {
         totem_esb_transport_queue_pressure(true);
+        /* A recovered driver must be retried even when no new frame fits. */
+        begin_tx();
         k_spin_unlock(&tx_ring_lock, key);
         k_mutex_unlock(&event_mutex);
         return -ENOSPC;
