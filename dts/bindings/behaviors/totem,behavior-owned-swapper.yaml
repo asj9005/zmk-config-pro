@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+
+description: Owned Alt-Tab swapper with direct release
+
+compatible: "totem,behavior-owned-swapper"
+
+include: zero_param.yaml
+
+properties:
+  ignored-key-positions:
+    type: array
+    required: true

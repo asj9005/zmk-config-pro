@@ -1,6 +1,6 @@
 # Totem + Prospector ZMK firmware
 
-Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 ZMK 설정이다. 기존 BLE split 빌드를 롤백용으로 보존하고, Nordic ESB 2.4 GHz split transport를 사용하는 저지연 프로필을 별도로 제공한다. 기존 keymap, tri-state, hold-tap, sticky key, combo, mouse/pointing 동작은 공통 `config/totem.keymap`을 사용한다.
+Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 ZMK 설정이다. 기존 BLE split 빌드를 롤백용으로 보존하고, Nordic ESB 2.4 GHz split transport를 사용하는 저지연 프로필을 별도로 제공한다. Alt-Tab, hold-tap, sticky key, combo, mouse/pointing 동작은 공통 `config/totem.keymap`을 사용한다. Alt-Tab은 이 저장소의 owned swapper로 구현하며 이전 tri-state 의존성은 제거했다.
 
 ## 빌드 구분
 
@@ -12,7 +12,7 @@ Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 Z
 | ESB Secure v3 후보 | v2 release 조합 + `totem_esb_v3` | v2 release 조합 + `totem_esb_v3` | v2 release 조합 + `totem_esb_v3` |
 | ESB Secure v3 benchmark | v3 조합 + `totem_esb_benchmark` | v3 조합 + `totem_esb_benchmark` | v3 조합 + `totem_esb_benchmark` |
 
-`build.yaml`에는 기존 BLE 3개, `settings_reset`, ESB v2 release 3개, ESB v2 benchmark 3개와 v3 release/benchmark 6개 등 총 16개 항목이 있다. v2 기준선은 [GitHub Actions run 30433985080](https://github.com/asj9005/zmk-config-pro/actions/runs/30433985080)에서 10/10 빌드됐다. Artifact를 내려받아 ZIP을 푼 뒤 다음 v2 release 파일을 사용한다.
+`build.yaml`에는 BLE, `settings_reset`, ESB v2/v3와 진단 비교본을 포함한 26개 항목이 있다. 빌드 도구도 성공한 이미지 digest와 action SHA로 고정한다([의존성 관리](docs/dependency-management.md)). v2 기준선은 [GitHub Actions run 30433985080](https://github.com/asj9005/zmk-config-pro/actions/runs/30433985080)에서 10/10 빌드됐다. 다음 파일은 평문 v2 기준선이며 현재 개인키 v3 목표와 구분한다.
 
 - `totem_left_esb.uf2`
 - `totem_right_esb.uf2`
@@ -29,15 +29,15 @@ Fresh-event 검증은 부팅 때 생성되는 32-bit session ID와 source별 seq
 현재 상태:
 
 - ESB v2 전송 및 benchmark 코드 경로: 구현됨, 기준선 10개 CI 빌드 **성공**
-- Secure v3 코드 경로: 구현됨, 16-entry 전체 matrix의 compile/link 검증은 별도 기록
+- Secure v3 코드 경로: 구현됨, 이전 9014a3f의 26개 전체 matrix 성공. 이후 최적화의 검증은 해당 커밋 CI에서 확인
 - release debounce: press 1 ms, release 5 ms
-- Prospector 화면, peer 상태 및 battery event 코드 경로: 포함됨, 실기 **미측정**
+- Prospector 화면, peer 상태 및 battery event 코드 경로: 포함됨. 기존 ram25 동글의 자연 타이핑·화면·동글 재연결 기본 시험 통과
 - v2 기준선의 컴파일된 release/benchmark 동글 HID descriptor `bInterval=1`: **확인**
 - v3 동글 HID descriptor 및 실제 USB cadence: **미측정**
 - 실제 USB enumerate 및 USBPcap 1 ms cadence: **미측정**
 - 실제 ESB typical/p95/p99 latency: **미측정**
 - 양쪽 동시 입력과 source별 100,000-event loss: **미측정**
-- 실제 Prospector 화면 및 좌우 battery 표시: **미측정**
+- 실제 Prospector WPM·modifier·레이어 표시: 기존 ram25 기본 시험 통과. 재연결 후 왼쪽 battery `-` 문제와 새 최적화의 장치 시험은 남음
 
 컴파일 성공 또는 descriptor 설정 확인은 실기 1K 달성과 별개다. 측정되지 않은 결과를 실측값처럼 사용하지 않는다.
 
@@ -45,11 +45,13 @@ Fresh-event 검증은 부팅 때 생성되는 32-bit session ID와 source별 seq
 
 `CONFIG_ESB_PIPE_COUNT=3`이며 pipe 0은 예약되어 있다. Pipe 1은 왼쪽, pipe 2는 오른쪽의 uplink와 해당 하프로 돌아가는 PRX ACK payload를 함께 담당한다. 동글은 독립적인 downlink를 선제 송신하지 못하며, command는 대상 half의 다음 uplink/heartbeat에 대한 ACK payload로 전달된다. Command application retry는 현재 0이다.
 
-Nordic PRX의 hardware ACK-payload FIFO는 pipe별로 따로 비우는 API가 없다. 이미 FIFO에 들어간 command의 대상 half가 전송 전에 꺼지면 그 entry가 남아 다른 half의 reverse command를 지연시킬 수 있다. Half→dongle key uplink 자체에는 해당하지 않는 제한이지만 실제 장치에서 확인해야 한다.
+고정한 Nordic SDK에 pipe별 ACK 수 확인/취소 API를 추가했다. 각 half는 hardware ACK-payload FIFO를 한 칸만 사용하며, 소프트웨어 큐도 half별 한도를 두고 순환 처리한다. 동일한 대기 응답은 합치고, 기본 1.5초 동안 전달되지 않은 응답은 만료시킨다. 세션을 폐기할 때는 해당 half의 producer/software/hardware 큐를 정리한다. 이미 무선으로 전달된 응답을 취소할 수는 없으므로 v3의 세션·sequence 검증도 유지한다.
 
 왼쪽과 오른쪽은 별도 pipe를 쓰지만 하나의 RF channel과 하나의 동글 radio를 공유한다. TDMA나 CSMA는 없다. 고정 retry 충돌을 줄이기 위해 hardware retry delay를 왼쪽 500 µs, 오른쪽 800 µs로 다르게 두었지만, 양쪽 동시 fresh 1K와 무손실을 보장하지 않는다. RF channel hopping도 PTX/PRX 동기화가 없어 비활성화되어 있다.
 
-각 half는 부팅마다 하드웨어 entropy로 non-zero random session ID를 만든다. Dongle은 session 변경이나 peer timeout 때 이전에 눌린 것으로 남은 key를 release하고 sequence 상태를 재설정한다. 이는 재부팅 복구 및 stuck key 완화용이며 보안 nonce나 인증 수단은 아니다.
+각 half는 부팅마다 하드웨어 entropy로 non-zero random session ID를 만든다. Dongle은 session 변경이나 peer timeout 때 이전에 눌린 것으로 남은 key를 release하고 sequence 상태를 재설정한다. 추가로 half가 38개 키의 현재 상태를 5-byte bitmap으로 보내 release 유실과 재연결 후 held key를 복구한다. Snapshot은 기존 edge와 같은 FIFO/sequence를 사용하며 기본 250ms heartbeat마다, 큐 overflow 후, v3 연결 전 입력 큐가 모두 배출된 뒤 전송한다. v3 snapshot에도 기존 CCM 인증 및 replay 검사를 적용한다. 완전히 유실된 짧은 tap의 과거 동작은 현재 상태만으로 복원할 수 없다.
+
+RADIO 우선순위는 SDK/Zephyr 설정을 유지하며 raw NVIC priority 0으로 덮어쓰지 않는다. PTX는 송신 큐가 비고 기본 10ms 동안 유휴 상태이면 HFCLK 요청을 해제하고, 다음 송신 전에 비동기로 다시 확보한다. v3 미접속 탐색 간격은 2ms부터 최대 1초까지 늘어나며 키 입력 또는 무선 ACK 성공 시 즉시 빠른 탐색으로 복귀한다. 첫 입력 지연과 대기전류는 실제 장치에서 확인해야 한다. 자세한 변경 및 검증 범위는 [ESB 안정성 패치](docs/esb-reliability-patch.md)를 참고한다.
 
 ## 주소와 보안
 
@@ -76,3 +78,7 @@ Secure v3 후보는 half별 128-bit PSK, AES-128-CCM/MIC4, 두 random nonce로 �
 - [ESB 1K benchmark](docs/esb-1k-benchmark.md)
 - [ESB Secure v3 보안 설계와 검증 상태](docs/esb-v3-security.md)
 - [ESB Secure v3 production 빌드 및 플래시](docs/esb-v3-build-flash.md)
+- [ESB 안정성 패치와 회귀 테스트](docs/esb-reliability-patch.md)
+- [마우스 속도·E/R 반응 조정과 시험 순서](docs/mouse-tuning.md)
+- [외부 모듈과 빌드 도구 고정](docs/dependency-management.md)
+- [동작·메모리 최적화와 검증 범위](docs/firmware-optimization.md)

@@ -1,0 +1,56 @@
+# Copyright (c) 2024 The ZMK Contributors
+# SPDX-License-Identifier: MIT
+
+description: Cursor movement with a delayed acceleration boost
+
+compatible: "totem,behavior-mouse-move"
+
+include: one_param.yaml
+
+properties:
+  x-input-code:
+    type: int
+    required: true
+  y-input-code:
+    type: int
+    required: true
+  trigger-period-ms:
+    type: int
+    default: 16
+    description: The time (in ms) between generated inputs when an input has non-zero speed.
+  delay-ms:
+    type: int
+  time-to-max-speed-ms:
+    type: int
+    required: true
+  acceleration-exponent:
+    type: int
+    default: 1
+  acceleration-boost-start-ms:
+    type: int
+    default: 0
+    description: Time before the additional speed curve begins.
+  acceleration-boost-numerator:
+    type: int
+    default: 1
+    description: Numerator of the final speed multiplier, at least the denominator.
+  acceleration-boost-denominator:
+    type: int
+    default: 1
+    description: Positive denominator of the final speed multiplier.
+  fast-layer:
+    type: int
+    default: -1
+    description: Layer ID for constant fast movement, or -1 to disable. Wins over precise-layer.
+  precise-layer:
+    type: int
+    default: -1
+    description: Layer ID for constant precise movement, or -1 to disable.
+  fast-speed:
+    type: array
+    default: [1, 1]
+    description: Positive numerator and denominator of absolute fast movement units per second.
+  precise-speed:
+    type: array
+    default: [1, 1]
+    description: Positive numerator and denominator of absolute precise movement units per second.

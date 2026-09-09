@@ -27,9 +27,7 @@ K_MSGQ_DEFINE(pending_usb_events, sizeof(struct pending_usb_event), 64, 4);
 #endif
 
 #if IS_ENABLED(CONFIG_TOTEM_ESB_PROSPECTOR)
-#include <zmk/events/battery_state_changed.h>
 #include <zmk/events/split_central_status_changed.h>
-#include <zmk/split/central.h>
 #endif
 
 LOG_MODULE_REGISTER(totem_esb, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
@@ -45,12 +43,6 @@ struct peer_state {
 static struct peer_state peers[CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT];
 static void peer_timeout_work_handler(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(peer_timeout_work, peer_timeout_work_handler);
-#if IS_ENABLED(CONFIG_TOTEM_ESB_PROSPECTOR)
-static void display_sync_work_handler(struct k_work *work);
-static K_WORK_DELAYABLE_DEFINE(display_sync_work, display_sync_work_handler);
-static uint8_t display_sync_source;
-static uint8_t display_sync_remaining;
-#endif
 
 static void publish_peer_display(uint8_t source, bool connected) {
 #if IS_ENABLED(CONFIG_TOTEM_ESB_PROSPECTOR)
@@ -67,55 +59,6 @@ static void publish_peer_display(uint8_t source, bool connected) {
 static void publish_peer(uint8_t source, bool connected) {
     publish_peer_display(source, connected);
     totem_esb_notify_transport_status();
-    totem_esb_schedule_display_sync();
-}
-
-#if IS_ENABLED(CONFIG_TOTEM_ESB_PROSPECTOR)
-static void display_sync_work_handler(struct k_work *work) {
-    ARG_UNUSED(work);
-
-    if (display_sync_remaining == 0) {
-        return;
-    }
-
-    uint8_t source = display_sync_source++;
-    display_sync_remaining--;
-    publish_peer_display(source, peers[source].seen);
-
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
-    uint8_t level;
-    if (peers[source].seen &&
-        zmk_split_central_get_peripheral_battery_level(source, &level) == 0) {
-        raise_zmk_peripheral_battery_state_changed(
-            (struct zmk_peripheral_battery_state_changed){
-                .source = source,
-                .state_of_charge = level,
-            });
-    }
-#endif
-
-    if (display_sync_remaining > 0) {
-        /*
-         * Publish one source per tick because the pinned Prospector listener
-         * has one state/work item and can coalesce back-to-back source events.
-         * A bounded full pass also completes when the last peer disconnects,
-         * without continuously waking the display while the link is stable.
-         */
-        k_work_reschedule(&display_sync_work, K_MSEC(500));
-    }
-}
-#endif
-
-void totem_esb_schedule_display_sync(void) {
-#if IS_ENABLED(CONFIG_TOTEM_ESB_PROSPECTOR)
-    display_sync_source = 0;
-    display_sync_remaining = ARRAY_SIZE(peers);
-    /*
-     * Let the event manager commit the triggering transition/battery update
-     * before republishing authoritative state.
-     */
-    k_work_reschedule(&display_sync_work, K_MSEC(100));
-#endif
 }
 
 void totem_esb_peer_seen(uint8_t source) {
@@ -195,7 +138,6 @@ bool totem_esb_peer_is_connected(uint8_t source) {
     return false;
 }
 uint8_t totem_esb_peer_connected_count(void) { return 0; }
-void totem_esb_schedule_display_sync(void) {}
 #endif
 
 void totem_esb_benchmark_rx(uint8_t source, uint64_t session_id, uint32_t sequence,

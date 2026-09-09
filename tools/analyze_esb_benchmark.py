@@ -42,6 +42,7 @@ WIRE_NAMES = {
     0: "zmk",
     1: "heartbeat",
     2: "benchmark",
+    6: "key_state",
 }
 
 EVENT_NAMES = {

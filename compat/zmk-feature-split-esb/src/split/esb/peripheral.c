@@ -16,6 +16,15 @@
 #include <zephyr/sys/crc.h>
 #include <zephyr/sys/ring_buffer.h>
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/uart.h>
+#endif
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+#include <zephyr/sys/printk.h>
+#endif
+
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
@@ -33,7 +42,9 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <zmk/physical_layouts.h>
 
 #include <totem/esb_benchmark.h>
+#include <totem/esb_diagnostics.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+#include <totem/esb_backoff.h>
 #include <totem/esb_v3_crypto.h>
 #endif
 
@@ -56,15 +67,30 @@ BUILD_ASSERT(RX_BUFFER_SIZE <= CONFIG_ESB_MAX_PAYLOAD_LENGTH,
 RING_BUF_DECLARE(tx_buf, TX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_EVENT_BUFFER_ITEMS);
 static struct k_spinlock tx_ring_lock;
 
+/* Serialize physical key updates with edge/snapshot commits to the TX FIFO. */
+K_MUTEX_DEFINE(event_mutex);
+static struct esb_key_state_payload local_key_state;
+static void key_state_work_cb(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(key_state_work, key_state_work_cb);
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+static atomic_t transport_ready;
+#endif
+
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS)
 struct ring_buf rx_bufs[CONFIG_ESB_PIPE_COUNT];
-uint8_t rx_bufs_data[CONFIG_ESB_PIPE_COUNT][RX_RING_BUF_SIZE];
+/* ACK commands are accepted only on this half's own pipe. */
+uint8_t rx_bufs_data[RX_RING_BUF_SIZE];
 
 static const uint8_t peripheral_id = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID;
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID > 0,
              "Pipe 0 is reserved; peripheral IDs start at 1");
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID < CONFIG_ESB_PIPE_COUNT,
              "Peripheral ID must map to a configured ESB pipe");
+
+static void init_rx_buffers(void) {
+    ring_buf_init(&rx_bufs[peripheral_id], RX_RING_BUF_SIZE, rx_bufs_data);
+}
 
 static void process_rx_cb(uint8_t pipe);
 
@@ -79,8 +105,17 @@ static void begin_tx(void) {
     zmk_split_esb_tx(&state);
 }
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+static void handshake_radio_ack_cb(void);
+#endif
+
 void zmk_split_esb_on_ptx_esb_callback(app_esb_event_t *event) {
     zmk_split_esb_cb(event, &state);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (event->evt_type == APP_ESB_EVT_TX_SUCCESS) {
+        handshake_radio_ack_cb();
+    }
+#endif
 }
 
 static ssize_t get_payload_data_size(const struct zmk_split_transport_peripheral_event *evt) {
@@ -114,6 +149,10 @@ static uint8_t get_retry_count(const struct zmk_split_transport_peripheral_event
 }
 
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+BUILD_ASSERT(CONFIG_TOTEM_ESB_V3_HANDSHAKE_MAX_INTERVAL_MS >=
+                 CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS,
+             "Handshake backoff maximum must cover the initial probe interval");
+
 enum esb_v3_peripheral_state {
     ESB_V3_NO_SESSION = 0,
     ESB_V3_WAIT_CHALLENGE,
@@ -132,13 +171,18 @@ static uint32_t accepted_challenge_request = UINT32_MAX;
 static uint32_t downlink_sequence;
 static int64_t wait_session_ok_started_at;
 static uint8_t heartbeat_metric;
-K_MUTEX_DEFINE(event_mutex);
+static struct totem_esb_backoff handshake_backoff = {
+    .next_ms = CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS,
+};
+static atomic_t handshake_radio_ack;
 K_MSGQ_DEFINE(presession_events,
               sizeof(struct zmk_split_transport_peripheral_event),
               CONFIG_TOTEM_ESB_V3_PRESESSION_EVENT_QUEUE_SIZE, 4);
 #define ESB_V3_PRESESSION_FLUSH_BATCH 4U
 static void handshake_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(handshake_work, handshake_work_cb);
+static void handshake_wakeup_work_cb(struct k_work *work);
+static K_WORK_DEFINE(handshake_wakeup_work, handshake_wakeup_work_cb);
 static void flush_presession_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(flush_presession_work, flush_presession_work_cb);
 
@@ -148,6 +192,35 @@ static enum esb_v3_peripheral_state get_secure_state(void) {
 
 static void set_secure_state(enum esb_v3_peripheral_state next) {
     atomic_set(&secure_state, next);
+}
+
+static void handshake_radio_ack_cb(void) {
+    if (get_secure_state() != ESB_V3_ESTABLISHED) {
+        atomic_set(&handshake_radio_ack, 1);
+        /* IRQ-safe: never take event_mutex from the ESB radio callback. */
+        k_work_submit(&handshake_wakeup_work);
+    }
+}
+
+static void handshake_wakeup_work_cb(struct k_work *work) {
+    ARG_UNUSED(work);
+    k_mutex_lock(&event_mutex, K_FOREVER);
+    if (atomic_set(&handshake_radio_ack, 0) != 0 &&
+        get_secure_state() != ESB_V3_ESTABLISHED) {
+        /* Pick up the dongle's next ACK payload before its queue entry expires. */
+        totem_esb_backoff_reset(&handshake_backoff,
+                                CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
+        k_work_reschedule(&handshake_work, K_NO_WAIT);
+    }
+    k_mutex_unlock(&event_mutex);
+}
+
+static void schedule_handshake_retry(void) {
+    k_mutex_lock(&event_mutex, K_FOREVER);
+    uint32_t delay_ms = totem_esb_backoff_take(
+        &handshake_backoff, CONFIG_TOTEM_ESB_V3_HANDSHAKE_MAX_INTERVAL_MS);
+    k_work_reschedule(&handshake_work, K_MSEC(delay_ms));
+    k_mutex_unlock(&event_mutex);
 }
 
 static void clear_v3_traffic_session_locked(void) {
@@ -168,6 +241,9 @@ static void reset_v3_session_locked(enum esb_v3_peripheral_state next,
     peripheral_nonce = next_peripheral_nonce;
     root_sequence = 0;
     last_probe_sequence = 0;
+    totem_esb_backoff_reset(&handshake_backoff,
+                            CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
+    atomic_clear(&handshake_radio_ack);
 }
 
 static int begin_fresh_v3_handshake(void) {
@@ -201,9 +277,7 @@ static void restart_v3_after_auth_failure(void) {
     int err = begin_fresh_v3_handshake();
     if (err != 0) {
         LOG_ERR("ESB v3 auth-failure rekey nonce generation failed (%d)", err);
-        k_work_reschedule(
-            &handshake_work,
-            K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+        schedule_handshake_retry();
         return;
     }
     k_work_reschedule(&handshake_work, K_NO_WAIT);
@@ -225,6 +299,8 @@ static int enqueue_v3_frame(
         body_size = sizeof(event->type) + data_size;
     } else if (wire_type == ESB_WIRE_EVENT_V3_RECOVERY) {
         body_size = sizeof(struct esb_v3_recovery_payload);
+    } else if (wire_type == ESB_WIRE_EVENT_KEY_STATE) {
+        body_size = sizeof(struct esb_key_state_payload);
     } else if (wire_type != ESB_WIRE_EVENT_BENCHMARK &&
                wire_type != ESB_WIRE_EVENT_V3_HELLO &&
                wire_type != ESB_WIRE_EVENT_V3_READY) {
@@ -287,6 +363,8 @@ static int enqueue_v3_frame(
     };
     if (wire_type == ESB_WIRE_EVENT_ZMK) {
         env.payload.body.event = *event;
+    } else if (wire_type == ESB_WIRE_EVENT_KEY_STATE) {
+        env.payload.body.key_state = local_key_state;
     } else if (wire_type == ESB_WIRE_EVENT_V3_RECOVERY) {
         env.payload.body.recovery.active_session =
             get_secure_state() == ESB_V3_ESTABLISHED ? wire_session_id : 0;
@@ -308,6 +386,8 @@ static int enqueue_v3_frame(
     k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
     if (ring_buf_space_get(&tx_buf) < frame_size) {
         totem_esb_transport_queue_pressure(true);
+        /* A recovered driver must be retried even when no new frame fits. */
+        begin_tx();
         k_spin_unlock(&tx_ring_lock, key);
         k_mutex_unlock(&event_mutex);
         return -ENOSPC;
@@ -321,10 +401,12 @@ static int enqueue_v3_frame(
     uint8_t max_retry =
         event != NULL
             ? get_retry_count(event)
-            : ((wire_type == ESB_WIRE_EVENT_V3_HELLO ||
-                wire_type == ESB_WIRE_EVENT_V3_READY)
-                   ? 3
-                   : 1);
+            : (wire_type == ESB_WIRE_EVENT_KEY_STATE
+                   ? CONFIG_ZMK_SPLIT_ESB_RETRY_KEY_POSITION
+                   : ((wire_type == ESB_WIRE_EVENT_V3_HELLO ||
+                       wire_type == ESB_WIRE_EVENT_V3_READY)
+                          ? 3
+                          : 1));
     struct esb_msg_meta meta = {
         .msg_id = event_message_id,
         .max_retry = max_retry,
@@ -383,6 +465,8 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
         payload_size += data_size + sizeof(enum zmk_split_transport_peripheral_event_type);
     } else if (wire_type == ESB_WIRE_EVENT_HEARTBEAT) {
         payload_size += sizeof(struct totem_esb_link_metric_payload);
+    } else if (wire_type == ESB_WIRE_EVENT_KEY_STATE) {
+        payload_size += sizeof(struct esb_key_state_payload);
     }
 
     k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
@@ -413,6 +497,8 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
     };
     if (event != NULL) {
         env.payload.body.event = *event;
+    } else if (wire_type == ESB_WIRE_EVENT_KEY_STATE) {
+        env.payload.body.key_state = local_key_state;
     } else if (wire_type == ESB_WIRE_EVENT_HEARTBEAT) {
         env.payload.body.link_metric.metric = heartbeat_metric;
         env.payload.body.link_metric.value =
@@ -459,7 +545,9 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
 
     uint8_t max_retry =
         event != NULL ? get_retry_count(event)
-                      : (wire_type == ESB_WIRE_EVENT_HEARTBEAT ? 1 : 0);
+                      : (wire_type == ESB_WIRE_EVENT_KEY_STATE
+                             ? CONFIG_ZMK_SPLIT_ESB_RETRY_KEY_POSITION
+                             : (wire_type == ESB_WIRE_EVENT_HEARTBEAT ? 1 : 0));
     struct esb_msg_meta meta = {
         .msg_id = evt_msg_id,
         .max_retry = max_retry,
@@ -482,8 +570,7 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
 }
 #endif
 
-static int
-split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_event *event) {
+static int report_event_locked(const struct zmk_split_transport_peripheral_event *event) {
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     if (get_secure_state() != ESB_V3_ESTABLISHED ||
         k_msgq_num_used_get(&presession_events) > 0) {
@@ -519,6 +606,51 @@ split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_ev
         return 0;
     }
 #endif
+    return err;
+}
+
+static int
+split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_event *event) {
+    k_mutex_lock(&event_mutex, K_FOREVER);
+    bool key_event = event->type ==
+                     ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT;
+    if (key_event) {
+        uint32_t position = event->data.key_position_event.position;
+        if (position < CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX) {
+            uint8_t mask = BIT(position % 8U);
+            if (event->data.key_position_event.pressed) {
+                local_key_state.keys[position / 8U] |= mask;
+            } else {
+                local_key_state.keys[position / 8U] &= (uint8_t)~mask;
+            }
+        }
+    }
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (!atomic_get(&transport_ready)) {
+        /* Preserve startup edges without touching crypto or waking radio work. */
+        int err = k_msgq_put(&presession_events, event, K_NO_WAIT);
+        if (err != 0) {
+            totem_esb_transport_queue_pressure(true);
+            err = -ENOSPC;
+        }
+        k_mutex_unlock(&event_mutex);
+        return err;
+    }
+    if (key_event) {
+        if (get_secure_state() != ESB_V3_ESTABLISHED) {
+            /* Resume fast discovery immediately when the user starts typing. */
+            totem_esb_backoff_reset(&handshake_backoff,
+                                    CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
+            k_work_reschedule(&handshake_work, K_NO_WAIT);
+        }
+    }
+#endif
+    int err = report_event_locked(event);
+    if (key_event && err != 0) {
+        /* The local bitmap survives even when the edge queue is full. */
+        k_work_reschedule(&key_state_work, K_NO_WAIT);
+    }
+    k_mutex_unlock(&event_mutex);
     return err;
 }
 
@@ -564,9 +696,7 @@ static void handshake_work_cb(struct k_work *work) {
     enum esb_v3_peripheral_state current = get_secure_state();
     if (current == ESB_V3_NO_SESSION) {
         if (begin_fresh_v3_handshake() != 0) {
-            k_work_reschedule(
-                &handshake_work,
-                K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+            schedule_handshake_retry();
             return;
         }
         current = ESB_V3_WAIT_CHALLENGE;
@@ -588,9 +718,7 @@ static void handshake_work_cb(struct k_work *work) {
              * to send READY can never recover when the peer has no key.
              */
             if (begin_fresh_v3_handshake() != 0) {
-                k_work_reschedule(
-                    &handshake_work,
-                    K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+                schedule_handshake_retry();
                 return;
             }
             (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_HELLO, NULL);
@@ -600,14 +728,14 @@ static void handshake_work_cb(struct k_work *work) {
     } else {
         return;
     }
-    k_work_reschedule(
-        &handshake_work,
-        K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+    schedule_handshake_retry();
 }
 
 static void flush_presession_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
+    k_mutex_lock(&event_mutex, K_FOREVER);
     if (get_secure_state() != ESB_V3_ESTABLISHED) {
+        k_mutex_unlock(&event_mutex);
         return;
     }
     struct zmk_split_transport_peripheral_event event;
@@ -621,6 +749,7 @@ static void flush_presession_work_cb(struct k_work *work) {
                 k_work_reschedule(&handshake_work, K_NO_WAIT);
             }
             k_work_reschedule(&flush_presession_work, K_MSEC(1));
+            k_mutex_unlock(&event_mutex);
             return;
         }
         /*
@@ -630,15 +759,48 @@ static void flush_presession_work_cb(struct k_work *work) {
          */
         if (k_msgq_get(&presession_events, &event, K_NO_WAIT) != 0) {
             totem_esb_transport_queue_pressure(true);
+            k_mutex_unlock(&event_mutex);
             return;
         }
         flushed++;
     }
     if (k_msgq_num_used_get(&presession_events) > 0) {
         k_work_reschedule(&flush_presession_work, K_NO_WAIT);
+    } else {
+        /* Append current state only after every retained older edge. */
+        k_work_reschedule(&key_state_work, K_NO_WAIT);
     }
+    k_mutex_unlock(&event_mutex);
 }
 #endif
+
+static void key_state_work_cb(struct k_work *work) {
+    ARG_UNUSED(work);
+    k_mutex_lock(&event_mutex, K_FOREVER);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (get_secure_state() != ESB_V3_ESTABLISHED) {
+        k_mutex_unlock(&event_mutex);
+        return;
+    }
+    if (k_msgq_num_used_get(&presession_events) > 0) {
+        /* A snapshot must never be followed by an older presession edge. */
+        k_work_reschedule(&flush_presession_work, K_NO_WAIT);
+        k_mutex_unlock(&event_mutex);
+        return;
+    }
+#endif
+    int err = enqueue_wire_event(ESB_WIRE_EVENT_KEY_STATE, NULL);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (err == -EOVERFLOW && begin_fresh_v3_handshake() == 0) {
+        k_work_reschedule(&handshake_work, K_NO_WAIT);
+    }
+#endif
+    if (err == -ENOSPC) {
+        /* Preserve input capacity while a full radio queue drains. */
+        k_work_reschedule(&key_state_work, K_MSEC(10));
+    }
+    k_mutex_unlock(&event_mutex);
+}
 
 static void heartbeat_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(heartbeat_work, heartbeat_work_cb);
@@ -657,6 +819,7 @@ static void heartbeat_work_cb(struct k_work *work) {
 #else
     enqueue_wire_event(ESB_WIRE_EVENT_HEARTBEAT, NULL);
 #endif
+    k_work_reschedule(&key_state_work, K_NO_WAIT);
     k_work_reschedule(&heartbeat_work, K_MSEC(CONFIG_TOTEM_ESB_HEARTBEAT_INTERVAL_MS));
 }
 
@@ -858,6 +1021,8 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
         wire_session_id = session_id;
         accepted_challenge_request = request;
         wait_session_ok_started_at = k_uptime_get();
+        totem_esb_backoff_reset(&handshake_backoff,
+                                CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
         set_secure_state(ESB_V3_WAIT_SESSION_OK);
         k_mutex_unlock(&event_mutex);
         (void)enqueue_v3_frame(ESB_WIRE_EVENT_V3_READY, NULL);
@@ -930,16 +1095,21 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
 
 static int zmk_split_esb_peripheral_init(void) {
     int ret;
+    totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, -EINPROGRESS);
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     ret = totem_esb_v3_crypto_init();
     if (ret != 0) {
         LOG_ERR("Refusing to start plaintext fallback after crypto failure (%d)",
                 ret);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
+    totem_esb_diag_stage(TOTEM_DIAG_BOOT_NONCE, -EINPROGRESS);
     ret = begin_fresh_v3_handshake();
+    totem_esb_diag_stage(TOTEM_DIAG_BOOT_NONCE, ret);
     if (ret != 0) {
         LOG_ERR("Secure ESB boot nonce generation failed (%d)", ret);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
 #else
@@ -948,15 +1118,16 @@ static int zmk_split_esb_peripheral_init(void) {
         wire_session_id = 1;
     }
 #endif
-    for (int i = 0; i < CONFIG_ESB_PIPE_COUNT; i++) {
-        ring_buf_init(&rx_bufs[i], RX_RING_BUF_SIZE, rx_bufs_data[i]);
-    }
+    init_rx_buffers();
     ret = zmk_split_esb_init(APP_ESB_MODE_PTX, zmk_split_esb_on_ptx_esb_callback);
     if (ret < 0) {
         LOG_ERR("zmk_split_esb_init failed (ret %d)", ret);
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, ret);
         return ret;
     }
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    /* Publish readiness only after every synchronous initialization succeeded. */
+    atomic_set(&transport_ready, 1);
     k_work_schedule(&handshake_work, K_NO_WAIT);
 #endif
     k_work_schedule(&heartbeat_work, K_MSEC(CONFIG_TOTEM_ESB_HEARTBEAT_INTERVAL_MS));
@@ -964,13 +1135,71 @@ static int zmk_split_esb_peripheral_init(void) {
     k_work_schedule(&benchmark_work, K_USEC(CONFIG_TOTEM_ESB_BENCHMARK_PERIOD_US));
 #endif
     k_work_submit(&notify_status_work);
+    totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, 0);
     return 0;
 }
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+K_THREAD_STACK_DEFINE(peripheral_start_stack, 4096);
+static struct k_thread peripheral_start_thread;
+
+static void peripheral_start_thread_cb(void *unused1, void *unused2, void *unused3) {
+    ARG_UNUSED(unused1);
+    ARG_UNUSED(unused2);
+    ARG_UNUSED(unused3);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+    const struct device *console = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+    if (!device_is_ready(console)) {
+        totem_esb_diag_stage(TOTEM_DIAG_TRANSPORT, -ENODEV);
+        return;
+    }
+
+    printk("ESB_DIAG USB_START waiting_for_dtr source=%u\n", peripheral_id);
+    uint32_t dtr = 0;
+    while (uart_line_ctrl_get(console, UART_LINE_CTRL_DTR, &dtr) != 0 || !dtr) {
+        k_msleep(100);
+    }
+    k_msleep(1000);
+    printk("ESB_DIAG USB_START transport_init source=%u stack=4096\n", peripheral_id);
+    /* Let the independent USB queues deliver the marker before crypto starts. */
+    k_msleep(200);
+#elif IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+#if CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS > 0
+    printk("ESB_DIAG DELAY_START delay_ms=%u\n",
+           (unsigned int)CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS);
+    k_msleep(CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS);
+#endif
+    printk("ESB_DIAG AUTO_START transport_init source=%u stack=4096\n", peripheral_id);
+#endif
+    int ret = zmk_split_esb_peripheral_init();
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
+    printk("ESB_DIAG USB_START transport_return source=%u result=%d\n", peripheral_id, ret);
+#elif IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+    printk("ESB_DIAG AUTO_START transport_return source=%u result=%d\n", peripheral_id, ret);
+#else
+    ARG_UNUSED(ret);
+#endif
+}
+
+static int peripheral_start_init(void) {
+    /* Keep secure startup off the main init stack and shared workqueues. */
+    k_thread_create(&peripheral_start_thread, peripheral_start_stack,
+                    K_THREAD_STACK_SIZEOF(peripheral_start_stack),
+                    peripheral_start_thread_cb, NULL, NULL, NULL,
+                    K_PRIO_PREEMPT(5), 0, K_NO_WAIT);
+    return 0;
+}
+
+SYS_INIT(peripheral_start_init, APPLICATION, 99);
+#else
 SYS_INIT(zmk_split_esb_peripheral_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif
 
 static void process_rx_work_cb(struct k_work *work) {
     for (int pipe = 0; pipe < CONFIG_ESB_PIPE_COUNT; pipe++) {
+        if (pipe != peripheral_id) {
+            continue;
+        }
         struct ring_buf *rx_buf = &state.rx_bufs[pipe];
         while (ring_buf_size_get(rx_buf) > ESB_MSG_WIRE_MIN_SIZE) {
             struct esb_command_envelope env = {0};
@@ -996,6 +1225,15 @@ static void process_rx_work_cb(struct k_work *work) {
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
                 {
                     int secure_err = process_v3_downlink(&env);
+                    if (secure_err == 0) {
+                        /* Count authenticated, accepted handshake receptions. */
+                        if (env.payload.wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
+                            totem_esb_diag_event(TOTEM_DIAG_CHALLENGE, 0);
+                        } else if (env.payload.wire_type ==
+                                   ESB_WIRE_COMMAND_V3_SESSION_OK) {
+                            totem_esb_diag_event(TOTEM_DIAG_SESSION_OK, 0);
+                        }
+                    }
                     if (secure_err != 0 && secure_err != -EALREADY) {
                         totem_esb_benchmark_rx_invalid(pipe, secure_err);
                     }

@@ -10,6 +10,7 @@
 //
 // ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
 
+#include "mouse-tuning.h"
 #include <input/processors.dtsi>
 #include <behaviors.dtsi>
 #include <dt-bindings/zmk/keys.h>
@@ -39,7 +40,7 @@
     quick-tap-ms = <150>;
 };
 
-&mmv { acceleration-exponent = <2>; };
+#include "mouse-tuning.dtsi"
 
 / {
     behaviors {
@@ -55,10 +56,9 @@
         };
 
         swapper: swapper {
-            compatible = "zmk,behavior-tri-state";
+            compatible = "totem,behavior-owned-swapper";
             label = "SWAPPER";
             #binding-cells = <0>;
-            bindings = <&kt LALT>, <&kp TAB>, <&kt LALT>;
 
             ignored-key-positions = <2 3 7 16 17 18>;  // 키 위치를 숫자로 변환 필요
         };
@@ -117,7 +117,7 @@
         AutoLayer_3: AutoLayer_3 {
             compatible = "zmk,behavior-hold-tap";
             label = "AUTOLAYER_3";
-            bindings = <&AutoLayer_2>, <&AutoLayer_1>;
+            bindings = <&kp>, <&AutoLayer_1>;
 
             #binding-cells = <2>;
             flavor = "tap-preferred";
@@ -425,21 +425,23 @@
         AutoLayer_Fast: AutoLayer_Fast {
             compatible = "zmk,behavior-hold-tap";
             label = "AUTOLAYER_FAST";
-            bindings = <&Mouse_Fast>, <&AutoLayer_1>;
+            bindings = <&mo>, <&AutoLayer_1>;
 
             #binding-cells = <2>;
-            tapping-term-ms = <180>;
+            tapping-term-ms = <TOTEM_MOUSE_TAPPING_TERM_MS>;
             flavor = "tap-preferred";
+            hold-while-undecided;
         };
 
         AutoLayer_Slow: AutoLayer_Slow {
             compatible = "zmk,behavior-hold-tap";
             label = "AUTOLAYER_SLOW";
-            bindings = <&Mouse_Slow>, <&AutoLayer_1>;
+            bindings = <&mo>, <&AutoLayer_1>;
 
             #binding-cells = <2>;
-            tapping-term-ms = <180>;
+            tapping-term-ms = <TOTEM_MOUSE_TAPPING_TERM_MS>;
             flavor = "tap-preferred";
+            hold-while-undecided;
         };
 
         Nav_Ctrl: Nav_Ctrl {
@@ -748,30 +750,9 @@
         };
 
         AutoLayer_1: atlayertab {
-            compatible = "zmk,behavior-macro-one-param";
+            compatible = "totem,behavior-auto-base";
             #binding-cells = <1>;
-            bindings =
-                <&macro_tap>,
-                <&macro_param_1to1 &kp MACRO_PLACEHOLDER &to 0>;
-
             label = "atlayertab";
-            wait-ms = <0>;
-            tap-ms = <0>;
-        };
-
-        AutoLayer_2: atlayerhm {
-            compatible = "zmk,behavior-macro-one-param";
-            #binding-cells = <1>;
-            bindings =
-                <&macro_press>,
-                <&macro_param_1to1 &kp MACRO_PLACEHOLDER>,
-                <&macro_pause_for_release>,
-                <&macro_release>,
-                <&macro_param_1to1 &kp MACRO_PLACEHOLDER>;
-
-            label = "atlayerhm";
-            wait-ms = <0>;
-            tap-ms = <0>;
         };
 
         esccombo: esccombo {
@@ -893,34 +874,6 @@
             wait-ms = <0>;
         };
 
-        Mouse_Fast: Mouse_Fast {
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings =
-                <&macro_press>,
-                <&mo 2 &kp F23>,
-                <&macro_pause_for_release>,
-                <&macro_release>,
-                <&mo 2 &kp F23>;
-
-            label = "MOUSE_FAST";
-            wait-ms = <0>;
-        };
-
-        Mouse_Slow: Mouse_Slow {
-            compatible = "zmk,behavior-macro";
-            #binding-cells = <0>;
-            bindings =
-                <&macro_press>,
-                <&mo 3 &kp F22>,
-                <&macro_pause_for_release>,
-                <&macro_release>,
-                <&mo 3 &kp F22>;
-
-            label = "MOUSE_SLOW";
-            wait-ms = <0>;
-        };
-
         CtrlShift: CtrlShift {
             compatible = "zmk,behavior-macro";
             #binding-cells = <0>;
@@ -954,7 +907,7 @@
         Mouse {
             display-name = "Mouse";
             bindings = <
-        &AutoLayer_1 LC(LS(LA(P)))  &AutoLayer_4 9 W         &AutoLayer_Fast 0 E   &AutoLayer_Slow 0 R        &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
+        &AutoLayer_1 LC(LS(LA(P)))  &AutoLayer_4 9 W         &AutoLayer_Fast Acc E &AutoLayer_Slow Prec R     &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
         &At_Gui                     &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
 &trans  &AutoLayer_3 LEFT_GUI Z     &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
                                                              &trans                &trans                     &mkp MB1          &trans           &trans          &trans

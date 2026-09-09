@@ -3,8 +3,20 @@
 
 zephyr_library()
 
+# Keymap behaviors run on the central (also in the retained BLE builds).
+if((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    target_sources(app PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_auto_base.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_mouse_move.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_owned_swapper.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/owned_swapper_replay_listener.c)
+    target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/owned-swapper-order.cmake)
+endif()
+
 set(TOTEM_WEST_TOPDIR "${APPLICATION_SOURCE_DIR}/../..")
 set(TOTEM_ESB_MODULE_DIR "${TOTEM_WEST_TOPDIR}/zmk-feature-split-esb")
+set(TOTEM_NRF_MODULE_DIR "${TOTEM_WEST_TOPDIR}/nrf")
 set(TOTEM_PROSPECTOR_MODULE_DIR "${TOTEM_WEST_TOPDIR}/prospector-zmk-module")
 set(TOTEM_ZMK_CENTRAL_H "${APPLICATION_SOURCE_DIR}/include/zmk/split/central.h")
 
@@ -22,6 +34,22 @@ function(totem_restore_pinned_file UPSTREAM_FILE)
         configure_file("${UPSTREAM_BACKUP}" "${UPSTREAM_FILE}" COPYONLY)
     endif()
 endfunction()
+
+# Owned Alt updates HID state directly, so its display notification must also
+# be observed in retained BLE central builds. Restore the pinned widget when
+# another keymap/configuration does not use this behavior in the same workspace.
+set(TOTEM_MODIFIER_WIDGET
+    "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/modifier_indicator.c")
+if(EXISTS "${TOTEM_MODIFIER_WIDGET}")
+    if(((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL) AND
+       CONFIG_DT_HAS_TOTEM_BEHAVIOR_OWNED_SWAPPER_ENABLED)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/layouts/operator/modifier_indicator.c"
+            "${TOTEM_MODIFIER_WIDGET}")
+    else()
+        totem_restore_pinned_file("${TOTEM_MODIFIER_WIDGET}")
+    endif()
+endif()
 
 # The pinned upstream ESB module edits this ZMK header in place. Always make
 # configuration deterministic so an ESB build cannot contaminate a later BLE
@@ -46,6 +74,13 @@ if(EXISTS "${TOTEM_ZMK_CENTRAL_H}")
 endif()
 
 if(CONFIG_TOTEM_ESB_COMPAT)
+    # The pinned SDK needs per-pipe ACK cleanup to preserve the other half's
+    # RX/PID state when an offline peer's pending response expires.
+    foreach(TOTEM_NRF_FILE include/esb.h subsys/esb/esb.c)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/sdk-nrf/${TOTEM_NRF_FILE}"
+            "${TOTEM_NRF_MODULE_DIR}/${TOTEM_NRF_FILE}")
+    endforeach()
     if(NOT EXISTS "${TOTEM_ESB_MODULE_DIR}/src/split/esb/central.c")
         message(FATAL_ERROR "Pinned zmk-feature-split-esb project was not found")
     endif()
@@ -58,6 +93,7 @@ if(CONFIG_TOTEM_ESB_COMPAT)
 
     zephyr_include_directories(include)
     zephyr_library_sources(src/totem_esb_hooks.c)
+    zephyr_library_sources_ifdef(CONFIG_TOTEM_ESB_DIAGNOSTICS src/esb_diagnostics.c)
 
     if(CONFIG_TOTEM_ESB_V3)
         function(totem_esb_v3_hex_key_to_initializer KEY_HEX OUTPUT_VARIABLE)
@@ -114,7 +150,7 @@ if(CONFIG_TOTEM_ESB_COMPAT)
         totem_overlay_pinned_file(
             "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/src/split/bluetooth/central_status_changed_observer.c"
             "${TOTEM_PROSPECTOR_MODULE_DIR}/src/split/bluetooth/central_status_changed_observer.c")
-        foreach(TOTEM_OPERATOR_FILE output.c output.h)
+        foreach(TOTEM_OPERATOR_FILE output.c output.h battery_circles.c wpm_meter.c)
             totem_overlay_pinned_file(
                 "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}"
                 "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}")
@@ -124,11 +160,14 @@ if(CONFIG_TOTEM_ESB_COMPAT)
             PERIPHERAL_COUNT=${CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT})
     endif()
 else()
-    # An ESB configure overlays three files in the pinned Prospector checkout.
+    foreach(TOTEM_NRF_FILE include/esb.h subsys/esb/esb.c)
+        totem_restore_pinned_file("${TOTEM_NRF_MODULE_DIR}/${TOTEM_NRF_FILE}")
+    endforeach()
+    # Restore ESB widget changes before a standard BLE build in this workspace.
     # Restore them before any subsequent standard BLE build in this workspace.
     totem_restore_pinned_file(
         "${TOTEM_PROSPECTOR_MODULE_DIR}/src/split/bluetooth/central_status_changed_observer.c")
-    foreach(TOTEM_OPERATOR_FILE output.c output.h)
+    foreach(TOTEM_OPERATOR_FILE output.c output.h battery_circles.c wpm_meter.c)
         totem_restore_pinned_file(
             "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}")
     endforeach()

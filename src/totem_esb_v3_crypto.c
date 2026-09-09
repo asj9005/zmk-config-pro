@@ -16,10 +16,30 @@
 #include <zephyr/sys/util.h>
 
 #include <totem/esb_benchmark.h>
+#include <totem/esb_diagnostics.h>
 #include <totem/esb_v3_crypto.h>
 #include <totem/esb_v3_keys.h>
 
 LOG_MODULE_REGISTER(totem_esb_v3_crypto, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+#include <zephyr/sys/printk.h>
+/* Checkpoint numbers identify operations only; never print cryptographic data. */
+#define KAT_PSA_DIAG(checkpoint, status, result)                                      \
+    do {                                                                           \
+    totem_esb_diag_kat((checkpoint), (int)(status));                                  \
+    printk("ESB_DIAG KAT checkpoint=%d psa=%d result=%s\n",                         \
+           (checkpoint), (int)(status), (result));                                  \
+    } while (0)
+#define KAT_IMPORT_DIAG(checkpoint, err)                                             \
+    do {                                                                           \
+    totem_esb_diag_kat((checkpoint), (err));                                          \
+    printk("ESB_DIAG KAT checkpoint=%d import_errno=%d\n", (checkpoint), (err));     \
+    } while (0)
+#else
+#define KAT_PSA_DIAG(checkpoint, status, result) ((void)0)
+#define KAT_IMPORT_DIAG(checkpoint, err) ((void)0)
+#endif
 
 #define TOTEM_ESB_V3_LINK_COUNT 2U
 #define TOTEM_ESB_V3_CCM_ALG                                                               \
@@ -76,7 +96,7 @@ static int import_aes_key(const uint8_t key[TOTEM_ESB_V3_KEY_SIZE],
     return status_to_errno(status);
 }
 
-static bool ccm_known_answer_rejects(
+static psa_status_t ccm_known_answer_decrypt_status(
     psa_key_id_t key_id, const uint8_t nonce[TOTEM_ESB_V3_NONCE_SIZE],
     const uint8_t *aad, size_t aad_len, const uint8_t *ciphertext,
     size_t ciphertext_len, size_t plaintext_len) {
@@ -86,7 +106,7 @@ static bool ccm_known_answer_rejects(
         key_id, TOTEM_ESB_V3_CCM_ALG, nonce, TOTEM_ESB_V3_NONCE_SIZE, aad,
         aad_len, ciphertext, ciphertext_len, output, plaintext_len, &output_len);
     mbedtls_platform_zeroize(output, sizeof(output));
-    return status == PSA_ERROR_INVALID_SIGNATURE;
+    return status;
 }
 
 static void destroy_key(psa_key_id_t *key_id) {
@@ -144,6 +164,7 @@ static int run_known_answer_tests(void) {
     uint8_t cmac_output[TOTEM_ESB_V3_KEY_SIZE];
     int err = import_aes_key(key, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT,
                              TOTEM_ESB_V3_CCM_ALG, &kat_key);
+    KAT_IMPORT_DIAG(1, err);
     if (err != 0) {
         return err;
     }
@@ -155,9 +176,11 @@ static int run_known_answer_tests(void) {
         &ciphertext_len);
     if (status != PSA_SUCCESS || ciphertext_len != sizeof(expected) ||
         memcmp(ciphertext, expected, sizeof(expected)) != 0) {
+        KAT_PSA_DIAG(2, status, "fail");
         err = -EIO;
         goto out;
     }
+    KAT_PSA_DIAG(2, status, "pass");
 
     size_t decrypted_len = 0;
     status = psa_aead_decrypt(
@@ -165,42 +188,56 @@ static int run_known_answer_tests(void) {
         ciphertext, ciphertext_len, decrypted, sizeof(decrypted), &decrypted_len);
     if (status != PSA_SUCCESS || decrypted_len != sizeof(plaintext) ||
         memcmp(decrypted, plaintext, sizeof(plaintext)) != 0) {
+        KAT_PSA_DIAG(3, status, "fail");
         err = -EIO;
         goto out;
     }
+    KAT_PSA_DIAG(3, status, "pass");
 
     memcpy(tampered, ciphertext, sizeof(tampered));
     tampered[0] ^= 1U;
-    if (!ccm_known_answer_rejects(
-            kat_key, nonce, aad, sizeof(aad), tampered, sizeof(tampered),
-            sizeof(plaintext))) {
+    status = ccm_known_answer_decrypt_status(
+        kat_key, nonce, aad, sizeof(aad), tampered, sizeof(tampered),
+        sizeof(plaintext));
+    KAT_PSA_DIAG(4, status, status == PSA_ERROR_INVALID_SIGNATURE
+                                ? "expected-reject" : "fail");
+    if (status != PSA_ERROR_INVALID_SIGNATURE) {
         err = -EIO;
         goto out;
     }
 
     memcpy(tampered, ciphertext, sizeof(tampered));
     tampered[sizeof(tampered) - 1U] ^= 1U;
-    if (!ccm_known_answer_rejects(
-            kat_key, nonce, aad, sizeof(aad), tampered, sizeof(tampered),
-            sizeof(plaintext))) {
+    status = ccm_known_answer_decrypt_status(
+        kat_key, nonce, aad, sizeof(aad), tampered, sizeof(tampered),
+        sizeof(plaintext));
+    KAT_PSA_DIAG(5, status, status == PSA_ERROR_INVALID_SIGNATURE
+                                ? "expected-reject" : "fail");
+    if (status != PSA_ERROR_INVALID_SIGNATURE) {
         err = -EIO;
         goto out;
     }
 
     memcpy(tampered_aad, aad, sizeof(tampered_aad));
     tampered_aad[0] ^= 1U;
-    if (!ccm_known_answer_rejects(
-            kat_key, nonce, tampered_aad, sizeof(tampered_aad), ciphertext,
-            ciphertext_len, sizeof(plaintext))) {
+    status = ccm_known_answer_decrypt_status(
+        kat_key, nonce, tampered_aad, sizeof(tampered_aad), ciphertext,
+        ciphertext_len, sizeof(plaintext));
+    KAT_PSA_DIAG(6, status, status == PSA_ERROR_INVALID_SIGNATURE
+                                ? "expected-reject" : "fail");
+    if (status != PSA_ERROR_INVALID_SIGNATURE) {
         err = -EIO;
         goto out;
     }
 
     memcpy(tampered_nonce, nonce, sizeof(tampered_nonce));
     tampered_nonce[0] ^= 1U;
-    if (!ccm_known_answer_rejects(
-            kat_key, tampered_nonce, aad, sizeof(aad), ciphertext,
-            ciphertext_len, sizeof(plaintext))) {
+    status = ccm_known_answer_decrypt_status(
+        kat_key, tampered_nonce, aad, sizeof(aad), ciphertext,
+        ciphertext_len, sizeof(plaintext));
+    KAT_PSA_DIAG(7, status, status == PSA_ERROR_INVALID_SIGNATURE
+                                ? "expected-reject" : "fail");
+    if (status != PSA_ERROR_INVALID_SIGNATURE) {
         err = -EIO;
         goto out;
     }
@@ -210,13 +247,17 @@ static int run_known_answer_tests(void) {
     err = import_aes_key(
         wrong_key_bytes, PSA_KEY_USAGE_ENCRYPT | PSA_KEY_USAGE_DECRYPT,
         TOTEM_ESB_V3_CCM_ALG, &wrong_key);
+    KAT_IMPORT_DIAG(8, err);
     mbedtls_platform_zeroize(wrong_key_bytes, sizeof(wrong_key_bytes));
     if (err != 0) {
         goto out;
     }
-    if (!ccm_known_answer_rejects(
-            wrong_key, nonce, aad, sizeof(aad), ciphertext, ciphertext_len,
-            sizeof(plaintext))) {
+    status = ccm_known_answer_decrypt_status(
+        wrong_key, nonce, aad, sizeof(aad), ciphertext, ciphertext_len,
+        sizeof(plaintext));
+    KAT_PSA_DIAG(9, status, status == PSA_ERROR_INVALID_SIGNATURE
+                                ? "expected-reject" : "fail");
+    if (status != PSA_ERROR_INVALID_SIGNATURE) {
         err = -EIO;
         goto out;
     }
@@ -224,6 +265,7 @@ static int run_known_answer_tests(void) {
 
     err = import_aes_key(
         key, PSA_KEY_USAGE_SIGN_MESSAGE, PSA_ALG_CMAC, &cmac_key);
+    KAT_IMPORT_DIAG(10, err);
     if (err != 0) {
         goto out;
     }
@@ -234,10 +276,12 @@ static int run_known_answer_tests(void) {
     if (status != PSA_SUCCESS ||
         cmac_output_len != sizeof(expected_cmac) ||
         memcmp(cmac_output, expected_cmac, sizeof(expected_cmac)) != 0) {
+        KAT_PSA_DIAG(11, status, "fail");
         mbedtls_platform_zeroize(cmac_output, sizeof(cmac_output));
         err = -EIO;
         goto out;
     }
+    KAT_PSA_DIAG(11, status, "pass");
     mbedtls_platform_zeroize(cmac_output, sizeof(cmac_output));
     err = 0;
 
@@ -276,18 +320,23 @@ int totem_esb_v3_crypto_init(void) {
         return 0;
     }
 
+    totem_esb_diag_stage(TOTEM_DIAG_CRYPTO_INIT, -EINPROGRESS);
     psa_status_t status = psa_crypto_init();
+    totem_esb_diag_stage(TOTEM_DIAG_CRYPTO_INIT, status_to_errno(status));
     if (status != PSA_SUCCESS) {
         LOG_ERR("PSA crypto initialization failed (%d)", status);
         return status_to_errno(status);
     }
 
+    totem_esb_diag_stage(TOTEM_DIAG_CRYPTO_KAT, -EINPROGRESS);
     int err = run_known_answer_tests();
+    totem_esb_diag_stage(TOTEM_DIAG_CRYPTO_KAT, err);
     if (err != 0) {
         LOG_ERR("AES-CCM/MIC4 or CMAC known-answer self-test failed (%d)", err);
         return err;
     }
 
+    totem_esb_diag_stage(TOTEM_DIAG_CRYPTO_ROOTS, -EINPROGRESS);
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
     static const uint8_t left_key[TOTEM_ESB_V3_KEY_SIZE] = {
         TOTEM_ESB_V3_LEFT_KEY_BYTES};
@@ -306,6 +355,7 @@ int totem_esb_v3_crypto_init(void) {
                  "ESB v3 supports Totem peripheral IDs 1 and 2");
     err = import_link_roots(source, local_key);
 #endif
+    totem_esb_diag_stage(TOTEM_DIAG_CRYPTO_ROOTS, err);
     if (err != 0) {
         LOG_ERR("Unable to import ESB v3 link key (%d)", err);
         return err;

@@ -4,8 +4,6 @@ manifest:
       url-base: https://github.com/zmkfirmware
     - name: carrefinho
       url-base: https://github.com/carrefinho
-    - name: urob
-      url-base: https://github.com/urob
     - name: badjeff
       url-base: https://github.com/badjeff
     - name: nrfconnect
@@ -69,9 +67,5 @@ manifest:
     - name: prospector-zmk-module
       remote: carrefinho
       revision: ed98221f3b52b7066dbb10ba3af8a29150b93a5a
-    - name: zmk-tri-state
-      remote: urob
-      revision: 2007896c6d5bfb519e8babccf8633841c5647d8b
-      path: modules/zmk/tri-state
   self:
     path: config

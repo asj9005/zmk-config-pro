@@ -58,7 +58,15 @@ enum esb_wire_event_type {
     ESB_WIRE_EVENT_V3_RECOVERY,
     ESB_WIRE_EVENT_V3_READY,
 #endif
+    /* Keep every existing wire value; snapshots use the same value in v2/v3. */
+    ESB_WIRE_EVENT_KEY_STATE = 6,
 };
+
+#define ESB_KEY_STATE_BYTES ((CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX + 7) / 8)
+
+struct esb_key_state_payload {
+    uint8_t keys[ESB_KEY_STATE_BYTES];
+} __packed;
 
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 enum esb_wire_command_type {
@@ -94,6 +102,7 @@ struct esb_event_payload {
     union {
         struct zmk_split_transport_peripheral_event event;
         struct totem_esb_link_metric_payload link_metric;
+        struct esb_key_state_payload key_state;
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
         struct esb_v3_recovery_payload recovery;
 #endif

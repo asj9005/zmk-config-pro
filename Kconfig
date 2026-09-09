@@ -21,6 +21,16 @@ config TOTEM_ESB_PROSPECTOR
     depends on TOTEM_ESB_COMPAT && ZMK_SPLIT_ROLE_CENTRAL
     default n
 
+config TOTEM_ESB_DIAGNOSTICS
+    bool "Print ESB initialization and link counters to the console"
+    depends on TOTEM_ESB_COMPAT
+    select PRINTK
+    default n
+    help
+      Reports startup results and aggregate link counters every five seconds.
+      Does not print keys or packet contents. Enable only in diagnostic builds;
+      console output changes timing and is not a latency benchmark.
+
 config TOTEM_ESB_V3
     bool "Enable authenticated/encrypted Totem ESB v3 transport"
     depends on TOTEM_ESB_COMPAT
@@ -29,6 +39,31 @@ config TOTEM_ESB_V3
       Replaces the v2 CRC32 postfix with AES-128-CCM encryption and a
       BLE-sized 4-byte MIC. A two-nonce authenticated handshake establishes
       a fresh session before ZMK events or commands are accepted.
+
+config TOTEM_ESB_DIAGNOSTIC_USB_START
+    bool "Wait for a USB console before starting peripheral ESB diagnostics"
+    depends on TOTEM_ESB_DIAGNOSTICS && TOTEM_ESB_V3
+    depends on !ZMK_SPLIT_ROLE_CENTRAL && !ZMK_SPLIT_ESB_USE_TIMESLOT
+    depends on USB_DEVICE_STACK && UART_CONSOLE && UART_LINE_CTRL
+    default n
+    help
+      Diagnostic-only startup isolation for a half whose USB enumeration fails.
+      Start ESB on a dedicated 4096-byte thread only after the USB console DTR
+      is asserted. Preserve early input until transport initialization completes and
+      pause briefly at initialization checkpoints so USB can deliver logs.
+      This changes initialization order, stack and timing; it is not a fix or
+      a battery-only firmware. It does not bypass encryption or key checks.
+
+config TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS
+    int "Delay peripheral ESB diagnostic startup in milliseconds"
+    depends on TOTEM_ESB_DIAGNOSTICS && TOTEM_ESB_V3
+    depends on !ZMK_SPLIT_ROLE_CENTRAL && !TOTEM_ESB_DIAGNOSTIC_USB_START
+    default 0
+    range 0 10000
+    help
+      Delay secure transport initialization once on its dedicated startup thread.
+      This isolates startup timing without requiring USB console DTR or changing
+      initialization checkpoints. Leave at zero outside controlled diagnostics.
 
 config TOTEM_ESB_V3_CI_TEST_KEYS
     bool "Use public disposable ESB v3 CI test keys"
@@ -73,6 +108,15 @@ config TOTEM_ESB_V3_SESSION_OK_TIMEOUT_MS
       in WAIT_SESSION_OK for this long. This recovers after the central has
       discarded a pending key during an extended RF outage.
 
+config TOTEM_ESB_V3_HANDSHAKE_MAX_INTERVAL_MS
+    int "Maximum ESB v3 offline probe interval in milliseconds"
+    depends on TOTEM_ESB_V3 && !ZMK_SPLIT_ROLE_CENTRAL
+    default 1000
+    range 100 5000
+    help
+      Back off unsuccessful HELLO/READY probes up to this interval. A key
+      transition or handshake progress resumes the initial fast interval.
+
 config TOTEM_ESB_V3_PENDING_TIMEOUT_MS
     int "ESB v3 central pending-session timeout in milliseconds"
     depends on TOTEM_ESB_V3 && ZMK_SPLIT_ROLE_CENTRAL
@@ -101,6 +145,25 @@ config TOTEM_ESB_PEER_TIMEOUT_MS
     depends on TOTEM_ESB_COMPAT && ZMK_SPLIT_ROLE_CENTRAL
     default 1500
     range 250 30000
+
+config TOTEM_ESB_ACK_TTL_MS
+    int "Lifetime of a queued ESB downlink in milliseconds"
+    depends on TOTEM_ESB_COMPAT
+    default 1500
+    range 500 30000
+    help
+      Expire undelivered ACK payloads so an offline half cannot pin shared
+      radio FIFO space. Handshake messages are retried by their state machine.
+
+config TOTEM_ESB_HF_IDLE_MS
+    int "PTX high-frequency clock idle grace period in milliseconds"
+    depends on TOTEM_ESB_COMPAT
+    default 10
+    range 1 1000
+    help
+      Keep the clock running across typing bursts, then release the PTX
+      request once the hardware and software queues are idle. PRX keeps its
+      clock running to receive asynchronous peripheral packets.
 
 config TOTEM_ESB_BENCHMARK
     bool "Enable ESB sequence/latency benchmark logging"
