@@ -38,3 +38,19 @@ properties:
     type: int
     default: 1
     description: Positive denominator of the final speed multiplier.
+  fast-layer:
+    type: int
+    default: -1
+    description: Layer ID for constant fast movement, or -1 to disable. Wins over precise-layer.
+  precise-layer:
+    type: int
+    default: -1
+    description: Layer ID for constant precise movement, or -1 to disable.
+  fast-speed:
+    type: array
+    default: [1, 1]
+    description: Positive numerator and denominator of absolute fast movement units per second.
+  precise-speed:
+    type: array
+    default: [1, 1]
+    description: Positive numerator and denominator of absolute precise movement units per second.

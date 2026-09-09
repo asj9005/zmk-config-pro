@@ -17,6 +17,7 @@
 #include <zephyr/sys/util.h> // CLAMP
 
 #include <zmk/behavior.h>
+#include <zmk/keymap.h>
 #include <dt-bindings/zmk/pointing.h>
 #include <totem/pointing_curve.h>
 
@@ -31,8 +32,15 @@ struct vector2d {
     float y;
 };
 
+enum mouse_speed_mode {
+    MOUSE_SPEED_NORMAL,
+    MOUSE_SPEED_FAST,
+    MOUSE_SPEED_PRECISE,
+    MOUSE_SPEED_MODE_COUNT,
+};
+
 struct movement_state_1d {
-    float remainder;
+    float remainder[MOUSE_SPEED_MODE_COUNT];
     int16_t speed;
     int64_t start_time;
 };
@@ -62,7 +70,26 @@ struct behavior_input_two_axis_config {
     uint16_t acceleration_boost_start_ms;
     uint16_t acceleration_boost_numerator;
     uint16_t acceleration_boost_denominator;
+    int16_t fast_layer;
+    int16_t precise_layer;
+    float fast_speed;
+    float precise_speed;
 };
+
+static enum mouse_speed_mode current_speed_mode(const struct behavior_input_two_axis_config *cfg) {
+    zmk_keymap_layers_state_t layers = zmk_keymap_layer_state();
+    zmk_keymap_layer_id_t default_layer = zmk_keymap_layer_default();
+    if (default_layer < 32) {
+        layers |= BIT(default_layer);
+    }
+    if (cfg->fast_layer >= 0 && (layers & BIT(cfg->fast_layer))) {
+        return MOUSE_SPEED_FAST;
+    }
+    if (cfg->precise_layer >= 0 && (layers & BIT(cfg->precise_layer))) {
+        return MOUSE_SPEED_PRECISE;
+    }
+    return MOUSE_SPEED_NORMAL;
+}
 
 static int64_t ticks_since_start(int64_t start, int64_t now, int64_t delay) {
     if (start == 0) {
@@ -104,7 +131,11 @@ static inline uint8_t get_acceleration_exponent(const struct behavior_input_two_
 #endif // IS_ENABLED(CONFIG_ZMK_POINTING_SMOOTH_SCROLLING)
 
 static float speed(const struct behavior_input_two_axis_config *config, uint16_t code,
-                   float max_speed, int64_t duration_ticks) {
+                   float max_speed, int64_t duration_ticks, enum mouse_speed_mode mode) {
+    if (mode != MOUSE_SPEED_NORMAL) {
+        float fixed = mode == MOUSE_SPEED_FAST ? config->fast_speed : config->precise_speed;
+        return max_speed == 0 ? 0 : (max_speed > 0 ? fixed : -fixed);
+    }
     uint8_t accel_exp = get_acceleration_exponent(config, code);
 
     uint32_t duration_ms = (uint32_t)MIN(
@@ -122,31 +153,35 @@ static void track_remainder(float *move, float *remainder) {
 }
 
 static float update_movement_1d(const struct behavior_input_two_axis_config *config, uint16_t code,
-                                struct movement_state_1d *state, int64_t now) {
+                                struct movement_state_1d *state, int64_t now,
+                                enum mouse_speed_mode mode) {
     float move = 0;
     if (state->speed == 0) {
-        state->remainder = 0;
+        for (int i = 0; i < MOUSE_SPEED_MODE_COUNT; i++) {
+            state->remainder[i] = 0;
+        }
         return move;
     }
 
     int64_t move_duration = ticks_since_start(state->start_time, now, config->delay_ms);
-    LOG_DBG("Calculated speed: %f", (double)speed(config, code, state->speed, move_duration));
+    LOG_DBG("Calculated speed: %f", (double)speed(config, code, state->speed, move_duration, mode));
     move =
         (move_duration > 0)
-            ? (speed(config, code, state->speed, move_duration) * config->trigger_period_ms / 1000)
+            ? (speed(config, code, state->speed, move_duration, mode) * config->trigger_period_ms / 1000)
             : 0;
 
-    track_remainder(&(move), &(state->remainder));
+    track_remainder(&(move), &(state->remainder[mode]));
 
     return move;
 }
 static struct vector2d update_movement_2d(const struct behavior_input_two_axis_config *config,
-                                          struct movement_state_2d *state, int64_t now) {
+                                          struct movement_state_2d *state, int64_t now,
+                                          enum mouse_speed_mode mode) {
     struct vector2d move = {0};
 
     move = (struct vector2d){
-        .x = update_movement_1d(config, config->x_code, &state->x, now),
-        .y = update_movement_1d(config, config->y_code, &state->y, now),
+        .x = update_movement_1d(config, config->x_code, &state->x, now, mode),
+        .y = update_movement_1d(config, config->y_code, &state->y, now, mode),
     };
 
     return move;
@@ -174,7 +209,9 @@ static void tick_work_cb(struct k_work *work) {
     // LOG_INF("x start: %llu, y start: %llu, current timestamp: %llu", data->state.x.start_time,
     //         data->state.y.start_time, timestamp);
 
-    struct vector2d move = update_movement_2d(cfg, &data->state, timestamp);
+    /* Select once for both axes, before queuing fully scaled input events. */
+    enum mouse_speed_mode mode = current_speed_mode(cfg);
+    struct vector2d move = update_movement_2d(cfg, &data->state, timestamp, mode);
 
     int ret = 0;
     bool have_x = is_non_zero_1d_movement(move.x);
@@ -198,6 +235,9 @@ static void set_start_times_for_activity_1d(struct movement_state_1d *state) {
         state->start_time = k_uptime_ticks();
     } else if (state->speed == 0) {
         state->start_time = 0;
+        for (int i = 0; i < MOUSE_SPEED_MODE_COUNT; i++) {
+            state->remainder[i] = 0;
+        }
     }
 }
 static void set_start_times_for_activity(struct movement_state_2d *state) {
@@ -215,8 +255,6 @@ static void update_work_scheduling(const struct device *dev) {
         k_work_schedule(&data->tick_work, K_MSEC(cfg->trigger_period_ms));
     } else {
         k_work_cancel_delayable(&data->tick_work);
-        data->state.y.remainder = 0;
-        data->state.x.remainder = 0;
     }
 }
 
@@ -274,6 +312,13 @@ static const struct behavior_driver_api behavior_input_two_axis_driver_api = {
     .binding_pressed = on_keymap_binding_pressed, .binding_released = on_keymap_binding_released};
 
 #define ITA_INST(n)                                                                                \
+    BUILD_ASSERT(DT_INST_PROP(n, fast_layer) >= -1 && DT_INST_PROP(n, fast_layer) < 32);             \
+    BUILD_ASSERT(DT_INST_PROP(n, precise_layer) >= -1 && DT_INST_PROP(n, precise_layer) < 32);       \
+    BUILD_ASSERT(DT_INST_PROP_LEN(n, fast_speed) == 2 && DT_INST_PROP_LEN(n, precise_speed) == 2);   \
+    BUILD_ASSERT(DT_INST_PROP_BY_IDX(n, fast_speed, 0) > 0 &&                                       \
+                 DT_INST_PROP_BY_IDX(n, fast_speed, 1) > 0 &&                                       \
+                 DT_INST_PROP_BY_IDX(n, precise_speed, 0) > 0 &&                                   \
+                 DT_INST_PROP_BY_IDX(n, precise_speed, 1) > 0);                                    \
     static struct behavior_input_two_axis_data behavior_input_two_axis_data_##n = {};              \
     static struct behavior_input_two_axis_config behavior_input_two_axis_config_##n = {            \
         .x_code = DT_INST_PROP(n, x_input_code),                                                   \
@@ -285,6 +330,12 @@ static const struct behavior_driver_api behavior_input_two_axis_driver_api = {
         .acceleration_boost_start_ms = DT_INST_PROP(n, acceleration_boost_start_ms),               \
         .acceleration_boost_numerator = DT_INST_PROP(n, acceleration_boost_numerator),             \
         .acceleration_boost_denominator = DT_INST_PROP(n, acceleration_boost_denominator),         \
+        .fast_layer = DT_INST_PROP(n, fast_layer),                                                 \
+        .precise_layer = DT_INST_PROP(n, precise_layer),                                           \
+        .fast_speed = (float)DT_INST_PROP_BY_IDX(n, fast_speed, 0) /                                \
+                      DT_INST_PROP_BY_IDX(n, fast_speed, 1),                                      \
+        .precise_speed = (float)DT_INST_PROP_BY_IDX(n, precise_speed, 0) /                          \
+                         DT_INST_PROP_BY_IDX(n, precise_speed, 1),                                \
     };                                                                                             \
     BEHAVIOR_DT_INST_DEFINE(                                                                       \
         n, behavior_input_two_axis_init, NULL, &behavior_input_two_axis_data_##n,                  \

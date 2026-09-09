@@ -9,18 +9,10 @@
     acceleration-boost-start-ms = <TOTEM_MOUSE_BOOST_START_MS>;
     acceleration-boost-numerator = <TOTEM_MOUSE_BOOST_NUM>;
     acceleration-boost-denominator = <TOTEM_MOUSE_BOOST_DEN>;
-};
-
-/* Fast is deliberately first: the first active override wins. */
-&mmv_input_listener {
-    fast {
-        layers = <Acc>;
-        input-processors = <&zip_xy_scaler TOTEM_MOUSE_FAST_NUM TOTEM_MOUSE_FAST_DEN>;
-    };
-    precise {
-        layers = <Prec>;
-        input-processors = <&zip_xy_scaler TOTEM_MOUSE_SLOW_NUM TOTEM_MOUSE_SLOW_DEN>;
-    };
+    fast-layer = <Acc>;
+    precise-layer = <Prec>;
+    fast-speed = <TOTEM_MOUSE_FAST_SPEED_NUM TOTEM_MOUSE_FAST_SPEED_DEN>;
+    precise-speed = <TOTEM_MOUSE_SLOW_SPEED_NUM TOTEM_MOUSE_SLOW_SPEED_DEN>;
 };
 
 / {

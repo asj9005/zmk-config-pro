@@ -2,23 +2,23 @@
 #ifndef TOTEM_MOUSE_TUNING_H
 #define TOTEM_MOUSE_TUNING_H
 
-/* With the longer ramp, initial acceleration is about 59% of 1200 / 490^2. */
-#define ZMK_POINTING_DEFAULT_MOVE_VAL 2400
+/* Raise early movement 12.5% from 2400; keep the 900 ms / 4500 peak. */
+#define ZMK_POINTING_DEFAULT_MOVE_VAL 2700
 #define TOTEM_MOUSE_TIME_TO_MAX_MS 900
 #define TOTEM_MOUSE_ACCEL_EXPONENT 2
 #define TOTEM_MOUSE_TRIGGER_PERIOD_MS 16
 #define TOTEM_MOUSE_TAPPING_TERM_MS 180
 
-/* Add the late curve after 500 ms; reach 2400 * 15/8 = 4500 at 900 ms. */
+/* Add the late curve after 500 ms; reach 2700 * 5/3 = 4500 at 900 ms. */
 #define TOTEM_MOUSE_BOOST_START_MS 500
-#define TOTEM_MOUSE_BOOST_NUM 15
-#define TOTEM_MOUSE_BOOST_DEN 8
+#define TOTEM_MOUSE_BOOST_NUM 5
+#define TOTEM_MOUSE_BOOST_DEN 3
 
-/* Initial approximation of AHK speed 20 / 3 at Windows speed 10, EPP off. */
-#define TOTEM_MOUSE_FAST_NUM 7
-#define TOTEM_MOUSE_FAST_DEN 2
-#define TOTEM_MOUSE_SLOW_NUM 1
-#define TOTEM_MOUSE_SLOW_DEN 8
+/* Absolute cursor speeds, independent of the normal acceleration settings. */
+#define TOTEM_MOUSE_FAST_SPEED_NUM 15750
+#define TOTEM_MOUSE_FAST_SPEED_DEN 1
+#define TOTEM_MOUSE_SLOW_SPEED_NUM 1125
+#define TOTEM_MOUSE_SLOW_SPEED_DEN 2
 
 /* AHK wheel presets relative to the observed Windows baseline: 5 lines, 3 chars. */
 #define TOTEM_MOUSE_FAST_WHEEL_NUM 4

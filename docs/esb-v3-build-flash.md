@@ -203,7 +203,7 @@ CONFIG_LV_Z_DOUBLE_VDB=y
 CONFIG_LV_Z_BUFFER_ALLOC_STATIC=y
 ```
 
-`zephyr/zephyr.dts`에서도 Mouse 이동 binding의 기준값 2400, `&mmv`의 `compatible = "totem,behavior-mouse-move"`, 도달 시간 900 ms, 추가 가속 시작 500 ms와 배율 15/8을 확인한다. 이 조합은 처음 500 ms에 기준 2400의 2차 곡선을 사용하고, 이후 최대 2100의 2차 추가 가속으로 최종 4500에 도달한다. E 3.5배·R 0.125배, tap-preferred·hold-while-undecided·180 ms, 기존 콤보와 기본 50 ms, 스크롤과 Base 복귀는 유지한다. 자세한 값은 [마우스 조정](mouse-tuning.md)을 참고한다. 공개 테스트키 옵션과 개인키 입력을 제외한 CONFIG 차이가 위 비교 대상과 다르면 원인을 확인한 뒤 업로드한다. CI와 개인키 빌드의 UF2 hash가 같아야 하는 것은 아니다.
+`zephyr/zephyr.dts`에서도 Mouse 이동 binding의 기준값 2700, `&mmv`의 `compatible = "totem,behavior-mouse-move"`, 도달 시간 900 ms, 추가 가속 시작 500 ms와 배율 5/3을 확인한다. 처음 500 ms에 기준 2700의 2차 곡선을 사용하고, 이후 최대 1800의 추가 가속으로 최종 4500에 도달한다. `fast-layer=2`, `precise-layer=3`, `fast-speed=<15750 1>`, `precise-speed=<1125 2>`이고 mmv input listener에는 XY 레이어 배율을 중복 적용하지 않는다. tap-preferred·hold-while-undecided·180 ms, 기존 콤보와 기본 50 ms, 스크롤과 Base 복귀는 유지한다. 자세한 값은 [마우스 조정](mouse-tuning.md)을 참고한다. 공개 테스트키 옵션과 개인키 입력을 제외한 CONFIG 차이가 위 비교 대상과 다르면 원인을 확인한 뒤 업로드한다. CI와 개인키 빌드의 UF2 hash가 같아야 하는 것은 아니다.
 
 Production key 문자열을 log에 출력하거나 `.config`를 공개하지 않는다. 생성 헤더·ELF·object·UF2에도 키가 들어가므로 build 폴더 전체를 비공개로 보관한다. Windows에서는 파일의 쓰기 속성만으로 접근 제어가 보장되지 않으므로 키 폴더의 ACL도 확인한다.
 
