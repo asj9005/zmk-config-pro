@@ -43,6 +43,47 @@ KAT 단계: 1=CCM 키 가져오기, 2=암호화, 3=정상 복호화, 4=암호문
 
 `sensor: device not ready.`는 고정 Prospector 모듈의 주변광 센서 APDS9960 메시지다. 이 문구 하나만으로 ESB 초기화 실패를 판정하지 않는다.
 
+### 송신 중 정체 진단과 타이머 보완
+
+2026-09-09 실제 왼쪽 정체 상태에서 20초 동안 `tx_ok=36903`,
+`tx_fail=119`, `write=37023`, `start=37348`이 고정된 반면
+`radio_busy`는 9750→11827, `send`는 46644→48721로 증가했다.
+마지막 send 결과 -35는 이 펌웨어의 Zephyr errno 정의에서 **ENOMSG**이며
+소프트웨어 대기열 포화를 뜻한다. Linux errno 번호로 해석하지 않는다.
+HF-ready 검사를 통과한 뒤 SDK non-IDLE 분기로 계속 진입하므로,
+대기열 펌프는 살아 있고 무선 transaction 완료가 정체된 범위로 좁혀진다.
+포화가 처음 고장의 원인인지 결과인지의 시간 순서는 이 로그만으로 확정하지 않는다.
+
+고정 SDK에는 Nordic의
+[NCSDK-35742 수정](https://github.com/nrfconnect/sdk-nrf/commit/2a6a1bddbd5b1f342569ec11afc1dded8edfb898)이
+누락되어 있었다. 현재 overlay는 첫 TX ramp-up의 COMPARE2 interrupt에서
+STOP/CLEAR shortcuts를 해제하고 ACK 설정에서 경과 시간을 보존한다.
+이로써 RADIO handler가 늦어질 때 같은 COMPARE2가 다시 타이머를 정지시키는
+경로를 보완한다. COMPARE1 callback도 실제 COMPARE1 이벤트에서만 실행한다.
+진행 중 payload, RF PID, 암호문 순서, queue 크기, 개인키는 변경하지 않는다.
+실측 증상과 맞는 결함을 수정했지만, 고장 당시 SDK/하드웨어 상태는 읽지
+못했으므로 실제 원인 확정이나 모든 지연 조건의 복구 보장은 아니다.
+
+진단 빌드는 이제 5초마다 다음 읽기 전용 정보도 출력한다.
+
+| 값 | 의미 |
+| --- | --- |
+| `sdk_state` | 고정 SDK enum: 0=IDLE, 1=PTX_TX, 2=PTX_TX_ACK, 3=PTX_RX_ACK, 4=PRX, 5=PRX_SEND_ACK, 6=PTX_TXIDLE |
+| `radio_state` | RADIO STATE 하드웨어 레지스터의 원시 값 |
+| `tx_queued`, `retries`, `irq_flags` | SDK FIFO 항목 수, 재시도 카운터 원시 값, 이벤트 flags(TX 성공 bit 0/실패 bit 1/RX bit 2) |
+| `radio_events` | bit 0=READY, 1=ADDRESS, 2=END, 3=DISABLED |
+| `timer_events` | bit 0=COMPARE0, 1=COMPARE1, 2=COMPARE2 |
+| `timer_shorts` | TIMER SHORTS 레지스터의 원시 값 |
+| `radio_irq`, `timer_irq` | bit 0=IRQ enabled, 1=pending |
+
+숫자는 모두 10진수다. 함수는 lock, event clear, timer capture, 레지스터 쓰기를
+하지 않는다. 따라서 IRQ가 항목 사이에 상태를 바꿀 수 있으며 단일 시점의
+원자적 snapshot이 아니다. 이벤트 비트만으로 타이머가 현재 진행 중이라고
+판정하지 않는다. SDK 초기화가 완료되기 전에는 이 행을 출력하지 않는다.
+`retries`는 unsigned 후감소 값이므로 최종 실패 뒤 IDLE에서는 UINT32_MAX가
+남을 수 있다. 그 값을 실제 남은 재시도 횟수로 해석하지 않는다.
+출력에 패킷 내용, 키 위치, 개인키, nonce, session ID는 포함하지 않는다.
+
 ## 검증 범위
 
 ### 왼쪽 USB 인식 실패의 비교 빌드

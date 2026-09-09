@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <stdint.h>
+#include <esb.h>
 #include <zephyr/init.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/atomic.h>
@@ -152,6 +153,19 @@ static void diagnostics_work_handler(struct k_work *work) {
            tx_counts[TOTEM_DIAG_HF_CALLBACK], tx_results[TOTEM_DIAG_HF_CALLBACK],
            tx_counts[TOTEM_DIAG_HF_WAIT], tx_results[TOTEM_DIAG_HF_WAIT],
            tx_counts[TOTEM_DIAG_RADIO_BUSY], tx_results[TOTEM_DIAG_RADIO_BUSY]);
+
+    struct esb_diagnostics radio;
+    if (esb_get_diagnostics(&radio) == 0) {
+        printk("[esb-diag] role=%s uptime_ms=%lu sdk_state=%lu radio_state=%lu "
+               "tx_queued=%lu retries=%lu irq_flags=%lu radio_events=%lu "
+               "timer_events=%lu timer_shorts=%lu radio_irq=%lu timer_irq=%lu\n",
+               TOTEM_DIAG_ROLE, uptime_ms,
+               (unsigned long)radio.state, (unsigned long)radio.radio_state,
+               (unsigned long)radio.tx_queued, (unsigned long)radio.retries,
+               (unsigned long)radio.irq_flags, (unsigned long)radio.radio_events,
+               (unsigned long)radio.timer_events, (unsigned long)radio.timer_shorts,
+               (unsigned long)radio.radio_irq, (unsigned long)radio.timer_irq);
+    }
 
     k_work_schedule(&diagnostics_work, K_SECONDS(5));
 }

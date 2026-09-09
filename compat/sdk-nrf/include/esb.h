@@ -616,6 +616,29 @@ int esb_set_bitrate(enum esb_bitrate bitrate);
  */
 int esb_reuse_pid(uint8_t pipe);
 
+#if defined(CONFIG_TOTEM_ESB_DIAGNOSTICS)
+/** Read-only observations for diagnosing a stalled radio. Fields can change
+ * between reads; this is not an atomic snapshot. No payload or key is exposed.
+ */
+struct esb_diagnostics {
+	uint32_t state;
+	uint32_t radio_state;
+	uint32_t tx_queued;
+	uint32_t retries;
+	uint32_t irq_flags;
+	/* READY, ADDRESS, END, DISABLED in bits 0..3. */
+	uint32_t radio_events;
+	/* COMPARE0, COMPARE1, COMPARE2 in bits 0..2. */
+	uint32_t timer_events;
+	uint32_t timer_shorts;
+	/* Enabled, pending in bits 0..1. */
+	uint32_t radio_irq;
+	uint32_t timer_irq;
+};
+
+int esb_get_diagnostics(struct esb_diagnostics *out);
+#endif
+
 /** @} */
 
 #ifdef __cplusplus
@@ -623,4 +646,3 @@ int esb_reuse_pid(uint8_t pipe);
 #endif
 
 #endif /* ESB */
-
