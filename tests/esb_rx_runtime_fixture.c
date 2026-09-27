@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <sys/types.h>
+#endif
 #include <totem/esb_key_state.h>
 
 #define CONFIG_ESB_MAX_PAYLOAD_LENGTH 64

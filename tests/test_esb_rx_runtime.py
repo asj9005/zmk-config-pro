@@ -87,7 +87,8 @@ class ActualRxRuntimeTest(unittest.TestCase):
         ]
         mutations = {
             "budget": ("processed < ESB_RX_WORK_BATCH_SIZE", "processed < 10000U", "bounded_worker"),
-            "quota": ("state->rx_pipe_bytes[event->pipe] + record_size >", "0U >", "per_pipe_quota"),
+            "quota": ("state->rx_pipe_bytes[event->pipe] + record_size >\n"
+                      "                    state->rx_pipe_capacity", "false", "per_pipe_quota"),
             "length": ("if (packet_size != (payload_to_read", "if (packet_size < (payload_to_read", "packet_boundaries"),
         }
         with tempfile.TemporaryDirectory(prefix="esb-rx-runtime-") as directory:
