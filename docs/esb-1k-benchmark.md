@@ -111,6 +111,12 @@ BENCH_USB_QUEUE_OVERFLOW source=0 seq=999
 | `UNMATCHED` | 대기 중인 remote key event 없이 keyboard report 함수가 호출됨 |
 | `QUEUE_OVERFLOW` | Pending remote key FIFO에 넣지 못함 |
 
+현재 ESB USB 구현의 `queue_done_tick`은 복사된 보고서를 소프트웨어 전송 큐에
+넣은 시점입니다. 실제 endpoint 제출·IN 완료·PC 수신 시점은 포함하지 않습니다.
+USB가 바쁜 동안의 재시도 지연은 이 값으로 측정할 수 없으며, 이전 동기 전송
+구현의 수치와 직접 비교하지 않습니다. 전송 큐 포화 시에는 개별 전이를 잃을 수
+있으므로 `usb_overflow`가 증가한 구간도 지연 표본에서 제외합니다.
+
 세 tick은 모두 dongle clock이므로 RX→queue enter, queue call, RX→queue done 차이를 계산할 수 있다. 그러나 이 계측은 remote key-position event와 keyboard-report 함수 호출을 FIFO 순서로 연결한다. 다음과 같은 경우에는 1:1 관계가 깨질 수 있다.
 
 - hold-tap처럼 report가 즉시 만들어지지 않는 behavior

@@ -15,11 +15,15 @@
 #include <zephyr/logging/log.h>
 
 #include <totem/esb_benchmark.h>
+#include <totem/esb_diagnostics.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 #include <totem/esb_v3_crypto.h>
 #endif
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
+
+BUILD_ASSERT(CONFIG_ESB_MAX_PAYLOAD_LENGTH <= UINT8_MAX,
+             "Local RX metadata requires a one-byte radio packet length");
 
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 BUILD_ASSERT(offsetof(struct esb_command_payload, body) ==
@@ -103,6 +107,7 @@ void zmk_split_esb_tx(struct zmk_split_esb_state *state) {
 void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state) {
     switch(event->evt_type) {
         case APP_ESB_EVT_TX_SUCCESS:
+            totem_esb_diag_event(TOTEM_DIAG_TX_OK, 0);
             totem_esb_benchmark_tx(state->tx_pipe > 0 ? state->tx_pipe - 1 : UINT8_MAX,
                                    event->msg_id, event->tx_attempts, true);
             // LOG_DBG("ESB TX sent");
@@ -111,6 +116,7 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
             }
             break;
         case APP_ESB_EVT_TX_FAIL:
+            totem_esb_diag_event(TOTEM_DIAG_TX_FAIL, 0);
             totem_esb_benchmark_tx(state->tx_pipe > 0 ? state->tx_pipe - 1 : UINT8_MAX,
                                    event->msg_id, event->tx_attempts, false);
             // LOG_WRN("ESB TX failed");
@@ -124,35 +130,53 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
             }
             break;
         case APP_ESB_EVT_RX:
+            totem_esb_diag_event(TOTEM_DIAG_RX, 0);
             // LOG_DBG("ESB RX received: {%d} %d", event->pipe, event->data_length);
-            if (event->pipe >= CONFIG_ESB_PIPE_COUNT) {
+            if (event->pipe >= CONFIG_ESB_PIPE_COUNT ||
+                event->pipe < state->rx_first_pipe ||
+                event->pipe > state->rx_last_pipe) {
                 LOG_ERR("Ignoring RX payload for invalid ESB pipe %u", event->pipe);
                 totem_esb_benchmark_rx_invalid(event->pipe, -EADDRNOTAVAIL);
                 break;
             }
 
-            struct ring_buf *rx_buf = &state->rx_bufs[event->pipe];
-
-            if (ring_buf_space_get(rx_buf) < event->data_length) {
-                state->rx_overflow_count[event->pipe]++;
-                totem_esb_benchmark_rx_overflow(
-                    event->pipe, state->rx_overflow_count[event->pipe]);
-                LOG_WRN("No room to receive (have %d but only space for %d/%d)",
-                        event->data_length, ring_buf_space_get(rx_buf),
-                        ring_buf_capacity_get(rx_buf));
+            if (event->data_length == 0 ||
+                event->data_length > CONFIG_ESB_MAX_PAYLOAD_LENGTH) {
+                totem_esb_benchmark_rx_invalid(event->pipe, -EMSGSIZE);
+                totem_esb_diag_event(TOTEM_DIAG_FRAME_ERR, -EMSGSIZE);
                 break;
             }
 
-            size_t received = ring_buf_put(rx_buf, event->buf, event->data_length);
-            if (received < event->data_length) {
+            struct esb_rx_record record = {
+                .received_at = k_uptime_get_32(),
+                .pipe = event->pipe,
+                .length = event->data_length,
+            };
+            size_t record_size = sizeof(record) + record.length;
+            k_spinlock_key_t key = k_spin_lock(&state->rx_lock);
+            struct ring_buf *rx_buf = state->rx_buf;
+            if (ring_buf_space_get(rx_buf) < record_size ||
+                state->rx_pipe_bytes[event->pipe] + record_size >
+                    state->rx_pipe_capacity) {
                 state->rx_overflow_count[event->pipe]++;
+                uint32_t overflows = state->rx_overflow_count[event->pipe];
+                k_spin_unlock(&state->rx_lock, key);
                 totem_esb_benchmark_rx_overflow(
-                    event->pipe, state->rx_overflow_count[event->pipe]);
-                LOG_ERR("RX overrun! %d < %d", received, event->data_length);
+                    event->pipe, overflows);
+                totem_esb_diag_event(TOTEM_DIAG_RX_OVERFLOW, event->pipe);
                 break;
             }
 
-            // LOG_DBG("RX + %3d and now buffer is %3d", received, ring_buf_size_get(&rx_buf));
+            /* Commit the header and its complete packet together. No parser or
+             * callback runs under this lock; the radio's reused buffer can be
+             * overwritten as soon as the copies complete. */
+            ring_buf_put(rx_buf, (const uint8_t *)&record, sizeof(record));
+            ring_buf_put(rx_buf, event->buf, record.length);
+            state->rx_pipe_bytes[event->pipe] += record_size;
+            uint32_t queued_bytes = ring_buf_size_get(rx_buf);
+            k_spin_unlock(&state->rx_lock, key);
+            totem_esb_diag_rx_observe(queued_bytes, 0);
+
             if (state->process_rx_callback) {
                 state->process_rx_callback(event->pipe);
             }
@@ -208,120 +232,139 @@ int zmk_split_esb_finalize_item(uint8_t *env, size_t env_len,
 #endif
 }
 
-int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_size,
-                           bool downlink, uint8_t expected_pipe) {
+/* Count one parser outcome, including failures before authentication. */
+static inline int diag_frame_result(int result) {
+    totem_esb_diag_event(result == 0 ? TOTEM_DIAG_FRAME_OK : TOTEM_DIAG_FRAME_ERR,
+                         result);
+    return result;
+}
+
+/* Decode exactly one radio payload. A malformed packet cannot consume or reset
+ * any subsequent admission, including one received from the other half. */
+static int decode_rx_packet(const uint8_t *packet, size_t packet_size,
+                            uint8_t *env, size_t env_size,
+                            bool downlink, uint8_t expected_pipe) {
 #if !IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     ARG_UNUSED(expected_pipe);
+    ARG_UNUSED(downlink);
 #endif
-    // RX buffer only has prefix + postfix
-    while (ring_buf_size_get(rx_buf) > (sizeof(struct esb_msg_prefix)
-#if ESB_MSG_HAS_POSTFIX
-            + sizeof(struct esb_msg_postfix)
-#endif
-    )) {
-        struct esb_msg_prefix prefix;
+    if (packet_size <= ESB_MSG_WIRE_MIN_SIZE) {
+        return diag_frame_result(-EMSGSIZE);
+    }
+    struct esb_msg_prefix prefix;
+    memcpy(&prefix, packet, sizeof(prefix));
 
-        __ASSERT_EVAL(
-            (void)ring_buf_peek(rx_buf, (uint8_t *)&prefix, sizeof(prefix)),
-            uint32_t peek_read = ring_buf_peek(rx_buf, (uint8_t *)&prefix, sizeof(prefix)),
-            peek_read == sizeof(prefix), "Somehow read less than we expect from the RX buffer");
-
-        if (memcmp(&prefix.magic_prefix, &ZMK_SPLIT_ESB_ENVELOPE_MAGIC_PREFIX,
-                   sizeof(prefix.magic_prefix)) != 0) {
-            LOG_WRN("Multiple prefix mismatches, resetting buffer");
-            ring_buf_reset(rx_buf);
-
-            // // LOG_WRN("Prefix mismatch, skipping 1 byte to realign");
-            // // Drop a single byte to let the stream re-align
-            // uint8_t dummy;
-            // ring_buf_get(rx_buf, &dummy, 1);
-
-            return -EPROTO;
-        }
-
-        size_t payload_to_read = sizeof(prefix) + prefix.payload_size;
-
-        if (payload_to_read > env_size) {
-            LOG_WRN("Invalid message with payload %d bigger than expected max %d",
-                payload_to_read, env_size);
-            ring_buf_reset(rx_buf);
-            return -EMSGSIZE;
-        }
-
-        if (ring_buf_size_get(rx_buf) < (payload_to_read
-#if ESB_MSG_HAS_POSTFIX
-            + sizeof(struct esb_msg_postfix)
-#endif
-        )) {
-            return -EAGAIN;
-        }
-
-        // Now that prefix matches, read it out so we can read the rest of the payload.
-        __ASSERT_EVAL((void)ring_buf_get(rx_buf, env, payload_to_read),
-                      uint32_t read = ring_buf_get(rx_buf, env, payload_to_read),
-                      read == payload_to_read,
-                      "Somehow read less than we expect from the RX buffer");
-
-#if ESB_MSG_HAS_POSTFIX
-        struct esb_msg_postfix postfix;
-        __ASSERT_EVAL((void)ring_buf_get(rx_buf, (uint8_t *)&postfix, sizeof(postfix)),
-                      uint32_t read = ring_buf_get(rx_buf, (uint8_t *)&postfix, sizeof(postfix)),
-                      read == sizeof(postfix),
-                      "Somehow read less of the postfix than we expect from the RX buffer");
-
-#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
-        if (payload_to_read <
-            sizeof(struct esb_msg_prefix) +
-                sizeof(struct esb_v3_wire_payload_header)) {
-            return -EMSGSIZE;
-        }
-        struct esb_v3_wire_payload_header *header =
-            (void *)(env + sizeof(struct esb_msg_prefix));
-        if (header->source == 0 ||
-            header->source >= CONFIG_ESB_PIPE_COUNT ||
-            header->source != expected_pipe) {
-            return -EADDRNOTAVAIL;
-        }
-        enum totem_esb_v3_key_stage stage = TOTEM_ESB_V3_ACTIVE_KEY;
-        if ((!downlink &&
-             (header->wire_type == ESB_WIRE_EVENT_V3_HELLO ||
-              header->wire_type == ESB_WIRE_EVENT_V3_RECOVERY)) ||
-            (downlink &&
-             header->wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE)) {
-            stage = TOTEM_ESB_V3_ROOT_KEY;
-        } else if ((!downlink &&
-                    header->wire_type == ESB_WIRE_EVENT_V3_READY) ||
-                   (downlink &&
-                    header->wire_type == ESB_WIRE_COMMAND_V3_SESSION_OK)) {
-            stage = TOTEM_ESB_V3_PENDING_KEY;
-        }
-        size_t aad_len = sizeof(struct esb_msg_prefix) +
-                         sizeof(struct esb_v3_wire_payload_header);
-        size_t body_len = payload_to_read - aad_len;
-        int crypto_err = totem_esb_v3_open(
-            header->source - 1U,
-            downlink ? TOTEM_ESB_V3_DOWNLINK : TOTEM_ESB_V3_UPLINK, stage,
-            header->session_id, header->sequence, env, aad_len, env + aad_len,
-            body_len, postfix.tag);
-        if (crypto_err != 0) {
-            totem_esb_benchmark_security_drop(
-                header->source - 1U,
-                crypto_err == -EACCES ? "auth" : "session", header->sequence);
-            return crypto_err;
-        }
-#else
-        uint32_t crc = crc32_ieee(env, payload_to_read);
-
-        if (crc != postfix.crc) {
-            LOG_WRN("Data corruption in received peripheral event, resetting buffer (%d vs %d)",
-                    crc, postfix.crc);
-            return -EBADMSG;
-        }
-#endif
-#endif
-
-        return 0;
+    if (memcmp(&prefix.magic_prefix, &ZMK_SPLIT_ESB_ENVELOPE_MAGIC_PREFIX,
+               sizeof(prefix.magic_prefix)) != 0) {
+        return diag_frame_result(-EPROTO);
     }
 
-    return -EAGAIN;
+    size_t payload_to_read = sizeof(prefix) + prefix.payload_size;
+
+    if (payload_to_read > env_size) {
+        LOG_WRN("Invalid message with payload %d bigger than expected max %d",
+            payload_to_read, env_size);
+        return diag_frame_result(-EMSGSIZE);
+    }
+
+    if (packet_size != (payload_to_read
+#if ESB_MSG_HAS_POSTFIX
+        + sizeof(struct esb_msg_postfix)
+#endif
+    )) {
+        return diag_frame_result(-EMSGSIZE);
+    }
+
+    memcpy(env, packet, payload_to_read);
+
+#if ESB_MSG_HAS_POSTFIX
+    struct esb_msg_postfix postfix;
+    memcpy(&postfix, packet + payload_to_read, sizeof(postfix));
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+    if (payload_to_read <
+        sizeof(struct esb_msg_prefix) +
+            sizeof(struct esb_v3_wire_payload_header)) {
+        return diag_frame_result(-EMSGSIZE);
+    }
+    struct esb_v3_wire_payload_header *header =
+        (void *)(env + sizeof(struct esb_msg_prefix));
+    if (header->source == 0 ||
+        header->source >= CONFIG_ESB_PIPE_COUNT ||
+        header->source != expected_pipe) {
+        return diag_frame_result(-EADDRNOTAVAIL);
+    }
+    enum totem_esb_v3_key_stage stage = TOTEM_ESB_V3_ACTIVE_KEY;
+    if ((!downlink &&
+         (header->wire_type == ESB_WIRE_EVENT_V3_HELLO ||
+          header->wire_type == ESB_WIRE_EVENT_V3_RECOVERY)) ||
+        (downlink &&
+         header->wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE)) {
+        stage = TOTEM_ESB_V3_ROOT_KEY;
+    } else if ((!downlink &&
+                header->wire_type == ESB_WIRE_EVENT_V3_READY) ||
+               (downlink &&
+                header->wire_type == ESB_WIRE_COMMAND_V3_SESSION_OK)) {
+        stage = TOTEM_ESB_V3_PENDING_KEY;
+    }
+    size_t aad_len = sizeof(struct esb_msg_prefix) +
+                     sizeof(struct esb_v3_wire_payload_header);
+    size_t body_len = payload_to_read - aad_len;
+    int crypto_err = totem_esb_v3_open(
+        header->source - 1U,
+        downlink ? TOTEM_ESB_V3_DOWNLINK : TOTEM_ESB_V3_UPLINK, stage,
+        header->session_id, header->sequence, env, aad_len, env + aad_len,
+        body_len, postfix.tag);
+    if (crypto_err != 0) {
+        totem_esb_benchmark_security_drop(
+            header->source - 1U,
+            crypto_err == -EACCES ? "auth" : "session", header->sequence);
+        return diag_frame_result(crypto_err);
+    }
+#else
+    uint32_t crc = crc32_ieee(env, payload_to_read);
+
+    if (crc != postfix.crc) {
+        LOG_WRN("Data corruption in received peripheral event (%d vs %d)",
+                crc, postfix.crc);
+        return diag_frame_result(-EBADMSG);
+    }
+#endif
+#endif
+
+    return diag_frame_result(0);
+}
+
+int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
+                         size_t env_size, bool downlink, uint8_t *pipe) {
+    struct esb_rx_record record;
+    uint8_t packet[CONFIG_ESB_MAX_PAYLOAD_LENGTH];
+    k_spinlock_key_t key = k_spin_lock(&state->rx_lock);
+    struct ring_buf *rx_buf = state->rx_buf;
+    if (ring_buf_is_empty(rx_buf)) {
+        k_spin_unlock(&state->rx_lock, key);
+        return -ENODATA;
+    }
+    /* These metadata bytes are generated locally, never supplied by a peer.
+     * Protect the queue against an internal invariant failure as well. */
+    if (ring_buf_peek(rx_buf, (uint8_t *)&record, sizeof(record)) != sizeof(record) ||
+        record.pipe >= CONFIG_ESB_PIPE_COUNT ||
+        record.pipe < state->rx_first_pipe || record.pipe > state->rx_last_pipe ||
+        record.length == 0 || record.length > sizeof(packet) ||
+        ring_buf_size_get(rx_buf) < sizeof(record) + record.length ||
+        state->rx_pipe_bytes[record.pipe] < sizeof(record) + record.length) {
+        ring_buf_reset(rx_buf);
+        memset(state->rx_pipe_bytes, 0, sizeof(state->rx_pipe_bytes));
+        k_spin_unlock(&state->rx_lock, key);
+        return diag_frame_result(-EIO);
+    }
+    ring_buf_get(rx_buf, (uint8_t *)&record, sizeof(record));
+    ring_buf_get(rx_buf, packet, record.length);
+    state->rx_pipe_bytes[record.pipe] -= sizeof(record) + record.length;
+    uint32_t queued_bytes = ring_buf_size_get(rx_buf);
+    k_spin_unlock(&state->rx_lock, key);
+
+    *pipe = record.pipe;
+    totem_esb_diag_rx_observe(queued_bytes, k_uptime_get_32() - record.received_at);
+    return decode_rx_packet(packet, record.length, env, env_size, downlink, *pipe);
 }
