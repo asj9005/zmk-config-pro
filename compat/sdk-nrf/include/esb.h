@@ -634,6 +634,8 @@ struct esb_diagnostics {
 	/* Enabled, pending in bits 0..1. */
 	uint32_t radio_irq;
 	uint32_t timer_irq;
+	/* Late/uncertain PTX ACK setups routed through bounded normal retries. */
+	uint32_t late_ack_setup;
 };
 
 int esb_get_diagnostics(struct esb_diagnostics *out);

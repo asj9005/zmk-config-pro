@@ -38,14 +38,22 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
         environment["PATH"] = str(Path(compiler_path).resolve().parent) + os.pathsep + environment.get("PATH", "")
         with tempfile.TemporaryDirectory(prefix="esb-key-dispatch-") as directory:
             work = Path(directory)
-            for negative in (False, True):
-                with self.subTest(orphan_guard=not negative):
-                    test_c = work / ("without_guard.c" if negative else "with_guard.c")
+            for negative in (None, "orphan", "position", "source"):
+                with self.subTest(removed_guard=negative):
+                    test_c = work / f"guard_{negative}.c"
                     executable = work / (test_c.stem + (".exe" if os.name == "nt" else ""))
-                    test_c.write_text(
-                        generated.replace("if (!was_pressed)", "if (false)", 1) if negative else generated,
-                        encoding="utf-8",
-                    )
+                    variant = generated
+                    if negative == "orphan":
+                        variant = variant.replace("if (!was_pressed)", "if (false)", 1)
+                    elif negative == "position":
+                        variant = variant.replace(
+                            "if (position >= CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX ||\n"
+                            "            position >= ZMK_KEYMAP_LEN)", "if (false)", 1)
+                    elif negative == "source":
+                        variant = variant.replace("if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT)", "if (false)", 1)
+                    if negative:
+                        self.assertNotEqual(variant, generated)
+                    test_c.write_text(variant, encoding="utf-8")
                     if Path(compiler[0]).stem.lower() in ("cl", "clang-cl"):
                         arguments = ["/nologo", "/std:c11", "/W4", "/WX", f"/I{ROOT / 'include'}",
                                      str(test_c), f"/Fe:{executable}"]
@@ -59,10 +67,11 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
                                          capture_output=True, text=True, timeout=10)
                     if negative:
                         self.assertNotEqual(run.returncode, 0)
-                        self.assertIn("orphan_release_stays_idle", run.stderr)
+                        self.assertIn("orphan_release_stays_idle" if negative == "orphan" else
+                                      "invalid_source_and_position_stay_outside_zmk", run.stderr)
                     else:
                         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-                        self.assertIn("7 actual central dispatch/snapshot/cleanup scenarios passed", run.stdout)
+                        self.assertIn("8 actual central dispatch/snapshot/cleanup scenarios passed", run.stdout)
 
 
 if __name__ == "__main__":

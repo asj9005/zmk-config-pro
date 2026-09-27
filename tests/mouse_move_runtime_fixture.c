@@ -213,7 +213,7 @@ static void mode_selection(void) {
 
 static void absolute_fixed_speeds(void) {
     reset_case("absolute_fixed_speeds");
-    CHECK(cfg.fast_speed == 15750 && cfg.precise_speed == 562.5f);
+    CHECK(cfg.fast_speed == 7875 && cfg.precise_speed == 450);
     const float signs[] = {-2700, -1, 0, 1, 2700};
     const int64_t times[] = {0, 1, 16, 500, 900, 901, INT64_C(4294967295)};
     for (int variant = 0; variant < 2; variant++) {
@@ -225,8 +225,8 @@ static void absolute_fixed_speeds(void) {
         for (size_t s = 0; s < sizeof(signs) / sizeof(signs[0]); s++) {
             for (size_t t = 0; t < sizeof(times) / sizeof(times[0]); t++) {
                 float direction = signs[s] < 0 ? -1 : (signs[s] > 0 ? 1 : 0);
-                CHECK(speed(&cfg, INPUT_REL_X, signs[s], times[t], MOUSE_SPEED_FAST) == direction * 15750);
-                CHECK(speed(&cfg, INPUT_REL_Y, signs[s], times[t], MOUSE_SPEED_PRECISE) == direction * 562.5f);
+                CHECK(speed(&cfg, INPUT_REL_X, signs[s], times[t], MOUSE_SPEED_FAST) == direction * 7875);
+                CHECK(speed(&cfg, INPUT_REL_Y, signs[s], times[t], MOUSE_SPEED_PRECISE) == direction * 450);
             }
         }
     }
@@ -234,8 +234,8 @@ static void absolute_fixed_speeds(void) {
 
 static void normal_state_isolation(void) {
     reset_case("normal_state_isolation");
-    /* Fractional fixed-mode reports make a shared remainder regression visible
-     * even though today's 16 ms fixed speeds produce exact 252/9 reports. */
+    /* Use fractional reports in both fixed modes to expose any shared remainder.
+     * At the configured 16 ms period, fast is integral and precise is fractional. */
     cfg.trigger_period_ms = 7;
     data.state.x.speed = ZMK_POINTING_DEFAULT_MOVE_VAL;
     data.state.x.start_time = fake_now;
@@ -255,6 +255,36 @@ static void normal_state_isolation(void) {
     CHECK(data.state.x.start_time == normal_reference.start_time);
     CHECK(speed(&cfg, INPUT_REL_X, 2700, 900, MOUSE_SPEED_NORMAL) == 4500);
     CHECK(fabsf(speed(&cfg, INPUT_REL_X, 2700, 200, MOUSE_SPEED_NORMAL) - 133.333333f) < 0.001f);
+
+    /* 450 units/s at 16 ms is 7.2 units per tick, in either direction. Verify
+     * conservation of emitted movement plus retained fractional movement.
+     * A float can sit just below an integer boundary, so include the remainder
+     * instead of requiring the extra unit on one particular boundary tick. */
+    cfg.trigger_period_ms = TOTEM_MOUSE_TRIGGER_PERIOD_MS;
+    CHECK(cfg.trigger_period_ms == 16);
+    for (int direction = -1; direction <= 1; direction += 2) {
+        struct movement_state_1d precise = {
+            .speed = direction * ZMK_POINTING_DEFAULT_MOVE_VAL, .start_time = 1000,
+        };
+        precise.remainder[MOUSE_SPEED_NORMAL] = 0.125f;
+        precise.remainder[MOUSE_SPEED_FAST] = -0.375f;
+        int total = 0;
+        for (int tick = 1; tick <= 127; tick++) {
+            float emitted = update_movement_1d(
+                &cfg, INPUT_REL_X, &precise, 1000 + tick * 16, MOUSE_SPEED_PRECISE);
+            CHECK(emitted == direction * 7 || emitted == direction * 8);
+            total += (int)emitted;
+            float remainder = precise.remainder[MOUSE_SPEED_PRECISE];
+            CHECK(fabsf(remainder) < 1);
+            CHECK(fabsf(total + remainder - direction * 7.2f * tick) < 0.001f);
+            same_float(precise.remainder[MOUSE_SPEED_NORMAL], 0.125f);
+            same_float(precise.remainder[MOUSE_SPEED_FAST], -0.375f);
+        }
+        CHECK(total == direction * 914);
+        CHECK(fabsf(precise.remainder[MOUSE_SPEED_PRECISE] - direction * 0.4f) < 0.001f);
+        CHECK(precise.start_time == 1000 &&
+              precise.speed == direction * ZMK_POINTING_DEFAULT_MOVE_VAL);
+    }
 }
 
 static void single_tick_snapshot(void) {
@@ -266,14 +296,14 @@ static void single_tick_snapshot(void) {
     tick_at(1016);
     CHECK(snapshot_calls == 1 && default_calls == 1);
     CHECK(report_count == 2);
-    CHECK(reports[0].code == INPUT_REL_X && reports[0].value == 252 && !reports[0].sync);
-    CHECK(reports[1].code == INPUT_REL_Y && reports[1].value == -252 && reports[1].sync);
+    CHECK(reports[0].code == INPUT_REL_X && reports[0].value == 126 && !reports[0].sync);
+    CHECK(reports[1].code == INPUT_REL_Y && reports[1].value == -126 && reports[1].sync);
     CHECK(data.state.x.start_time == 1000 && data.state.y.start_time == 1000);
     CHECK(data.tick_work.pending);
     report_count = snapshot_calls = default_calls = 0;
     tick_at(1032);
     CHECK(snapshot_calls == 1 && default_calls == 1 && report_count == 2);
-    CHECK(reports[0].value == 9 && reports[1].value == -9);
+    CHECK(reports[0].value == 7 && reports[1].value == -7);
     release(&diagonal);
 }
 
@@ -317,7 +347,7 @@ static void opposite_keys_cancel_and_resume(void) {
     CHECK(data.state.x.speed == ZMK_POINTING_DEFAULT_MOVE_VAL && data.state.x.start_time == 1400);
     for (int i = 0; i < MOUSE_SPEED_MODE_COUNT; i++) CHECK(data.state.x.remainder[i] == 0);
     tick_at(1416);
-    CHECK(report_count == 1 && reports[0].value == 9);
+    CHECK(report_count == 1 && reports[0].value == 7);
     layer_state = 0;
     release(&right);
     clear_check(&data.state.x);
@@ -334,7 +364,7 @@ static void zero_and_delay_gates(void) {
     cfg.delay_ms = 20;
     CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1016, MOUSE_SPEED_FAST) == 0);
     CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1020, MOUSE_SPEED_FAST) == 0);
-    CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1032, MOUSE_SPEED_FAST) == 252);
+    CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1032, MOUSE_SPEED_FAST) == 126);
     CHECK(data.state.x.start_time == 1000);
 }
 

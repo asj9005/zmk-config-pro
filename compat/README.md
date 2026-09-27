@@ -8,6 +8,7 @@ revisions pinned in `config/west.yml`.
 | `badjeff/zmk-feature-split-esb` | `1f4cd4558bb9e0626ec2507f334f239862af859d` | ESB wire source/sequence/tick metadata, per-source state, queue-safe retry IDs, heartbeat and benchmark hooks |
 | `carrefinho/prospector-zmk-module` | `ed98221f3b52b7066dbb10ba3af8a29150b93a5a` | ESB-only Operator output widget and replacement for the unconditional BLE observer |
 | `badjeff/sdk-nrf` | `9b3d2623fdcd9c0fd0284f860beea924568c9826` | Per-pipe PRX ACK count/cancellation, PTX timer correction, read-only radio diagnostics |
+| `zmkfirmware/zmk` | `904c9aec8822d79149d42c8a9a77e8828eb08f5a` | ESB-only scan recovery, hold-tap overflow/replay handling, queued USB HID delivery and USB reset handling |
 
 The copied files retain their upstream SPDX headers. Files derived from Nordic
 code remain under `LicenseRef-Nordic-5-Clause`; ZMK-derived files retain the MIT
@@ -27,10 +28,16 @@ or establish that every hardware stall is caused by this timing defect.
 During an ESB CMake configure, the root module copies these files over the
 matching files in the pinned west checkouts. Before the first copy, it saves the
 upstream file beside it with the suffix `.totem-esb-upstream`. A later standard
-BLE configure restores the Prospector and SDK originals from those backups, so building
+BLE configure restores the Prospector, SDK and ZMK originals from those backups, so building
 ESB and then BLE in the same west workspace does not leave the rollback build
 using the ESB-only display code.
 
 These overlays are revision-specific. When changing an upstream SHA,
-compare every overlaid file with the new upstream version and re-run all sixteen
+compare every overlaid file with the new upstream version and re-run the full
 GitHub Actions builds before accepting the update.
+
+The additional nRF52840 PTX guard handles ACK setup after its timer deadline.
+It preserves the current FIFO/PID and uses the existing finite retry budget.
+RX DMA ownership is checked conservatively before accepting an ACK; it never
+weakens v3 authentication or replay checks. See the actual-C PTX runtime tests
+and [input reliability notes](../docs/input-reliability.md) for scope and limits.

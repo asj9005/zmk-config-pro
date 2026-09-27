@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,7 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ESB = ROOT / "compat/zmk-feature-split-esb/src/split/esb"
 
 
-def fixture_source(*, pump_candidate: bool = False, remove_pump: bool = False) -> str:
+def fixture_source(*, protocol: int = 3, pump_candidate: bool = False,
+                   remove_pump: bool = False) -> str:
     app = (ESB / "app_esb.c").read_text(encoding="utf-8")
     common = (ESB / "common.c").read_text(encoding="utf-8")
     common_h = (ESB / "common.h").read_text(encoding="utf-8")
@@ -32,8 +34,17 @@ def fixture_source(*, pump_candidate: bool = False, remove_pump: bool = False) -
     transmit = braced_definition(common, r"^void zmk_split_esb_tx\([^;{}]*\)\s*\{")
     begin = braced_definition(peripheral, r"^static void begin_tx\(void\)\s*\{")
     begin = begin.replace("{\n", "{\n    pump_calls++;\n", 1)
-    enqueue = braced_definition(peripheral, r"^static int enqueue_v3_frame\([^;{}]*\)\s*\{")
-    admission = braced_definition(enqueue, r"^    if \(ring_buf_space_get\(&tx_buf\) < frame_size\)\s*\{")
+    if protocol == 3:
+        enqueue = braced_definition(peripheral, r"^static int enqueue_v3_frame\([^;{}]*\)\s*\{")
+        admission = braced_definition(enqueue, r"^    if \(ring_buf_space_get\(&tx_buf\) < frame_size\)\s*\{")
+    elif protocol == 2:
+        # The v3 forwarding wrapper starts its arguments on the next line;
+        # select the actual v2 producer, not that forwarding wrapper.
+        enqueue = braced_definition(peripheral, r"^static int enqueue_wire_event\(enum[^;{}]*\)\s*\{")
+        admission = braced_definition(
+            enqueue, r"^    if \(ring_buf_space_get\(&tx_buf\) < ESB_MSG_EXTRA_SIZE \+ payload_size\)\s*\{")
+    else:
+        raise ValueError(f"Unsupported protocol: {protocol}")
     if pump_candidate and "begin_tx();" not in admission:
         admission = admission.replace("        k_spin_unlock(&tx_ring_lock, key);",
                                       "        begin_tx();\n        k_spin_unlock(&tx_ring_lock, key);", 1)
@@ -44,6 +55,31 @@ def fixture_source(*, pump_candidate: bool = False, remove_pump: bool = False) -
         for name in ("esb_msg_prefix", "esb_msg_postfix", "esb_msg_meta")
     )
     fixture = (ROOT / "tests/esb_tx_liveness_runtime_fixture.c").read_text(encoding="utf-8")
+    if protocol == 2:
+        # Keep the extracted guard unchanged. V2 uses a caller-owned event
+        # mutex, whereas v3 owns it inside enqueue_v3_frame. The fixture uses
+        # postfix-bearing frames for both branches; take their size macros
+        # from the matching postfix-enabled branch of the real header.
+        size_macros = "\n".join(
+            re.search(rf"^#define {name} .+$", common_h, re.MULTILINE).group(0)
+            for name in ("ESB_MSG_WIRE_MIN_SIZE", "ESB_MSG_EXTRA_SIZE")
+        )
+        fixture = fixture.replace("/* ACTUAL_FRAME_STRUCTURES */",
+                                  "/* ACTUAL_FRAME_STRUCTURES */\n" + size_macros, 1)
+        fixture = fixture.replace("static int admit_sealed_frame(",
+                                  "static int admit_sealed_frame_v2(", 1)
+        fixture = fixture.replace("    k_mutex_lock(&event_mutex, K_FOREVER);\n", "", 1)
+        fixture = fixture.replace("    k_mutex_unlock(&event_mutex);\n", "", 1)
+        fixture = fixture.replace("    /* ACTUAL_PRODUCER_ADMISSION */",
+                                  "    const size_t payload_size = frame_size - ESB_MSG_EXTRA_SIZE;\n"
+                                  "    /* ACTUAL_PRODUCER_ADMISSION */", 1)
+        fixture = fixture.replace("static int admit_id(uint16_t id) {", """static int admit_sealed_frame(const uint8_t *frame, size_t frame_size) {
+    k_mutex_lock(&event_mutex, K_FOREVER);
+    int result = admit_sealed_frame_v2(frame, frame_size);
+    k_mutex_unlock(&event_mutex);
+    return result;
+}
+static int admit_id(uint16_t id) {""", 1)
     for marker, content in {
         "ACTUAL_FRAME_STRUCTURES": structures, "ACTUAL_PTX_PULL": pull,
         "ACTUAL_PTX_SEND": send, "ACTUAL_COMMON_TX": transmit,
@@ -88,19 +124,23 @@ class ActualTxLivenessRuntimeTest(unittest.TestCase):
             if os.environ.get("ESB_REQUIRE_C_COMPILER") == "1":
                 self.fail("A host C compiler is required for the TX liveness test")
             self.skipTest("Set CC to execute the TX liveness test")
-        for lower, producer in ((4, 3), (64, 128)):
-            with self.subTest(lower_capacity=lower, producer_capacity=producer):
-                run = compile_and_run(fixture_source(), lower_capacity=lower, producer_capacity=producer)
-                self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-                self.assertIn("FIFO preservation and bounded pressure passed", run.stdout)
-        negative = compile_and_run(fixture_source(remove_pump=True))
-        self.assertNotEqual(negative.returncode, 0)
-        self.assertIn("full_queue_write_failure", negative.stderr)
-        # Reach the independent start failure in the same source fixture.
-        negative_start = compile_and_run(fixture_source(remove_pump=True).replace(
-            "    full_queues_recover(false);\n", "", 1))
-        self.assertNotEqual(negative_start.returncode, 0)
-        self.assertIn("full_queue_start_failure", negative_start.stderr)
+        for protocol in (2, 3):
+            for lower, producer in ((4, 3), (64, 128)):
+                with self.subTest(protocol=protocol, lower_capacity=lower, producer_capacity=producer):
+                    run = compile_and_run(fixture_source(protocol=protocol),
+                                          lower_capacity=lower, producer_capacity=producer)
+                    self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+                    self.assertIn("FIFO preservation and bounded pressure passed", run.stdout)
+            with self.subTest(protocol=protocol, negative="write_failure"):
+                negative = compile_and_run(fixture_source(protocol=protocol, remove_pump=True))
+                self.assertNotEqual(negative.returncode, 0)
+                self.assertIn("full_queue_write_failure", negative.stderr)
+            # Reach the independent start failure in the same source fixture.
+            with self.subTest(protocol=protocol, negative="start_failure"):
+                negative_start = compile_and_run(fixture_source(protocol=protocol, remove_pump=True).replace(
+                    "    full_queues_recover(false);\n", "", 1))
+                self.assertNotEqual(negative_start.returncode, 0)
+                self.assertIn("full_queue_start_failure", negative_start.stderr)
 
 
 if __name__ == "__main__":

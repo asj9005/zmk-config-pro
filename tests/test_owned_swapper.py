@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from tests.test_esb_firmware import compiler_command
 
 
 class OwnedSwapperRuntimeTests(unittest.TestCase):
@@ -54,15 +55,15 @@ class OwnedSwapperRuntimeTests(unittest.TestCase):
             widget_state = widget[widget.index("struct modifier_indicator_state {"):widget.index("static void set_modifier_color")]
             fixture = fixture.replace("/* ACTUAL_MODIFIER_WIDGET_GETTER */", widget_state + function(widget, "modifier_indicator_get_state"))
             (WORK / "candidate-test.c").write_bytes(fixture.encode())
-            compiler_name = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc") or shutil.which("clang")
-            if not compiler_name:
+            compiler = compiler_command()
+            if not compiler:
                 if os.environ.get("ESB_REQUIRE_C_COMPILER") == "1":
                     self.fail("A C compiler is required for owned-swapper runtime tests")
                 self.skipTest("Set CC or put GCC/Clang on PATH to run owned-swapper runtime tests")
-            compiler = Path(shutil.which(compiler_name) or compiler_name).resolve()
+            compiler_path = Path(shutil.which(compiler[0]) or compiler[0]).resolve()
             env = os.environ.copy()
-            env["PATH"] = str(compiler.parent) + os.pathsep + env.get("PATH", "")
-            command = [str(compiler), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+            env["PATH"] = str(compiler_path.parent) + os.pathsep + env.get("PATH", "")
+            command = compiler + ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                        "-pedantic", "candidate-test.c", "-o", "candidate-test.exe"]
             build = subprocess.run(command, cwd=WORK, env=env, capture_output=True, text=True, timeout=60)
             if build.returncode:
@@ -100,7 +101,7 @@ class OwnedSwapperRuntimeTests(unittest.TestCase):
                 src = WORK / (name + ".c")
                 src.write_bytes(mutated.encode())
                 exe = WORK / (name + ".exe")
-                compiled = subprocess.run([str(compiler), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                compiled = subprocess.run(compiler + ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                                            "-pedantic", src.name, "-o", exe.name], env=env, cwd=WORK,
                                           capture_output=True, text=True, timeout=60)
                 assert compiled.returncode == 0, compiled.stdout + compiled.stderr
@@ -191,7 +192,7 @@ class OwnedSwapperRuntimeTests(unittest.TestCase):
                 src = WORK / (name + ".c")
                 src.write_bytes(contents.encode())
                 exe = WORK / (name + ".exe")
-                built = subprocess.run([str(compiler), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                built = subprocess.run(compiler + ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                                         "-Wno-unused-function", "-pedantic", src.name, "-o", exe.name],
                                        cwd=WORK, env=env, capture_output=True, text=True, timeout=60)
                 assert built.returncode == 0, built.stdout + built.stderr

@@ -15,10 +15,10 @@
 #define TOTEM_MOUSE_BOOST_DEN 3
 
 /* Absolute cursor speeds, independent of the normal acceleration settings. */
-#define TOTEM_MOUSE_FAST_SPEED_NUM 15750
+#define TOTEM_MOUSE_FAST_SPEED_NUM 7875
 #define TOTEM_MOUSE_FAST_SPEED_DEN 1
-#define TOTEM_MOUSE_SLOW_SPEED_NUM 1125
-#define TOTEM_MOUSE_SLOW_SPEED_DEN 2
+#define TOTEM_MOUSE_SLOW_SPEED_NUM 450
+#define TOTEM_MOUSE_SLOW_SPEED_DEN 1
 
 /* AHK wheel presets relative to the observed Windows baseline: 5 lines, 3 chars. */
 #define TOTEM_MOUSE_FAST_WHEEL_NUM 4

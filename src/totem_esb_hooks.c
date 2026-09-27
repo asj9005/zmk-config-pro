@@ -185,6 +185,8 @@ void totem_esb_benchmark_rx(uint8_t source, uint64_t session_id, uint32_t sequen
 int __real_zmk_usb_hid_send_keyboard_report(void);
 
 int __wrap_zmk_usb_hid_send_keyboard_report(void) {
+    /* ESB USB returns after copying into its bounded software queue. These
+     * ticks measure admission only, not endpoint submission or IN completion. */
     uint32_t queue_enter_tick = k_cycle_get_32();
     int result = __real_zmk_usb_hid_send_keyboard_report();
     uint32_t queue_done_tick = k_cycle_get_32();

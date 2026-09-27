@@ -78,9 +78,9 @@ static atomic_t transport_ready;
 #endif
 
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS)
-struct ring_buf rx_bufs[CONFIG_ESB_PIPE_COUNT];
+static struct ring_buf rx_buf;
 /* ACK commands are accepted only on this half's own pipe. */
-uint8_t rx_bufs_data[RX_RING_BUF_SIZE];
+static uint8_t rx_buf_data[RX_RING_BUF_SIZE];
 
 static const uint8_t peripheral_id = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID;
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID > 0,
@@ -89,7 +89,7 @@ BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID < CONFIG_ESB_PIPE_COUNT,
              "Peripheral ID must map to a configured ESB pipe");
 
 static void init_rx_buffers(void) {
-    ring_buf_init(&rx_bufs[peripheral_id], RX_RING_BUF_SIZE, rx_bufs_data);
+    ring_buf_init(&rx_buf, sizeof(rx_buf_data), rx_buf_data);
 }
 
 static void process_rx_cb(uint8_t pipe);
@@ -98,7 +98,10 @@ static struct zmk_split_esb_state state = {
     .tx_pipe = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID % CONFIG_ESB_PIPE_COUNT,
     .process_rx_callback = process_rx_cb,
     .tx_buf = &tx_buf,
-    .rx_bufs = rx_bufs,
+    .rx_buf = &rx_buf,
+    .rx_first_pipe = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID,
+    .rx_last_pipe = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID,
+    .rx_pipe_capacity = RX_RING_BUF_SIZE,
 };
 
 static void begin_tx(void) {
@@ -476,6 +479,7 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
                 ESB_MSG_EXTRA_SIZE + payload_size, ring_buf_space_get(&tx_buf),
                 ring_buf_capacity_get(&tx_buf));
         totem_esb_transport_queue_pressure(true);
+        begin_tx();
         k_spin_unlock(&tx_ring_lock, key);
         return -ENOSPC;
     }
@@ -1196,93 +1200,86 @@ SYS_INIT(zmk_split_esb_peripheral_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY
 #endif
 
 static void process_rx_work_cb(struct k_work *work) {
-    for (int pipe = 0; pipe < CONFIG_ESB_PIPE_COUNT; pipe++) {
-        if (pipe != peripheral_id) {
-            continue;
+    ARG_UNUSED(work);
+    unsigned int processed = 0;
+    for (; processed < ESB_RX_WORK_BATCH_SIZE; processed++) {
+        uint8_t pipe = 0;
+        struct esb_command_envelope env = {0};
+        int item_err = zmk_split_esb_rx_get(&state, (uint8_t *)&env,
+                                           sizeof(env), true, &pipe);
+        if (item_err == -ENODATA) {
+            break;
         }
-        struct ring_buf *rx_buf = &state.rx_bufs[pipe];
-        while (ring_buf_size_get(rx_buf) > ESB_MSG_WIRE_MIN_SIZE) {
-            struct esb_command_envelope env = {0};
-            int item_err = zmk_split_esb_get_item(rx_buf, (uint8_t *)&env,
-                                                  sizeof(struct esb_command_envelope),
-                                                  true, pipe);
-            switch (item_err) {
-            case 0:
-                if (!command_payload_size_is_valid(&env)) {
-                    LOG_WRN("Invalid ESB command payload size/type on pipe %d", pipe);
-                    break;
-                }
-                if (env.payload.source != peripheral_id || pipe != peripheral_id) {
-#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
-                    LOG_WRN("Ignoring secure command for source %d on pipe %d (expect %d)",
-                            env.payload.source, pipe, peripheral_id);
-#else
-                    LOG_WRN("Ignoring command type %d for source %d on pipe %d (expect %d)",
-                            env.payload.cmd.type, env.payload.source, pipe, peripheral_id);
-#endif
-                    break;
-                }
-#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
-                {
-                    int secure_err = process_v3_downlink(&env);
-                    if (secure_err == 0) {
-                        /* Count authenticated, accepted handshake receptions. */
-                        if (env.payload.wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
-                            totem_esb_diag_event(TOTEM_DIAG_CHALLENGE, 0);
-                        } else if (env.payload.wire_type ==
-                                   ESB_WIRE_COMMAND_V3_SESSION_OK) {
-                            totem_esb_diag_event(TOTEM_DIAG_SESSION_OK, 0);
-                        }
-                    }
-                    if (secure_err != 0 && secure_err != -EALREADY) {
-                        totem_esb_benchmark_rx_invalid(pipe, secure_err);
-                    }
-                }
-#else
-                if (env.payload.cmd.type == ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_POLL_EVENTS) {
-                    // begin_tx(); // NOTE: Shall NOT be called from central due to ESB natural.
-                    break;
-                }
-                zmk_split_transport_peripheral_command_handler(&esb_peripheral, env.payload.cmd);
-#endif
-                break;
-            case -EAGAIN:
-                /*
-                 * RX entries are complete ESB payloads, so a truncated frame
-                 * is malformed rather than a fragment that can finish later.
-                 */
-                LOG_WRN("Discarding incomplete ESB command on pipe %d", pipe);
-                ring_buf_reset(rx_buf);
-                goto next_pipe;
-            case -EACCES:
-                totem_esb_benchmark_rx_invalid(pipe, item_err);
-#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
-                /*
-                 * A root-key CHALLENGE failure is a pre-session probe. Any
-                 * pending/active-key MIC failure on this half terminates the
-                 * logical encrypted link and starts a fresh handshake.
-                 */
-                if (env.payload.source == peripheral_id &&
-                    pipe == peripheral_id &&
-                    env.payload.wire_type !=
-                        ESB_WIRE_COMMAND_V3_CHALLENGE) {
-                    LOG_ERR("ESB v3 MIC failure terminated local session");
-                    restart_v3_after_auth_failure();
-                }
-#endif
-                break;
-            default:
-                LOG_WRN("Issue fetching an item from the RX buffer: %d", item_err);
+        switch (item_err) {
+        case 0:
+            if (!command_payload_size_is_valid(&env)) {
+                LOG_WRN("Invalid ESB command payload size/type on pipe %d", pipe);
                 break;
             }
+            if (env.payload.source != peripheral_id || pipe != peripheral_id) {
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+                LOG_WRN("Ignoring secure command for source %d on pipe %d (expect %d)",
+                        env.payload.source, pipe, peripheral_id);
+#else
+                LOG_WRN("Ignoring command type %d for source %d on pipe %d (expect %d)",
+                        env.payload.cmd.type, env.payload.source, pipe, peripheral_id);
+#endif
+                break;
+            }
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+            {
+                int secure_err = process_v3_downlink(&env);
+                if (secure_err == 0) {
+                    /* Count authenticated, accepted handshake receptions. */
+                    if (env.payload.wire_type == ESB_WIRE_COMMAND_V3_CHALLENGE) {
+                        totem_esb_diag_event(TOTEM_DIAG_CHALLENGE, 0);
+                    } else if (env.payload.wire_type ==
+                               ESB_WIRE_COMMAND_V3_SESSION_OK) {
+                        totem_esb_diag_event(TOTEM_DIAG_SESSION_OK, 0);
+                    }
+                }
+                if (secure_err != 0 && secure_err != -EALREADY) {
+                    totem_esb_benchmark_rx_invalid(pipe, secure_err);
+                }
+            }
+#else
+            if (env.payload.cmd.type == ZMK_SPLIT_TRANSPORT_CENTRAL_CMD_TYPE_POLL_EVENTS) {
+                // begin_tx(); // NOTE: Shall NOT be called from central due to ESB natural.
+                break;
+            }
+            zmk_split_transport_peripheral_command_handler(&esb_peripheral, env.payload.cmd);
+#endif
+            break;
+        case -EACCES:
+            totem_esb_benchmark_rx_invalid(pipe, item_err);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+            /*
+             * A root-key CHALLENGE failure is a pre-session probe. Any
+             * pending/active-key MIC failure on this half terminates the
+             * logical encrypted link and starts a fresh handshake.
+             */
+            if (env.payload.source == peripheral_id &&
+                pipe == peripheral_id &&
+                env.payload.wire_type !=
+                    ESB_WIRE_COMMAND_V3_CHALLENGE) {
+                LOG_ERR("ESB v3 MIC failure terminated local session");
+                restart_v3_after_auth_failure();
+            }
+#endif
+            break;
+        default:
+            LOG_WRN("Issue fetching an item from the RX buffer: %d", item_err);
+            break;
         }
-    next_pipe:
-        continue;
+    }
+    if (processed == ESB_RX_WORK_BATCH_SIZE) {
+        process_rx_cb(0);
     }
 }
 
 K_WORK_DEFINE(process_rx_work, process_rx_work_cb);
 
 static void process_rx_cb(uint8_t pipe) {
+    ARG_UNUSED(pipe);
     k_work_submit(&process_rx_work);
 }

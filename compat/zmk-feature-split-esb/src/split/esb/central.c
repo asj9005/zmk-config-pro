@@ -30,6 +30,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <zmk/pointing/input_split.h>
 #include <zmk/hid_indicators_types.h>
 #include <zmk/physical_layouts.h>
+#include <zmk/matrix.h>
 
 #include <totem/esb_benchmark.h>
 #include <totem/esb_diagnostics.h>
@@ -61,20 +62,20 @@ BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT + 1 <= CONFIG_ESB_PIPE_COUNT,
 BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX > 0 &&
                  CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX <= 256,
              "Key snapshots require 1 to 256 positions");
+BUILD_ASSERT(CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX == ZMK_KEYMAP_LEN,
+             "ESB key snapshots must cover exactly the central keymap positions");
 
 RING_BUF_DECLARE(tx_buf, TX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS);
 static struct k_spinlock tx_ring_lock;
 
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_EVENT_BUFFER_ITEMS)
-struct ring_buf rx_bufs[CONFIG_ESB_PIPE_COUNT];
-/* Pipe 0 is reserved. Keep each real peer's capacity, without backing storage
- * for a pipe whose frames would always fail the source check. */
-uint8_t rx_bufs_data[CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT][RX_RING_BUF_SIZE];
+static struct ring_buf rx_buf;
+/* Keep the previous total backing size. Local packet metadata shares this
+ * storage; a per-peer quota prevents one half from occupying the entire FIFO. */
+static uint8_t rx_buf_data[CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT * RX_RING_BUF_SIZE];
 
 static void init_rx_buffers(void) {
-    for (uint8_t pipe = 1; pipe <= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT; pipe++) {
-        ring_buf_init(&rx_bufs[pipe], RX_RING_BUF_SIZE, rx_bufs_data[pipe - 1U]);
-    }
+    ring_buf_init(&rx_buf, sizeof(rx_buf_data), rx_buf_data);
 }
 
 static void process_rx_cb(uint8_t pipe);
@@ -83,7 +84,10 @@ static struct zmk_split_esb_state state = {
     .tx_pipe = 0,
     .process_rx_callback = process_rx_cb,
     .tx_buf = &tx_buf,
-    .rx_bufs = rx_bufs,
+    .rx_buf = &rx_buf,
+    .rx_first_pipe = 1,
+    .rx_last_pipe = CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT,
+    .rx_pipe_capacity = RX_RING_BUF_SIZE,
 };
 
 static void begin_tx(void) {
@@ -533,6 +537,12 @@ static bool event_payload_size_is_valid(const struct esb_event_envelope *env) {
         data_size = sizeof(env->payload.body.event.data.input_event);
         break;
     case ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT:
+        if (env->payload.body.event.data.key_position_event.position >=
+                CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX ||
+            env->payload.body.event.data.key_position_event.position >= ZMK_KEYMAP_LEN) {
+            totem_esb_diag_event(TOTEM_DIAG_RX_INVALID_POSITION, -ERANGE);
+            return false;
+        }
         data_size = sizeof(env->payload.body.event.data.key_position_event);
         break;
     case ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_SENSOR_EVENT:
@@ -582,8 +592,17 @@ static void emit_snapshot_key(void *context, uint8_t position, bool pressed) {
  */
 static void dispatch_wire_zmk_event(
     uint8_t source, const struct zmk_split_transport_peripheral_event *event) {
+    if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT) {
+        totem_esb_diag_event(TOTEM_DIAG_RX_INVALID_POSITION, -EADDRNOTAVAIL);
+        return;
+    }
     if (event->type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
         uint32_t position = event->data.key_position_event.position;
+        if (position >= CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX ||
+            position >= ZMK_KEYMAP_LEN) {
+            totem_esb_diag_event(TOTEM_DIAG_RX_INVALID_POSITION, -ERANGE);
+            return;
+        }
         if (position < CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX) {
             uint8_t *source_keys = key_pos_states[source];
             uint8_t mask = 1U << (position % 8);
@@ -1085,192 +1104,188 @@ static int process_v3_control_event(uint8_t source,
 
 static void process_rx_work_cb(struct k_work *work) {
     ARG_UNUSED(work);
-    for (int pipe = 1; pipe <= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT; pipe++) {
-        struct ring_buf *rx_buf = &state.rx_bufs[pipe];
-        while (ring_buf_size_get(rx_buf) > ESB_MSG_WIRE_MIN_SIZE) {
-            struct esb_event_envelope env = {0};
-            int item_err = zmk_split_esb_get_item(rx_buf, (uint8_t *)&env,
-                                                  sizeof(struct esb_event_envelope),
-                                                  false, pipe);
-            switch (item_err) {
-            case 0: {
-                if (!event_payload_size_is_valid(&env)) {
-                    LOG_WRN("Invalid ESB event payload size/type on pipe %d", pipe);
-                    totem_esb_benchmark_rx_invalid(pipe, -EMSGSIZE);
-                    break;
-                }
-                if (env.payload.source == 0 ||
-                    env.payload.source > CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT) {
-                    LOG_WRN("Invalid ESB wire source %u", env.payload.source);
-                    break;
-                }
-                if (pipe != env.payload.source) {
-                    LOG_WRN("ESB source %u arrived on unexpected pipe %d",
-                            env.payload.source, pipe);
-                    totem_esb_benchmark_rx_invalid(pipe, -EADDRNOTAVAIL);
-                    break;
-                }
-
-                uint8_t source = env.payload.source - 1;
-#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
-                if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO ||
-                    env.payload.wire_type == ESB_WIRE_EVENT_V3_RECOVERY ||
-                    env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
-                    int control_err = process_v3_control_event(source, &env);
-                    if (control_err == 0) {
-                        /* Count authenticated, accepted handshake receptions. */
-                        if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO) {
-                            totem_esb_diag_event(TOTEM_DIAG_HELLO, 0);
-                        } else if (env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
-                            totem_esb_diag_event(TOTEM_DIAG_READY, 0);
-                        }
-                    }
-                    if (control_err != 0 && control_err != -EALREADY) {
-                        totem_esb_benchmark_rx_invalid(pipe, control_err);
-                    }
-                    break;
-                }
-                if (!atomic_get(&secure_peers[source].active) ||
-                    env.payload.session_id !=
-                        secure_peers[source].active_session ||
-                    env.payload.sequence == 0) {
-                    totem_esb_benchmark_security_drop(
-                        source, "session", env.payload.sequence);
-                    break;
-                }
-#else
-                update_source_session(source, env.payload.session_id, false);
-#endif
-                struct esb_rx_sequence_state *seq = &rx_sequences[source];
-                uint32_t gap = 0;
-                bool accept = true;
-
-                if (seq->initialized) {
-                    if (env.payload.sequence == seq->last) {
-                        seq->duplicates++;
-                        accept = false;
-                    } else if (env.payload.sequence > seq->last) {
-                        gap = env.payload.sequence - seq->last - 1U;
-                        seq->gaps += gap;
-                        seq->last = env.payload.sequence;
-                    } else {
-                        seq->out_of_order++;
-                        accept = false;
-                    }
-                } else {
-                    seq->initialized = true;
-                    seq->last = env.payload.sequence;
-                }
-                seq->received++;
-
-#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
-                if (accept) {
-                    confirm_v3_active_session(source);
-                    totem_esb_peer_seen(source);
-                } else {
-                    totem_esb_benchmark_security_drop(
-                        source, "replay", env.payload.sequence);
-                }
-#else
-                totem_esb_peer_seen(source);
-#endif
-
-                uint8_t event_type = 0;
-                uint8_t position = 0;
-                uint8_t pressed = 0;
-                if (env.payload.wire_type == ESB_WIRE_EVENT_ZMK) {
-                    event_type = env.payload.body.event.type;
-                    if (env.payload.body.event.type ==
-                        ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
-                        position = env.payload.body.event.data.key_position_event.position;
-                        pressed = env.payload.body.event.data.key_position_event.pressed;
-                    }
-                } else if (env.payload.wire_type == ESB_WIRE_EVENT_HEARTBEAT) {
-                    totem_esb_benchmark_link_metric(
-                        source, env.payload.session_id,
-                        env.payload.body.link_metric.metric,
-                        env.payload.body.link_metric.value);
-                }
-                bool accepted_for_zmk =
-                    accept && env.payload.wire_type == ESB_WIRE_EVENT_ZMK &&
-                    &esb_central == active_transport;
-                totem_esb_benchmark_rx(
-                    source, env.payload.session_id, env.payload.sequence, gap,
-                    env.payload.source_tick, env.payload.wire_type, event_type, position,
-                    pressed, accepted_for_zmk);
-
-                if (!accepted_for_zmk) {
-                    if (accept && env.payload.wire_type == ESB_WIRE_EVENT_KEY_STATE &&
-                        &esb_central == active_transport) {
-                        totem_esb_key_state_reconcile(
-                            key_pos_states[source], env.payload.body.key_state.keys,
-                            CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX,
-                            emit_snapshot_key, &source);
-                    }
-                    break;
-                }
-
-                dispatch_wire_zmk_event(source, &env.payload.body.event);
-                break;
-            }
-            case -EAGAIN:
-                /*
-                 * Each ESB RX callback inserts one complete radio payload.
-                 * An incomplete frame therefore cannot become complete later;
-                 * discard it instead of spinning the system workqueue.
-                 */
-                totem_esb_benchmark_rx_invalid(pipe, item_err);
-                ring_buf_reset(rx_buf);
-                goto next_pipe;
-            case -EACCES:
-                totem_esb_benchmark_rx_invalid(pipe, item_err);
-#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
-                /*
-                 * The clear header is not trusted after CCM rejects its tag.
-                 * common.c has already constrained source to the RX pipe and
-                 * only returns EACCES after a matching key lookup.
-                 * Root-key HELLO/RECOVERY failures are pre-session probes and
-                 * are dropped without letting unauthenticated traffic tear
-                 * down an otherwise healthy active link.
-                 */
-                if (env.payload.source > 0 &&
-                    env.payload.source <=
-                        CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT &&
-                    pipe == env.payload.source &&
-                    env.payload.wire_type != ESB_WIRE_EVENT_V3_HELLO &&
-                    env.payload.wire_type != ESB_WIRE_EVENT_V3_RECOVERY) {
-                    uint8_t source = env.payload.source - 1U;
-                    LOG_ERR("ESB v3 MIC failure terminated source %u session",
-                            source);
-                    restart_v3_after_auth_failure(source, &env);
-                }
-#endif
-                break;
-            case -EPROTO:
-            case -EMSGSIZE:
-            case -EBADMSG:
-            case -EINVAL:
-            case -ENOENT:
-            case -EADDRNOTAVAIL:
-                totem_esb_benchmark_rx_invalid(pipe, item_err);
-#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP)
-                if (item_err == -EBADMSG) {
-                    esb_rf_ch_hop();
-                }
-#endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP) */
-                break;
-            default:
-                totem_esb_benchmark_rx_invalid(pipe, item_err);
-                break;
-            }
+    unsigned int processed = 0;
+    for (; processed < ESB_RX_WORK_BATCH_SIZE; processed++) {
+        uint8_t pipe = 0;
+        struct esb_event_envelope env = {0};
+        int item_err = zmk_split_esb_rx_get(&state, (uint8_t *)&env,
+                                           sizeof(env), false, &pipe);
+        if (item_err == -ENODATA) {
+            break;
         }
-    next_pipe:
-        continue;
+        switch (item_err) {
+        case 0: {
+            if (!event_payload_size_is_valid(&env)) {
+                LOG_WRN("Invalid ESB event payload size/type on pipe %d", pipe);
+                totem_esb_benchmark_rx_invalid(pipe, -EMSGSIZE);
+                break;
+            }
+            if (env.payload.source == 0 ||
+                env.payload.source > CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT) {
+                LOG_WRN("Invalid ESB wire source %u", env.payload.source);
+                break;
+            }
+            if (pipe != env.payload.source) {
+                LOG_WRN("ESB source %u arrived on unexpected pipe %d",
+                        env.payload.source, pipe);
+                totem_esb_benchmark_rx_invalid(pipe, -EADDRNOTAVAIL);
+                break;
+            }
+
+            uint8_t source = env.payload.source - 1;
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+            if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO ||
+                env.payload.wire_type == ESB_WIRE_EVENT_V3_RECOVERY ||
+                env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
+                int control_err = process_v3_control_event(source, &env);
+                if (control_err == 0) {
+                    /* Count authenticated, accepted handshake receptions. */
+                    if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO) {
+                        totem_esb_diag_event(TOTEM_DIAG_HELLO, 0);
+                    } else if (env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
+                        totem_esb_diag_event(TOTEM_DIAG_READY, 0);
+                    }
+                }
+                if (control_err != 0 && control_err != -EALREADY) {
+                    totem_esb_benchmark_rx_invalid(pipe, control_err);
+                }
+                break;
+            }
+            if (!atomic_get(&secure_peers[source].active) ||
+                env.payload.session_id !=
+                    secure_peers[source].active_session ||
+                env.payload.sequence == 0) {
+                totem_esb_benchmark_security_drop(
+                    source, "session", env.payload.sequence);
+                break;
+            }
+#else
+            update_source_session(source, env.payload.session_id, false);
+#endif
+            struct esb_rx_sequence_state *seq = &rx_sequences[source];
+            uint32_t gap = 0;
+            bool accept = true;
+
+            if (seq->initialized) {
+                if (env.payload.sequence == seq->last) {
+                    seq->duplicates++;
+                    accept = false;
+                } else if (env.payload.sequence > seq->last) {
+                    gap = env.payload.sequence - seq->last - 1U;
+                    seq->gaps += gap;
+                    seq->last = env.payload.sequence;
+                } else {
+                    seq->out_of_order++;
+                    accept = false;
+                }
+            } else {
+                seq->initialized = true;
+                seq->last = env.payload.sequence;
+            }
+            seq->received++;
+
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+            if (accept) {
+                confirm_v3_active_session(source);
+                totem_esb_peer_seen(source);
+            } else {
+                totem_esb_benchmark_security_drop(
+                    source, "replay", env.payload.sequence);
+            }
+#else
+            totem_esb_peer_seen(source);
+#endif
+
+            uint8_t event_type = 0;
+            uint8_t position = 0;
+            uint8_t pressed = 0;
+            if (env.payload.wire_type == ESB_WIRE_EVENT_ZMK) {
+                event_type = env.payload.body.event.type;
+                if (env.payload.body.event.type ==
+                    ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
+                    position = env.payload.body.event.data.key_position_event.position;
+                    pressed = env.payload.body.event.data.key_position_event.pressed;
+                }
+            } else if (env.payload.wire_type == ESB_WIRE_EVENT_HEARTBEAT) {
+                totem_esb_benchmark_link_metric(
+                    source, env.payload.session_id,
+                    env.payload.body.link_metric.metric,
+                    env.payload.body.link_metric.value);
+            }
+            bool accepted_for_zmk =
+                accept && env.payload.wire_type == ESB_WIRE_EVENT_ZMK &&
+                &esb_central == active_transport;
+            totem_esb_benchmark_rx(
+                source, env.payload.session_id, env.payload.sequence, gap,
+                env.payload.source_tick, env.payload.wire_type, event_type, position,
+                pressed, accepted_for_zmk);
+
+            if (!accepted_for_zmk) {
+                if (accept && env.payload.wire_type == ESB_WIRE_EVENT_KEY_STATE &&
+                    &esb_central == active_transport) {
+                    totem_esb_key_state_reconcile(
+                        key_pos_states[source], env.payload.body.key_state.keys,
+                        CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX,
+                        emit_snapshot_key, &source);
+                }
+                break;
+            }
+
+            dispatch_wire_zmk_event(source, &env.payload.body.event);
+            break;
+        }
+        case -EACCES:
+            totem_esb_benchmark_rx_invalid(pipe, item_err);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+            /*
+             * The clear header is not trusted after CCM rejects its tag.
+             * common.c has already constrained source to the RX pipe and
+             * only returns EACCES after a matching key lookup.
+             * Root-key HELLO/RECOVERY failures are pre-session probes and
+             * are dropped without letting unauthenticated traffic tear
+             * down an otherwise healthy active link.
+             */
+            if (env.payload.source > 0 &&
+                env.payload.source <=
+                    CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT &&
+                pipe == env.payload.source &&
+                env.payload.wire_type != ESB_WIRE_EVENT_V3_HELLO &&
+                env.payload.wire_type != ESB_WIRE_EVENT_V3_RECOVERY) {
+                uint8_t source = env.payload.source - 1U;
+                LOG_ERR("ESB v3 MIC failure terminated source %u session",
+                        source);
+                restart_v3_after_auth_failure(source, &env);
+            }
+#endif
+            break;
+        case -EPROTO:
+        case -EMSGSIZE:
+        case -EBADMSG:
+        case -EINVAL:
+        case -ENOENT:
+        case -EADDRNOTAVAIL:
+            totem_esb_benchmark_rx_invalid(pipe, item_err);
+#if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP)
+            if (item_err == -EBADMSG) {
+                esb_rf_ch_hop();
+            }
+#endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP) */
+            break;
+        default:
+            totem_esb_benchmark_rx_invalid(pipe, item_err);
+            break;
+        }
+    }
+    /* Resubmit at the workqueue tail. RX admission also submits work, so a
+     * packet arriving at an empty check cannot lose its wakeup. */
+    if (processed == ESB_RX_WORK_BATCH_SIZE) {
+        process_rx_cb(0);
     }
 }
 
 K_WORK_DEFINE(process_rx_work, process_rx_work_cb);
 
 static void process_rx_cb(uint8_t pipe) {
+    ARG_UNUSED(pipe);
     k_work_submit(&process_rx_work);
 }

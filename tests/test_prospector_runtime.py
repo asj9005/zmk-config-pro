@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from tests.test_esb_firmware import compiler_command
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,14 +20,14 @@ FIXTURES = ROOT / "tests/fixtures/prospector"
 
 class ProspectorRuntimeTests(unittest.TestCase):
     def test_actual_overlays_and_negative_controls(self):
-        compiler_name = os.environ.get("CC") or shutil.which("gcc") or shutil.which("cc") or shutil.which("clang")
-        if not compiler_name:
+        compiler = compiler_command()
+        if not compiler:
             if os.environ.get("ESB_REQUIRE_C_COMPILER") == "1":
                 self.fail("A C compiler is required for Prospector runtime tests")
             self.skipTest("Set CC or put GCC/Clang on PATH")
-        compiler = Path(shutil.which(compiler_name) or compiler_name).resolve()
+        compiler_path = Path(shutil.which(compiler[0]) or compiler[0]).resolve()
         env = os.environ.copy()
-        env["PATH"] = str(compiler.parent) + os.pathsep + env.get("PATH", "")
+        env["PATH"] = str(compiler_path.parent) + os.pathsep + env.get("PATH", "")
         stubs = (FIXTURES / "host-stubs.h").read_text(encoding="utf-8")
         listener = (FIXTURES / "pinned-display-listener.h").read_text(encoding="utf-8")
         with tempfile.TemporaryDirectory(prefix="prospector-") as directory:
@@ -43,7 +44,7 @@ class ProspectorRuntimeTests(unittest.TestCase):
                 path = work / (name + ".c")
                 path.write_text(unit, encoding="utf-8")
                 executable = work / (name + ".exe")
-                build = subprocess.run([str(compiler), "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                build = subprocess.run(compiler + ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                                         "-Wno-unused-parameter", "-Wno-unused-variable", "-Wno-unused-function",
                                         str(path), "-o", str(executable)], env=env, capture_output=True, text=True, timeout=60)
                 self.assertEqual(build.returncode, 0, build.stdout + build.stderr)

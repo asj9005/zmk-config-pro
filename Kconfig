@@ -165,6 +165,15 @@ config TOTEM_ESB_HF_IDLE_MS
       request once the hardware and software queues are idle. PRX keeps its
       clock running to receive asynchronous peripheral packets.
 
+config TOTEM_ESB_FIXED_CHANNEL
+    int "Fixed ESB channel (2400 MHz + channel)"
+    depends on TOTEM_ESB_COMPAT && !ZMK_SPLIT_ESB_RF_CH_HOP
+    default 2
+    range 2 80
+    help
+      All three devices must use the same channel. The default preserves the
+      existing RF setting; alternate channels need a same-hardware comparison.
+
 config TOTEM_ESB_BENCHMARK
     bool "Enable ESB sequence/latency benchmark logging"
     depends on TOTEM_ESB_COMPAT

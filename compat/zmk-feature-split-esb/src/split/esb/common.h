@@ -8,6 +8,7 @@
 
 #include <zephyr/sys/ring_buffer.h>
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 
 #include <zmk/split/transport/types.h>
 #include <totem/esb_benchmark.h>
@@ -142,11 +143,25 @@ struct esb_msg_meta {
 
 typedef void (*zmk_split_esb_process_rx_callback_t)(uint8_t pipe);
 
+/* Local metadata only: never sent over the radio or included in CCM input. */
+struct esb_rx_record {
+    uint32_t received_at;
+    uint8_t pipe;
+    uint8_t length;
+} __packed;
+
+#define ESB_RX_WORK_BATCH_SIZE 8U
+
 struct zmk_split_esb_state {
     uint8_t tx_pipe;
     zmk_split_esb_process_rx_callback_t process_rx_callback;
     struct ring_buf *tx_buf;
-    struct ring_buf *rx_bufs;
+    struct ring_buf *rx_buf;
+    uint8_t rx_first_pipe;
+    uint8_t rx_last_pipe;
+    uint32_t rx_pipe_capacity;
+    uint32_t rx_pipe_bytes[CONFIG_ESB_PIPE_COUNT];
+    struct k_spinlock rx_lock;
     uint32_t rx_overflow_count[CONFIG_ESB_PIPE_COUNT];
 };
 
@@ -156,5 +171,7 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
 
 int zmk_split_esb_finalize_item(uint8_t *env, size_t env_len,
                                 bool downlink, struct esb_msg_postfix *postfix);
-int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_size,
-                           bool downlink, uint8_t expected_pipe);
+/* One admitted radio packet per call; -ENODATA means the queue is empty.
+ * Authentication and dispatch happen outside the short RX queue lock. */
+int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
+                         size_t env_size, bool downlink, uint8_t *pipe);

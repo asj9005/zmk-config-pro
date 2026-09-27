@@ -559,8 +559,14 @@ static int esb_initialize(app_esb_mode_t mode) {
 
     err = esb_init(&config);
 
+    if (err) {
+        return err;
+    }
+
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP)
-    esb_set_rf_channel(esb_rf_ch[esb_rf_ch_idx]);
+    err = esb_set_rf_channel(esb_rf_ch[esb_rf_ch_idx]);
+#else
+    err = esb_set_rf_channel(CONFIG_TOTEM_ESB_FIXED_CHANNEL);
 #endif /* IS_ENABLED(CONFIG_ZMK_SPLIT_ESB_RF_CH_HOP) */
 
     if (err) {

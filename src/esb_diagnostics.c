@@ -32,6 +32,25 @@ static atomic_t last_kat_checkpoint;
 static atomic_t last_kat_status;
 static atomic_t tx_step_counts[TOTEM_DIAG_TX_STEP_COUNT];
 static atomic_t tx_step_results[TOTEM_DIAG_TX_STEP_COUNT];
+static atomic_t rx_high_water, rx_max_age_ms, scan_high_water, usb_high_water;
+
+static void observe_max(atomic_t *counter, uint32_t value) {
+    atomic_val_t previous = atomic_get(counter);
+    while (value > (uint32_t)previous && !atomic_cas(counter, previous, (atomic_val_t)value)) {
+        previous = atomic_get(counter);
+    }
+}
+
+void totem_esb_diag_rx_observe(uint32_t queued_bytes, uint32_t age_ms) {
+    observe_max(&rx_high_water, queued_bytes);
+    observe_max(&rx_max_age_ms, age_ms);
+}
+void totem_esb_diag_scan_observe(uint32_t queued_events) {
+    observe_max(&scan_high_water, queued_events);
+}
+void totem_esb_diag_usb_observe(uint32_t queued_reports) {
+    observe_max(&usb_high_water, queued_reports);
+}
 
 static const char *const stage_names[TOTEM_DIAG_STAGE_COUNT] = {
     [TOTEM_DIAG_CRYPTO_INIT] = "crypto_init",
@@ -158,15 +177,27 @@ static void diagnostics_work_handler(struct k_work *work) {
     if (esb_get_diagnostics(&radio) == 0) {
         printk("[esb-diag] role=%s uptime_ms=%lu sdk_state=%lu radio_state=%lu "
                "tx_queued=%lu retries=%lu irq_flags=%lu radio_events=%lu "
-               "timer_events=%lu timer_shorts=%lu radio_irq=%lu timer_irq=%lu\n",
+               "timer_events=%lu timer_shorts=%lu radio_irq=%lu timer_irq=%lu late_ack=%lu\n",
                TOTEM_DIAG_ROLE, uptime_ms,
                (unsigned long)radio.state, (unsigned long)radio.radio_state,
                (unsigned long)radio.tx_queued, (unsigned long)radio.retries,
                (unsigned long)radio.irq_flags, (unsigned long)radio.radio_events,
                (unsigned long)radio.timer_events, (unsigned long)radio.timer_shorts,
-               (unsigned long)radio.radio_irq, (unsigned long)radio.timer_irq);
+               (unsigned long)radio.radio_irq, (unsigned long)radio.timer_irq,
+               (unsigned long)radio.late_ack_setup);
     }
 
+    printk("[esb-diag] role=%s uptime_ms=%lu rx_drop=%lu bad_position=%lu "
+           "ht_overflow=%lu scan_overflow=%lu scan_resync=%lu usb_retry=%lu usb_overflow=%lu "
+           "rx_high=%lu rx_age_max=%lu scan_high=%lu usb_high=%lu\n",
+           TOTEM_DIAG_ROLE, uptime_ms, counts[TOTEM_DIAG_RX_OVERFLOW],
+           counts[TOTEM_DIAG_RX_INVALID_POSITION], counts[TOTEM_DIAG_HOLD_TAP_OVERFLOW],
+           counts[TOTEM_DIAG_SCAN_OVERFLOW], counts[TOTEM_DIAG_SCAN_RESYNC],
+           counts[TOTEM_DIAG_USB_RETRY], counts[TOTEM_DIAG_USB_OVERFLOW],
+           (unsigned long)(uint32_t)atomic_get(&rx_high_water),
+           (unsigned long)(uint32_t)atomic_get(&rx_max_age_ms),
+           (unsigned long)(uint32_t)atomic_get(&scan_high_water),
+           (unsigned long)(uint32_t)atomic_get(&usb_high_water));
     k_work_schedule(&diagnostics_work, K_SECONDS(5));
 }
 

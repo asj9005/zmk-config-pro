@@ -35,6 +35,17 @@ function(totem_restore_pinned_file UPSTREAM_FILE)
     endif()
 endfunction()
 
+# Keep pinned ZMK fixes deterministic across sequential ESB/BLE builds.
+foreach(TOTEM_ZMK_FILE src/physical_layouts.c src/usb.c src/usb_hid.c src/behaviors/behavior_hold_tap.c)
+    if(CONFIG_TOTEM_ESB_COMPAT)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/zmk/app/${TOTEM_ZMK_FILE}"
+            "${APPLICATION_SOURCE_DIR}/${TOTEM_ZMK_FILE}")
+    else()
+        totem_restore_pinned_file("${APPLICATION_SOURCE_DIR}/${TOTEM_ZMK_FILE}")
+    endif()
+endforeach()
+
 # Owned Alt updates HID state directly, so its display notification must also
 # be observed in retained BLE central builds. Restore the pinned widget when
 # another keymap/configuration does not use this behavior in the same workspace.

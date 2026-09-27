@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from tests.test_esb_firmware import compiler_command
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -30,15 +31,13 @@ def function_text(source, name):
 
 class ActualAutoBaseRuntimeTest(unittest.TestCase):
     def test_auto_base_callbacks(self):
-        compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("clang")
-        if not compiler and Path(r"C:\QMK_MSYS\mingw64\bin\gcc.exe").is_file():
-            compiler = r"C:\QMK_MSYS\mingw64\bin\gcc.exe"
+        compiler = compiler_command()
         if not compiler:
             if os.environ.get("ESB_REQUIRE_C_COMPILER") == "1":
                 self.fail("A C compiler is required for the Auto Base callback test")
             self.skipTest("A C compiler is required for the Auto Base callback test")
         environment = os.environ.copy()
-        environment["PATH"] = (str(Path(compiler).resolve().parent) + os.pathsep
+        environment["PATH"] = (str(Path(shutil.which(compiler[0]) or compiler[0]).resolve().parent) + os.pathsep
                                + environment.get("PATH", ""))
         source = (ROOT / "src/behavior_auto_base.c").read_text(encoding="utf-8")
         actual = "\n\n".join(function_text(source, name) for name in
@@ -50,7 +49,7 @@ class ActualAutoBaseRuntimeTest(unittest.TestCase):
             test_exe = workdir / ("test_auto_base.exe" if os.name == "nt" else "test_auto_base")
             test_c.write_text(fixture.replace("/* ACTUAL_FIRMWARE_FUNCTIONS */", actual),
                               encoding="utf-8")
-            subprocess.run([compiler, "-std=c11", "-Wall", "-Wextra", "-Werror",
+            subprocess.run(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror",
                             str(test_c), "-o", str(test_exe)], check=True,
                            env=environment, timeout=60)
             result = subprocess.run([str(test_exe)], check=True, capture_output=True,

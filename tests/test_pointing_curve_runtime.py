@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from tests.test_esb_firmware import compiler_command
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -149,15 +150,13 @@ int main(void) {
 
 class PointingCurveRuntimeTest(unittest.TestCase):
     def test_actual_helper(self):
-        compiler = os.environ.get("CC") or shutil.which("gcc") or shutil.which("clang")
-        if not compiler and Path(r"C:\QMK_MSYS\mingw64\bin\gcc.exe").is_file():
-            compiler = r"C:\QMK_MSYS\mingw64\bin\gcc.exe"
+        compiler = compiler_command()
         if not compiler:
             if os.environ.get("ESB_REQUIRE_C_COMPILER") == "1":
                 self.fail("A C compiler is required for the pointing curve test")
             self.skipTest("A C compiler is required for the pointing curve test")
         environment = os.environ.copy()
-        environment["PATH"] = str(Path(compiler).resolve().parent) + os.pathsep + environment.get("PATH", "")
+        environment["PATH"] = str(Path(shutil.which(compiler[0]) or compiler[0]).resolve().parent) + os.pathsep + environment.get("PATH", "")
         with tempfile.TemporaryDirectory(prefix="pointing-curve-") as directory:
             workdir = Path(directory)
             source = workdir / "curve.c"
@@ -165,7 +164,7 @@ class PointingCurveRuntimeTest(unittest.TestCase):
             for minimal_libc in (0, 1):
                 with self.subTest(minimal_libc=minimal_libc):
                     executable = workdir / (f"curve-{minimal_libc}" + (".exe" if os.name == "nt" else ""))
-                    subprocess.run([compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                    subprocess.run(compiler + ["-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
                                     f"-DCONFIG_MINIMAL_LIBC={minimal_libc}", "-I", str(ROOT / "include"),
                                     str(source), "-o", str(executable), "-lm"],
                                    check=True, env=environment, timeout=60)

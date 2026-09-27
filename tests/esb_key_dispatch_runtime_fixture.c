@@ -4,6 +4,7 @@
  * This does not model hold-tap capture, the scheduler, radio or USB delivery.
  */
 #include <stdbool.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,9 @@
 #include <totem/esb_key_state.h>
 
 #define CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX 38
+#define CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT 2
+#define ZMK_KEYMAP_LEN 38
+#define TOTEM_DIAG_RX_INVALID_POSITION 1
 #define LOG_WRN(...) ((void)0)
 #define CHECK(condition) do { if (!(condition)) { \
     fprintf(stderr, "%s:%d: %s\n", scenario, __LINE__, #condition); \
@@ -42,6 +46,12 @@ static size_t reset_count[2];
 static size_t transitions_at_reset[2];
 static int esb_central;
 static int64_t now;
+static unsigned int invalid_positions;
+static void totem_esb_diag_event(int event, int result) {
+    CHECK(event == TOTEM_DIAG_RX_INVALID_POSITION);
+    CHECK(result == -ERANGE || result == -EADDRNOTAVAIL);
+    invalid_positions++;
+}
 
 static int64_t k_uptime_get(void) { return ++now; }
 static void record_transition(uint8_t source, uint32_t position, bool pressed, bool direct) {
@@ -85,6 +95,7 @@ static void reset_fixture(const char *name) {
     memset(reset_count, 0, sizeof(reset_count));
     memset(transitions_at_reset, 0, sizeof(transitions_at_reset));
     transition_count = other_event_count = 0;
+    invalid_positions = 0;
 }
 static void wire_key(uint8_t source, uint32_t position, bool pressed) {
     struct zmk_split_transport_peripheral_event event = {
@@ -195,6 +206,20 @@ static void non_key_events_are_unchanged(void) {
     dispatch_wire_zmk_event(1, &event);
     CHECK(other_event_count == 2 && transition_count == 0);
 }
+static void invalid_source_and_position_stay_outside_zmk(void) {
+    reset_fixture("invalid_source_and_position_stay_outside_zmk");
+    wire_key(0, 38, true);
+    wire_key(1, 255, false);
+    wire_key(2, 0, true);
+    wire_key(255, 37, false);
+    CHECK(invalid_positions == 4 && transition_count == 0 && other_event_count == 0);
+    for (size_t source = 0; source < 2; source++) {
+        for (size_t i = 0; i < 5; i++) { CHECK(key_pos_states[source][i] == 0); }
+    }
+    wire_key(1, 37, true);
+    wire_key(1, 37, false);
+    CHECK(transition_count == 2 && activity[1][37] == 0);
+}
 int main(void) {
     orphan_release_stays_idle();
     normal_edges_and_duplicate_release();
@@ -203,6 +228,7 @@ int main(void) {
     snapshot_release_order_and_later_press();
     cleanup_and_reconnect_keep_sources_independent();
     non_key_events_are_unchanged();
-    puts("7 actual central dispatch/snapshot/cleanup scenarios passed");
+    invalid_source_and_position_stay_outside_zmk();
+    puts("8 actual central dispatch/snapshot/cleanup scenarios passed");
     return 0;
 }

@@ -293,6 +293,16 @@ static volatile uint32_t retransmits_remaining;
 static volatile uint32_t last_tx_attempts;
 static volatile uint32_t wait_for_ack_timeout_us;
 
+/* CC3 is free on the non-FEM nRF52840 (Errata 216 is nRF54H-only). */
+#if defined(CONFIG_SOC_NRF52840) && !defined(CONFIG_MPSL_FEM)
+#define TOTEM_ESB_PTX_DEADLINE_GUARD 1
+static bool ptx_ack_buffer_uncertain;
+static bool ptx_retry_deadline_elapsed;
+static volatile uint32_t ptx_late_ack_setup_count;
+#else
+#define TOTEM_ESB_PTX_DEADLINE_GUARD 0
+#endif
+
 static uint32_t radio_shorts_common = RADIO_SHORTS_COMMON;
 static const bool fast_switching = IS_ENABLED(CONFIG_ESB_FAST_SWITCHING);
 
@@ -1181,6 +1191,11 @@ static void start_tx_transaction(void)
 	bool is_tx_idle = false;
 	struct esb_radio_pdu *pdu = (struct esb_radio_pdu *)tx_payload_buffer;
 	last_tx_attempts = 1;
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+	ptx_ack_buffer_uncertain = false;
+	ptx_retry_deadline_elapsed = false;
+	nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_RXREADY);
+#endif
 	/* Prepare the payload */
 	current_payload = tx_fifo.payload[tx_fifo.front];
 
@@ -1344,8 +1359,75 @@ static void on_radio_disabled_tx_noack(void)
 	}
 }
 
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+/* A late TX->RX transition can let RX START latch the old TX EasyDMA buffer.
+ * Restore from the FIFO owner only after RADIO is disabled. Never allocate a
+ * new PID or re-enqueue the payload: ordinary bounded retries own this entry.
+ */
+static void ptx_restore_tx_buffer(void)
+{
+	struct esb_radio_pdu *pdu = (struct esb_radio_pdu *)tx_payload_buffer;
+	if (esb_cfg.protocol == ESB_PROTOCOL_ESB_DPL) {
+		memset(&pdu->type.dpl_pdu, 0, sizeof(pdu->type.dpl_pdu));
+		pdu->type.dpl_pdu.length = current_payload->length;
+		pdu->type.dpl_pdu.pid = current_payload->pid;
+		pdu->type.dpl_pdu.no_ack = current_payload->noack ? 0x00 : 0x01;
+	} else {
+		memset(&pdu->type.fixed_pdu, 0, sizeof(pdu->type.fixed_pdu));
+		pdu->type.fixed_pdu.pid = current_payload->pid;
+	}
+	memcpy(pdu->data, current_payload->data, current_payload->length);
+}
+
+static void ptx_check_ack_deadline(bool ramp_timer_untrusted, uint32_t entry_elapsed)
+{
+	uint32_t elapsed = nrfx_timer_capture(&esb_timer, NRF_TIMER_CC_CHANNEL3);
+	uint32_t deadline = wait_for_ack_timeout_us + ADDR_EVENT_LATENCY_US;
+	bool expired = entry_elapsed >= deadline || elapsed >= deadline ||
+		nrf_timer_event_check(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE0) ||
+		nrf_timer_event_check(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE1);
+	if (!ptx_ack_buffer_uncertain && !ramp_timer_untrusted && !expired) {
+		return;
+	}
+
+	ptx_late_ack_setup_count++;
+	uint32_t ramp_up = esb_cfg.use_fast_ramp_up ? TX_FAST_RAMP_UP_TIME_US :
+		TX_RAMP_UP_TIME_US;
+	uint32_t retry_deadline = esb_cfg.retransmit_delay - ramp_up;
+	ptx_retry_deadline_elapsed = entry_elapsed >= retry_deadline ||
+		elapsed >= retry_deadline ||
+		nrf_timer_event_check(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE1);
+	/* No polling/reset and no new ACK window. Complete this attempt through
+	 * the normal DISABLED callback; it preserves a valid ACK in the owned RX
+	 * buffer, or consumes one existing retry when reception is uncertain.
+	 */
+	esb_ppi_for_wait_for_ack_clear();
+	esb_ppi_for_retransmission_clear();
+	uint32_t radio_state = nrf_radio_state_get(NRF_RADIO);
+	if (radio_state == NRF_RADIO_STATE_DISABLED) {
+		nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_DISABLED);
+		on_radio_disabled_tx_wait_for_ack();
+	} else if (radio_state != NRF_RADIO_STATE_RXDISABLE &&
+		   radio_state != NRF_RADIO_STATE_TXDISABLE) {
+		nrf_radio_task_trigger(NRF_RADIO, NRF_RADIO_TASK_DISABLE);
+	}
+}
+#endif
+
 static void on_radio_disabled_tx(void)
 {
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+	/* RXREADY is generated with READY->START. Set PACKETPTR first, then
+	 * inspect it: a transition concurrent with the write is conservatively
+	 * uncertain. END still belongs to TX until this transition is prepared.
+	 */
+	nrf_radio_event_clear(NRF_RADIO, ESB_RADIO_EVENT_END);
+	nrf_radio_packetptr_set(NRF_RADIO, rx_payload_buffer);
+	ptx_ack_buffer_uncertain = nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_RXREADY);
+	bool ramp_timer_untrusted =
+		(esb_timer.p_reg->SHORTS & NRF_TIMER_SHORT_COMPARE2_STOP_MASK) != 0;
+	uint32_t entry_elapsed = nrfx_timer_capture(&esb_timer, NRF_TIMER_CC_CHANNEL3);
+#endif
 	esb_ppi_for_txrx_clear(false, true);
 	/* The timer was triggered on radio disabled event so we can clear PPI connections here. */
 	esb_ppi_for_fem_clear();
@@ -1361,6 +1443,11 @@ static void on_radio_disabled_tx(void)
 	 * received by the time defined in wait_for_ack_timeout_us
 	 */
 
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+	/* Preserve compares that occur during setup, even before PPI is armed. */
+	nrf_timer_event_clear(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE0);
+	nrf_timer_event_clear(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE1);
+#endif
 	nrfx_timer_compare(&esb_timer, NRF_TIMER_CC_CHANNEL0,
 			   (wait_for_ack_timeout_us + ADDR_EVENT_LATENCY_US), false);
 
@@ -1381,13 +1468,17 @@ static void on_radio_disabled_tx(void)
 	nrf_timer_shorts_set(esb_timer.p_reg,
 		(NRF_TIMER_SHORT_COMPARE1_STOP_MASK | NRF_TIMER_SHORT_COMPARE1_CLEAR_MASK));
 
+#if !TOTEM_ESB_PTX_DEADLINE_GUARD
 	nrf_timer_event_clear(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE0);
 	nrf_timer_event_clear(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE1);
+#endif
 
 	esb_ppi_for_wait_for_ack_set();
 	esb_ppi_for_retransmission_clear();
 
+#if !TOTEM_ESB_PTX_DEADLINE_GUARD
 	nrf_radio_event_clear(NRF_RADIO, ESB_RADIO_EVENT_END);
+#endif
 
 	if (esb_cfg.protocol == ESB_PROTOCOL_ESB) {
 		update_rf_payload_format(0);
@@ -1399,11 +1490,25 @@ static void on_radio_disabled_tx(void)
 	}
 	on_radio_disabled = on_radio_disabled_tx_wait_for_ack;
 	esb_state = ESB_STATE_PTX_RX_ACK;
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+	ptx_check_ack_deadline(ramp_timer_untrusted, entry_elapsed);
+#endif
 }
 
 static void on_radio_disabled_tx_wait_for_ack(void)
 {
 	struct esb_radio_pdu *rx_pdu = (struct esb_radio_pdu *)rx_payload_buffer;
+	bool ack_buffer_owned = true;
+	bool retry_deadline_elapsed = false;
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+	ack_buffer_owned = !ptx_ack_buffer_uncertain;
+	retry_deadline_elapsed = ptx_retry_deadline_elapsed;
+	ptx_retry_deadline_elapsed = false;
+	if (ptx_ack_buffer_uncertain) {
+		ptx_restore_tx_buffer();
+		ptx_ack_buffer_uncertain = false;
+	}
+#endif
 	/* This marks the completion of a TX_RX sequence (TX with ACK) */
 
 	/* Make sure the timer will not deactivate the radio if a packet is
@@ -1416,8 +1521,14 @@ static void on_radio_disabled_tx_wait_for_ack(void)
 	mpsl_fem_disable();
 
 	/* If the radio has received a packet and the CRC status is OK */
-	if (nrf_radio_event_check(NRF_RADIO, ESB_RADIO_EVENT_END) &&
+	if (ack_buffer_owned && nrf_radio_event_check(NRF_RADIO, ESB_RADIO_EVENT_END) &&
 	    nrf_radio_crc_status_check(NRF_RADIO)) {
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+		/* A valid ACK can finish before late PPI setup observes ADDRESS.
+		 * Restore the stopped/zero timer invariant before an immediately
+		 * queued transaction configures its initial ramp-up compare. */
+		nrf_timer_task_trigger(esb_timer.p_reg, NRF_TIMER_TASK_SHUTDOWN);
+#endif
 		interrupt_flags |= INT_TX_SUCCESS_MSK;
 		last_tx_attempts = esb_cfg.retransmit_count - retransmits_remaining + 1;
 
@@ -1473,6 +1584,10 @@ static void on_radio_disabled_tx_wait_for_ack(void)
 			}
 			update_rf_payload_format(current_payload->length);
 
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+			nrf_radio_event_clear(NRF_RADIO, NRF_RADIO_EVENT_RXREADY);
+#endif
+
 			nrf_radio_packetptr_set(NRF_RADIO, tx_payload_buffer);
 
 			on_radio_disabled = on_radio_disabled_tx;
@@ -1487,7 +1602,8 @@ static void on_radio_disabled_tx_wait_for_ack(void)
 			/* Check if PPI worked. If not we are to late with retransmission but it is
 			 * ok to start retransmission here.
 			 */
-			if (nrf_timer_event_check(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE1)) {
+			if (retry_deadline_elapsed ||
+			    nrf_timer_event_check(esb_timer.p_reg, NRF_TIMER_EVENT_COMPARE1)) {
 				radio_started =
 					(nrf_radio_state_get(NRF_RADIO) == NRF_RADIO_STATE_TXRU) ||
 					(nrf_radio_event_check(NRF_RADIO, NRF_RADIO_EVENT_READY));
@@ -2099,6 +2215,9 @@ int esb_get_diagnostics(struct esb_diagnostics *out)
 		.timer_irq =
 			(NVIC_GetEnableIRQ(ESB_TIMER_IRQ) ? BIT(0) : 0U) |
 			(NVIC_GetPendingIRQ(ESB_TIMER_IRQ) ? BIT(1) : 0U),
+#if TOTEM_ESB_PTX_DEADLINE_GUARD
+		.late_ack_setup = ptx_late_ack_setup_count,
+#endif
 	};
 	return 0;
 }

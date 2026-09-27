@@ -4,6 +4,7 @@
  */
 
 #pragma once
+#include <stdint.h>
 
 enum totem_esb_diag_stage {
     TOTEM_DIAG_CRYPTO_INIT,
@@ -26,6 +27,13 @@ enum totem_esb_diag_event {
     TOTEM_DIAG_CHALLENGE,
     TOTEM_DIAG_READY,
     TOTEM_DIAG_SESSION_OK,
+    TOTEM_DIAG_RX_OVERFLOW,
+    TOTEM_DIAG_RX_INVALID_POSITION,
+    TOTEM_DIAG_HOLD_TAP_OVERFLOW,
+    TOTEM_DIAG_SCAN_OVERFLOW,
+    TOTEM_DIAG_SCAN_RESYNC,
+    TOTEM_DIAG_USB_RETRY,
+    TOTEM_DIAG_USB_OVERFLOW,
     TOTEM_DIAG_EVENT_COUNT,
 };
 
@@ -54,6 +62,11 @@ void totem_esb_diag_kat(int checkpoint, int status);
 /* ISR-safe: EINPROGRESS marks entry; other results count completed calls. */
 void totem_esb_diag_tx_step(enum totem_esb_diag_tx_step step, int result);
 
+/* ISR-safe high-water observations; no key content or per-key timestamps. */
+void totem_esb_diag_rx_observe(uint32_t queued_bytes, uint32_t age_ms);
+void totem_esb_diag_scan_observe(uint32_t queued_events);
+void totem_esb_diag_usb_observe(uint32_t queued_reports);
+
 #else
 
 static inline void totem_esb_diag_stage(enum totem_esb_diag_stage stage, int result) {
@@ -75,5 +88,12 @@ static inline void totem_esb_diag_tx_step(enum totem_esb_diag_tx_step step, int 
     (void)step;
     (void)result;
 }
+
+static inline void totem_esb_diag_rx_observe(uint32_t queued_bytes, uint32_t age_ms) {
+    (void)queued_bytes;
+    (void)age_ms;
+}
+static inline void totem_esb_diag_scan_observe(uint32_t queued_events) { (void)queued_events; }
+static inline void totem_esb_diag_usb_observe(uint32_t queued_reports) { (void)queued_reports; }
 
 #endif
