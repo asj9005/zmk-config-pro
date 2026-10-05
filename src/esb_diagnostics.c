@@ -189,11 +189,13 @@ static void diagnostics_work_handler(struct k_work *work) {
 
     printk("[esb-diag] role=%s uptime_ms=%lu rx_drop=%lu bad_position=%lu "
            "ht_overflow=%lu scan_overflow=%lu scan_resync=%lu usb_retry=%lu usb_overflow=%lu "
+           "input_retry=%lu input_overflow=%lu "
            "rx_high=%lu rx_age_max=%lu scan_high=%lu usb_high=%lu\n",
            TOTEM_DIAG_ROLE, uptime_ms, counts[TOTEM_DIAG_RX_OVERFLOW],
            counts[TOTEM_DIAG_RX_INVALID_POSITION], counts[TOTEM_DIAG_HOLD_TAP_OVERFLOW],
            counts[TOTEM_DIAG_SCAN_OVERFLOW], counts[TOTEM_DIAG_SCAN_RESYNC],
            counts[TOTEM_DIAG_USB_RETRY], counts[TOTEM_DIAG_USB_OVERFLOW],
+           counts[TOTEM_DIAG_INPUT_RETRY], counts[TOTEM_DIAG_INPUT_OVERFLOW],
            (unsigned long)(uint32_t)atomic_get(&rx_high_water),
            (unsigned long)(uint32_t)atomic_get(&rx_max_age_ms),
            (unsigned long)(uint32_t)atomic_get(&scan_high_water),

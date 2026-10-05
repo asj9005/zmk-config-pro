@@ -378,6 +378,19 @@ static int enqueue_v3_frame(
 
     size_t env_len = sizeof(env.prefix) + payload_size;
     struct esb_msg_postfix postfix;
+    size_t frame_size = env_len + sizeof(postfix) + sizeof(struct esb_msg_meta);
+    k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
+    if (ring_buf_space_get(&tx_buf) < frame_size) {
+        totem_esb_transport_queue_pressure(true);
+        /* Retry draining without repeating AES work on a still-full ring. */
+        begin_tx();
+        k_spin_unlock(&tx_ring_lock, key);
+        k_mutex_unlock(&event_mutex);
+        return -ENOSPC;
+    }
+    k_spin_unlock(&tx_ring_lock, key);
+    /* event_mutex serializes producers; IRQ callbacks can only free space.
+     * Keep crypto outside the IRQ lock and retain the final commit guard. */
     int err =
         zmk_split_esb_finalize_item((uint8_t *)&env, env_len, false, &postfix);
     if (err != 0) {
@@ -385,8 +398,7 @@ static int enqueue_v3_frame(
         return err;
     }
 
-    size_t frame_size = env_len + sizeof(postfix) + sizeof(struct esb_msg_meta);
-    k_spinlock_key_t key = k_spin_lock(&tx_ring_lock);
+    key = k_spin_lock(&tx_ring_lock);
     if (ring_buf_space_get(&tx_buf) < frame_size) {
         totem_esb_transport_queue_pressure(true);
         /* A recovered driver must be retried even when no new frame fits. */
@@ -591,15 +603,18 @@ static int report_event_locked(const struct zmk_split_transport_peripheral_event
     int err = enqueue_wire_event(ESB_WIRE_EVENT_ZMK, event);
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     /*
-     * A rekey can begin after the lock-free state check above. Preserve the
-     * event instead of returning ENOTCONN to ZMK and losing a short tap.
+     * Keep ordered edges during either rekey or temporary TX backpressure.
+     * The state snapshot can repair a held key after overflow, but cannot
+     * reconstruct a complete tap whose press and release were both lost.
      */
-    if (err == -ENOTCONN || err == -EOVERFLOW) {
+    if (err == -ENOTCONN || err == -EOVERFLOW || err == -ENOSPC) {
         if (k_msgq_put(&presession_events, event, K_NO_WAIT) != 0) {
             totem_esb_transport_queue_pressure(true);
             return -ENOSPC;
         }
-        if (err == -EOVERFLOW) {
+        if (err == -ENOSPC) {
+            k_work_reschedule(&flush_presession_work, K_NO_WAIT);
+        } else if (err == -EOVERFLOW) {
             int rekey_err = begin_fresh_v3_handshake();
             if (rekey_err != 0) {
                 k_work_reschedule(&flush_presession_work, K_MSEC(1));

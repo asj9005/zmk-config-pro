@@ -15,7 +15,7 @@
 #define TOTEM_MOUSE_BOOST_DEN 3
 
 /* Absolute cursor speeds, independent of the normal acceleration settings. */
-#define TOTEM_MOUSE_FAST_SPEED_NUM 7875
+#define TOTEM_MOUSE_FAST_SPEED_NUM 5250
 #define TOTEM_MOUSE_FAST_SPEED_DEN 1
 #define TOTEM_MOUSE_SLOW_SPEED_NUM 450
 #define TOTEM_MOUSE_SLOW_SPEED_DEN 1

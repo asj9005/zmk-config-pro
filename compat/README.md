@@ -8,7 +8,7 @@ revisions pinned in `config/west.yml`.
 | `badjeff/zmk-feature-split-esb` | `1f4cd4558bb9e0626ec2507f334f239862af859d` | ESB wire source/sequence/tick metadata, per-source state, queue-safe retry IDs, heartbeat and benchmark hooks |
 | `carrefinho/prospector-zmk-module` | `ed98221f3b52b7066dbb10ba3af8a29150b93a5a` | ESB-only Operator output widget and replacement for the unconditional BLE observer |
 | `badjeff/sdk-nrf` | `9b3d2623fdcd9c0fd0284f860beea924568c9826` | Per-pipe PRX ACK count/cancellation, PTX timer correction, read-only radio diagnostics |
-| `zmkfirmware/zmk` | `904c9aec8822d79149d42c8a9a77e8828eb08f5a` | ESB-only scan recovery, hold-tap overflow/replay handling, queued USB HID delivery and USB reset handling |
+| `zmkfirmware/zmk` | `904c9aec8822d79149d42c8a9a77e8828eb08f5a` | ESB-only scan recovery, hold-tap overflow/replay handling, queued USB HID delivery, USB reset handling and mouse-button release recovery |
 
 The copied files retain their upstream SPDX headers. Files derived from Nordic
 code remain under `LicenseRef-Nordic-5-Clause`; ZMK-derived files retain the MIT

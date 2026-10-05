@@ -20,6 +20,7 @@
 #include <zmk/keymap.h>
 #include <dt-bindings/zmk/pointing.h>
 #include <totem/pointing_curve.h>
+#include <totem/esb_diagnostics.h>
 
 #if IS_ENABLED(CONFIG_ZMK_POINTING_SMOOTH_SCROLLING)
 #include <zmk/pointing/resolution_multipliers.h>
@@ -55,6 +56,8 @@ struct behavior_input_two_axis_data {
     const struct device *dev;
 
     struct movement_state_2d state;
+    /* X may have entered the input queue before the synchronizing Y failed. */
+    bool sync_pending;
 };
 
 struct behavior_input_two_axis_config {
@@ -194,7 +197,7 @@ static bool is_non_zero_2d_movement(struct movement_state_2d *state) {
 }
 
 static bool should_be_working(struct behavior_input_two_axis_data *data) {
-    return is_non_zero_2d_movement(&data->state);
+    return is_non_zero_2d_movement(&data->state) || data->sync_pending;
 }
 
 static void tick_work_cb(struct k_work *work) {
@@ -203,6 +206,21 @@ static void tick_work_cb(struct k_work *work) {
         CONTAINER_OF(d_work, struct behavior_input_two_axis_data, tick_work);
     const struct device *dev = data->dev;
     const struct behavior_input_two_axis_config *cfg = dev->config;
+
+    if (data->sync_pending) {
+        /* Close the accepted partial frame even after every direction is up.
+         * Do not replay the lost displacement or mix in a newer movement. */
+        int err = input_report_rel(dev, cfg->y_code, 0, true, K_NO_WAIT);
+        if (err == 0) {
+            data->sync_pending = false;
+        } else {
+            totem_esb_diag_event(TOTEM_DIAG_INPUT_RETRY, err);
+        }
+        if (should_be_working(data)) {
+            k_work_schedule(&data->tick_work, K_MSEC(cfg->trigger_period_ms));
+        }
+        return;
+    }
 
     uint64_t timestamp = k_uptime_ticks();
 
@@ -213,16 +231,26 @@ static void tick_work_cb(struct k_work *work) {
     enum mouse_speed_mode mode = current_speed_mode(cfg);
     struct vector2d move = update_movement_2d(cfg, &data->state, timestamp, mode);
 
-    int ret = 0;
+    bool x_accepted = false;
     bool have_x = is_non_zero_1d_movement(move.x);
     bool have_y = is_non_zero_1d_movement(move.y);
     if (have_x) {
-        ret = input_report_rel(dev, cfg->x_code, (int16_t)CLAMP(move.x, INT16_MIN, INT16_MAX),
-                               !have_y, K_NO_WAIT);
+        int err = input_report_rel(dev, cfg->x_code,
+                                   (int16_t)CLAMP(move.x, INT16_MIN, INT16_MAX),
+                                   !have_y, K_NO_WAIT);
+        x_accepted = err == 0;
+        if (err != 0) {
+            totem_esb_diag_event(TOTEM_DIAG_INPUT_RETRY, err);
+        }
     }
     if (have_y) {
-        ret = input_report_rel(dev, cfg->y_code, (int16_t)CLAMP(move.y, INT16_MIN, INT16_MAX), true,
-                               K_NO_WAIT);
+        int err = input_report_rel(dev, cfg->y_code,
+                                   (int16_t)CLAMP(move.y, INT16_MIN, INT16_MAX), true,
+                                   K_NO_WAIT);
+        if (err != 0) {
+            data->sync_pending = x_accepted;
+            totem_esb_diag_event(TOTEM_DIAG_INPUT_RETRY, err);
+        }
     }
 
     if (should_be_working(data)) {

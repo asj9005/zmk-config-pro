@@ -44,6 +44,14 @@ def fixture_source(mutation: str | None = None) -> str:
         old = "i < MOUSE_SPEED_MODE_COUNT"
         assert tail.count(old) == 1
         actual = before + tail.replace(old, "i < 1", 1)
+    elif mutation == "drop_partial_sync":
+        old = "data->sync_pending = x_accepted;"
+        assert actual.count(old) == 1
+        actual = actual.replace(old, "data->sync_pending = false;")
+    elif mutation == "cancel_partial_sync":
+        old = " || data->sync_pending"
+        assert actual.count(old) == 1
+        actual = actual.replace(old, "")
     elif mutation is not None:
         raise ValueError(mutation)
     fixture = (ROOT / "tests/mouse_move_runtime_fixture.c").read_text(encoding="utf-8")
@@ -68,8 +76,7 @@ def compile_and_run(source: str, *, minimal: int = 0, smooth: int = 0):
                          f"/DCONFIG_MINIMAL_LIBC={minimal}", f"/DCONFIG_ZMK_POINTING_SMOOTH_SCROLLING={smooth}",
                          f"/I{ROOT / 'include'}", f"/I{ROOT / 'config'}", str(test_c), f"/Fe:{executable}"]
         else:
-            # Pinned behavior has intentionally unused callback parameters and
-            # the existing input-report result local; do not rewrite its C.
+            # Pinned behavior has intentionally unused callback parameters.
             arguments = ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                          "-Wno-unused-parameter", "-Wno-unused-but-set-variable",
                          f"-DCONFIG_MINIMAL_LIBC={minimal}", f"-DCONFIG_ZMK_POINTING_SMOOTH_SCROLLING={smooth}",
@@ -95,12 +102,14 @@ class ActualMouseMoveRuntimeTest(unittest.TestCase):
             with self.subTest(minimal_libc=minimal, smooth_scrolling=smooth):
                 run = compile_and_run(fixture_source(), minimal=minimal, smooth=smooth)
                 self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-                self.assertIn("7 actual mouse behavior cases passed", run.stdout)
+                self.assertIn("10 actual mouse behavior cases passed", run.stdout)
 
     def test_negative_controls_detect_state_and_snapshot_regressions(self) -> None:
         for mutation, case in (("shared_remainder", "normal_state_isolation"),
                                ("resample_y", "single_tick_snapshot"),
-                               ("keep_inactive_remainders", "binding_release_after_base")):
+                               ("keep_inactive_remainders", "binding_release_after_base"),
+                               ("drop_partial_sync", "partial_sync_after_release"),
+                               ("cancel_partial_sync", "partial_sync_after_release")):
             with self.subTest(mutation=mutation):
                 run = compile_and_run(fixture_source(mutation))
                 self.assertNotEqual(run.returncode, 0)
