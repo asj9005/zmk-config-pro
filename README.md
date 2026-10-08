@@ -18,7 +18,7 @@ Seeed XIAO BLE/nRF52840 기반 Totem 좌우 하프와 Prospector USB 동글용 Z
 - `totem_right_esb.uf2`
 - `totem_dongle_esb_prospector.uf2`
 
-Benchmark artifact는 각각 `_benchmark.uf2`로 끝나며 일상 사용용이 아니다. 공개 Actions의 v3 artifact에는 저장소에 공개된 폐기용 test key가 들어 있으므로 보안용 또는 일상용으로 플래시하지 않는다. 실제 v3 firmware는 로컬에서 생성한 production key로 세 역할을 빌드해야 한다. ZIP 자체는 플래시하지 않는다. 자세한 절차는 [ESB v2 빌드 및 플래시](docs/esb-1k-build-flash.md)와 [Secure v3 빌드 및 플래시](docs/esb-v3-build-flash.md)를 따른다.
+Benchmark artifact는 각각 `_benchmark.uf2`로 끝나며 일상 사용용이 아니다. 공개 Actions의 v3 artifact에는 저장소에 공개된 폐기용 test key가 들어 있으므로 보안용 또는 일상용으로 플래시하지 않는다. 실제 v3 firmware는 같은 production key 세트로 세 역할을 빌드해야 한다. 로컬 빌드 절차를 유지하며, 클라우드로 이전할 때는 공개 CI와 분리한 비공개 Actions 빌더를 구성한다. 개발용 Codex Cloud에는 개인키를 넣지 않는다([클라우드 개발 흐름](docs/cloud-development.md)). ZIP 자체는 플래시하지 않는다. 자세한 절차는 [ESB v2 빌드 및 플래시](docs/esb-1k-build-flash.md)와 [Secure v3 빌드 및 플래시](docs/esb-v3-build-flash.md)를 따른다.
 
 ## “1K”의 의미
 
@@ -73,6 +73,7 @@ Secure v3 후보는 half별 128-bit PSK, AES-128-CCM/MIC4, 두 random nonce로 �
 
 ## 문서
 
+- [클라우드 개발 환경과 개인키 빌드 흐름](docs/cloud-development.md)
 - [ESB 1K 타당성 검토](docs/esb-1k-feasibility.md)
 - [ESB 빌드 및 플래시](docs/esb-1k-build-flash.md)
 - [ESB 1K benchmark](docs/esb-1k-benchmark.md)

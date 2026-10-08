@@ -1,0 +1,2 @@
+# Host-side manifest regression only; firmware dependency pins are in config/west.yml.
+west==1.3.0

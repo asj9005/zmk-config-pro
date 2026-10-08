@@ -10,7 +10,9 @@ Secure v3는 평문 ESB v2에 AES-128-CCM/MIC4, half별 PSK, session key와 repl
 - flash/RAM 크기 확인
 - 별도의 보안 가치가 필요 없는 시험 장치에서 protocol bring-up
 
-공개 test key는 누구나 알고 있으므로 실제 키보드의 암호화·인증에 사용하면 안 된다. Production firmware는 아래 절차로 로컬에서 생성한 key를 넣어 빌드한다. Production `.keyconf`, UF2와 build directory를 GitHub, 메신저나 공개 artifact에 올리지 않는다.
+공개 test key는 누구나 알고 있으므로 실제 키보드의 암호화·인증에 사용하면 안 된다. Production firmware는 아래 로컬 절차 또는 별도 비공개 Actions 빌더에서 같은 개인키 세트로 빌드한다. 이미 사용 중인 개인키가 있으면 환경 이전을 위해 새 키를 생성하지 않는다. Production `.keyconf`, UF2와 build directory를 Git 저장소, 메신저나 공개 artifact에 올리지 않는다.
+
+클라우드 이전 시 개발용 Codex Cloud에는 이 공개 소스만 연결하고, 개인키는 분리한 비공개 빌더의 Secrets로 전달하도록 구성한다. 비공개 빌더도 원문 빌드 로그·설정·헤더를 공개해서는 안 된다. 이 문서의 3~6절은 로컬 대안이며, 클라우드 작업 흐름은 [클라우드 개발 안내](cloud-development.md)를 따른다. 설정 파일 추가와 실제 클라우드 빌드·실물 검증 완료는 별도로 확인한다.
 
 ## 2. 역할과 shield
 

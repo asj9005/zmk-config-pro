@@ -1,0 +1,39 @@
+name: Cloud development setup
+
+on:
+  push:
+    paths:
+      - .github/workflows/cloud-setup-check.yml
+      - tools/cloud-*.sh
+      - tools/requirements-cloud.txt
+      - tests/**
+      - AGENTS.md
+      - docs/cloud-development.md
+  pull_request:
+    paths:
+      - .github/workflows/cloud-setup-check.yml
+      - tools/cloud-*.sh
+      - tools/requirements-cloud.txt
+      - tests/**
+      - AGENTS.md
+      - docs/cloud-development.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-setup-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7, Node.js 24
+        with:
+          persist-credentials: false
+      - name: Prepare the cloud development environment and run host regressions
+        run: bash tools/cloud-setup.sh
