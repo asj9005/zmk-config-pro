@@ -36,6 +36,7 @@
 #define BIT(bit) (1U << (bit))
 #define CONTAINER_OF(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 #define K_MSEC(ms) (ms)
+#define K_NO_WAIT 0
 #define CHECK(condition) do { if (!(condition)) { \
     fprintf(stderr, "CHECK failed %s:%d: %s\n", scenario, __LINE__, #condition); exit(87); \
 } } while (0)
@@ -45,7 +46,7 @@ static int64_t now;
 static unsigned sleep_calls, overflow_count, dispatch_depth, maximum_dispatch_depth;
 static unsigned scenario_count;
 static bool cancel_in_progress;
-struct k_work { void (*handler)(struct k_work *); };
+struct k_work { void (*handler)(struct k_work *); bool running; };
 struct k_work_delayable { struct k_work work; bool pending; int64_t due; };
 static int64_t k_uptime_get(void) { return now; }
 static int k_msleep(int ms) { sleep_calls++; now += ms; return 0; }
@@ -56,13 +57,53 @@ static void k_work_init_delayable(struct k_work_delayable *work, void (*handler)
     *work = (struct k_work_delayable){.work = {.handler = handler}};
 }
 static int k_work_schedule(struct k_work_delayable *work, int64_t delay) {
-    if (!work->pending) { work->pending = true; work->due = now + delay; }
-    return 1;
+    if (work->pending) return 0;
+    work->pending = true; work->due = now + delay;
+    /* Pinned Zephyr work.c allows a RUNNING item to queue itself again on the
+     * same workqueue; K_NO_WAIT returns2 in that case. It is not reentrant. */
+    return delay == K_NO_WAIT && work->work.running ? 2 : 1;
 }
 static int k_work_cancel_delayable(struct k_work_delayable *work) {
     if (cancel_in_progress) { cancel_in_progress = false; return -EINPROGRESS; }
     work->pending = false; return 0;
 }
+
+/* Small local RX metadata FIFO. The production peek/validation/time-expansion
+ * functions and central hook below are extracted unchanged. RF authentication
+ * is represented by the payload marker; IRQ and work scheduling remain fake. */
+#define CONFIG_ESB_PIPE_COUNT 3
+#define CONFIG_ESB_MAX_PAYLOAD_LENGTH 64
+struct k_spinlock { bool held; };
+typedef unsigned int k_spinlock_key_t;
+static unsigned int rx_locks, rx_corrupt_count;
+static k_spinlock_key_t k_spin_lock(struct k_spinlock *lock) {
+    CHECK(!lock->held && rx_locks == 0); lock->held = true; rx_locks++; return 0;
+}
+static void k_spin_unlock(struct k_spinlock *lock, k_spinlock_key_t key) {
+    (void)key; CHECK(lock->held && rx_locks == 1); lock->held = false; rx_locks--;
+}
+struct ring_buf { uint8_t data[1024]; size_t size; };
+static struct ring_buf timed_rx;
+static size_t ring_buf_size_get(const struct ring_buf *ring) { return ring->size; }
+static bool ring_buf_is_empty(const struct ring_buf *ring) { return ring->size == 0; }
+static void ring_buf_reset(struct ring_buf *ring) { ring->size = 0; }
+static size_t ring_buf_peek(const struct ring_buf *ring, uint8_t *out, size_t size) {
+    if (size > ring->size) size = ring->size;
+    memcpy(out, ring->data, size); return size;
+}
+#pragma pack(push, 1)
+/* ACTUAL_RX_RECORD */
+#pragma pack(pop)
+struct zmk_split_esb_state {
+    struct ring_buf *rx_buf;
+    uint8_t rx_first_pipe, rx_last_pipe;
+    uint32_t rx_pipe_bytes[CONFIG_ESB_PIPE_COUNT];
+    struct k_spinlock rx_lock;
+};
+static struct zmk_split_esb_state state = {.rx_buf = &timed_rx, .rx_first_pipe = 1, .rx_last_pipe = 2};
+static int diag_frame_result(int error) { CHECK(rx_locks == 0); rx_corrupt_count++; return error; }
+/* ACTUAL_RX_TIMING_HELPERS */
+static bool totem_esb_rx_pending_before(int64_t deadline);
 void totem_esb_diag_event(enum totem_esb_diag_event event, int value) {
     (void)value;
     if (event == TOTEM_DIAG_HOLD_TAP_OVERFLOW) overflow_count++;
@@ -128,6 +169,7 @@ static size_t code_count;
 static bool overwrite_replay_slot, fail_tap_press;
 static uint8_t key_pos_states[2][5];
 static int esb_central;
+static const int *active_transport = &esb_central;
 enum { ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT = 1 };
 struct zmk_split_transport_peripheral_event {
     uint8_t type;
@@ -143,6 +185,7 @@ static int zmk_split_transport_central_peripheral_event_handler(
 static void totem_owned_swapper_source_reset(uint8_t source) { (void)source; }
 
 /* ACTUAL_CENTRAL_HELPERS */
+/* ACTUAL_CENTRAL_TIMING_HOOK */
 
 static const struct device *zmk_behavior_get_binding(const char *name) {
     for (size_t i = 0; i < 16; i++) if (strcmp(name, device_names[i]) == 0) return &devices[i];
@@ -265,6 +308,8 @@ static void reset_fixture(const char *name) {
     overwrite_replay_slot = fail_tap_press = cancel_in_progress = false;
     hold_press_count = hold_release_count = tap_press_count = tap_release_count = 0;
     delivery_count = code_count = 0;
+    CHECK(rx_locks == 0 && !state.rx_lock.held);
+    rx_record_reset(&state); rx_corrupt_count = 0; active_transport = &esb_central;
     for (unsigned i = 0; i < 16; i++) {
         snprintf(device_names[i], sizeof(device_names[i]), "ht%u", i);
         configurations[i] = (struct behavior_hold_tap_config){
@@ -289,7 +334,29 @@ static void wire_key(uint8_t source, uint32_t position, bool pressed, int64_t ti
     struct zmk_split_transport_peripheral_event event = {
         .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT,
         .data.key_position_event = {.position = position, .pressed = pressed}};
-    dispatch_wire_zmk_event(source, &event);
+    dispatch_wire_zmk_event(source, &event, timestamp);
+}
+static void enqueue_timed_key(uint8_t source, uint32_t position, bool pressed, int64_t ingress) {
+    struct esb_rx_record record = {.received_at = (uint32_t)ingress, .pipe = source + 1, .length = 1};
+    CHECK(source < 2 && position < 64 && timed_rx.size + sizeof(record) + 1 <= sizeof(timed_rx.data));
+    memcpy(timed_rx.data + timed_rx.size, &record, sizeof(record)); timed_rx.size += sizeof(record);
+    timed_rx.data[timed_rx.size++] = (uint8_t)position | (pressed ? 0x80U : 0U);
+    state.rx_pipe_bytes[record.pipe] += sizeof(record) + 1;
+}
+static void drain_timed_keys(unsigned int budget) {
+    while (budget-- && !ring_buf_is_empty(&timed_rx)) {
+        struct esb_rx_record record;
+        CHECK(rx_record_peek_valid(&state, &record));
+        uint8_t encoded = timed_rx.data[sizeof(record)];
+        size_t consumed = sizeof(record) + record.length;
+        timed_rx.size -= consumed; memmove(timed_rx.data, timed_rx.data + consumed, timed_rx.size);
+        state.rx_pipe_bytes[record.pipe] -= consumed;
+        if (encoded == 0xff) continue; /* Rejected RF authentication/body. */
+        struct zmk_split_transport_peripheral_event event = {
+            .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT,
+            .data.key_position_event = {.position = encoded & 0x3f, .pressed = (encoded & 0x80) != 0}};
+        dispatch_wire_zmk_event(record.pipe - 1, &event, rx_record_timestamp(record.received_at));
+    }
 }
 static size_t buffered(void) {
     size_t count = 0;
@@ -301,7 +368,9 @@ static void fire_timeout(uint32_t position, int64_t timestamp) {
     struct active_hold_tap *hold_tap = find_hold_tap(position);
     CHECK(hold_tap != NULL && hold_tap->work.pending);
     hold_tap->work.pending = false;
+    hold_tap->work.work.running = true;
     behavior_hold_tap_timer_work_handler(&hold_tap->work.work);
+    hold_tap->work.work.running = false;
 }
 static void expect_idle(void) {
     CHECK(undecided_hold_tap == NULL && buffered() == 0 && mouse_refs == 0);
@@ -310,6 +379,75 @@ static void expect_idle(void) {
     for (size_t i = 0; i < 256; i++) CHECK(code_refs[i] == 0);
     for (size_t i = 0; i < 38; i++) CHECK(!physical_bindings[i]);
     for (size_t i = 0; i < ZMK_BHV_HOLD_TAP_MAX_HELD; i++) CHECK(active_hold_taps[i].position == ZMK_BHV_HOLD_TAP_POSITION_NOT_USED);
+}
+
+static void ingress_timing_scenarios(void) {
+    reset_fixture("delayed_release_keeps_ingress_tap_interval");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(0, 2, false, 1080); now = 1250; drain_timed_keys(8);
+    CHECK(hold_press_count == 0 && tap_press_count == 1 && tap_release_count == 1);
+    expect_idle();
+
+    reset_fixture("timer_first_yields_to_already_queued_short_release");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(0, 2, false, 1080); fire_timeout(2, 1250);
+    CHECK(hold_press_count == 0 && find_hold_tap(2)->work.pending);
+    CHECK(find_hold_tap(2)->work.due == now); drain_timed_keys(8);
+    CHECK(tap_press_count == 1 && tap_release_count == 1); expect_idle();
+
+    reset_fixture("expired_queued_press_uses_immediate_nonnegative_timer");
+    bind_ht(2, 0, false, false);
+    enqueue_timed_key(0, 2, true, 1000); enqueue_timed_key(0, 2, false, 1080);
+    now = 1500; drain_timed_keys(1);
+    CHECK(find_hold_tap(2)->work.due == 1500); fire_timeout(2, 1500);
+    CHECK(hold_press_count == 0); drain_timed_keys(8);
+    CHECK(tap_press_count == 1); expect_idle();
+
+    reset_fixture("release_beyond_one_rx_batch_precedes_timer");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    for (unsigned i = 0; i < 4; i++) {
+        enqueue_timed_key(1, 20 + i, true, 1010 + i * 10);
+        enqueue_timed_key(1, 20 + i, false, 1011 + i * 10);
+    }
+    enqueue_timed_key(0, 2, false, 1080); fire_timeout(2, 1250);
+    drain_timed_keys(8); CHECK(!ring_buf_is_empty(&timed_rx));
+    fire_timeout(2, 1251); CHECK(hold_press_count == 0); drain_timed_keys(8);
+    CHECK(tap_press_count == 1); expect_idle();
+
+    reset_fixture("newer_rx_traffic_cannot_extend_genuine_hold");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(1, 20, true, 1100); enqueue_timed_key(1, 20, false, 1110);
+    enqueue_timed_key(1, 21, true, 1201); enqueue_timed_key(1, 21, false, 1202);
+    fire_timeout(2, 1250); CHECK(hold_press_count == 0); drain_timed_keys(2);
+    fire_timeout(2, 1251); CHECK(hold_press_count == 1 && undecided_hold_tap == NULL);
+    drain_timed_keys(8); wire_key(0, 2, false, 1300); CHECK(tap_press_count == 0); expect_idle();
+
+    reset_fixture("rx_timestamp_wrap_keeps_tap_and_deadline_order");
+    bind_ht(2, 0, false, false); int64_t press_at = (int64_t)UINT32_MAX - 100;
+    wire_key(0, 2, true, press_at); enqueue_timed_key(0, 2, false, press_at + 150);
+    fire_timeout(2, press_at + 400); CHECK(hold_press_count == 0); drain_timed_keys(8);
+    CHECK(tap_press_count == 1); expect_idle();
+
+    reset_fixture("malformed_rx_metadata_does_not_stall_hold_timer");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(0, 2, false, 1080);
+    timed_rx.data[offsetof(struct esb_rx_record, length)] = 0;
+    fire_timeout(2, 1250);
+    CHECK(rx_corrupt_count == 1 && hold_press_count == 1 && ring_buf_is_empty(&timed_rx));
+    wire_key(0, 2, false, 1300); expect_idle();
+
+    reset_fixture("rejected_old_packet_defers_only_until_its_dequeue");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(0, 2, false, 1080); timed_rx.data[sizeof(struct esb_rx_record)] = 0xff;
+    fire_timeout(2, 1250); CHECK(hold_press_count == 0); drain_timed_keys(8);
+    fire_timeout(2, 1251); CHECK(hold_press_count == 1);
+    wire_key(0, 2, false, 1300); expect_idle();
+
+    reset_fixture("inactive_esb_does_not_defer_other_transport_timer");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(0, 2, false, 1080); active_transport = NULL;
+    fire_timeout(2, 1250); CHECK(hold_press_count == 1);
+    wire_key(0, 2, false, 1300); expect_idle();
 }
 
 int main(void) {
@@ -467,6 +605,7 @@ int main(void) {
     CHECK(delivery_count == 20 && code_count == 20 && overflow_count == 0 && hold_press_count == 0);
     expect_idle();
 
+    ingress_timing_scenarios();
     printf("%u actual hold-tap scenarios passed\n", scenario_count);
     return 0;
 }

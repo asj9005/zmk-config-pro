@@ -12,6 +12,8 @@
 #define CONFIG_ZMK_POINTING 1
 #define IS_ENABLED(x) (x)
 #define LOG_DBG(...) ((void)0)
+#define LOG_ERR(...) ((void)0)
+#define __ASSERT_NO_MSG(condition) assert(condition)
 #define HID_PROTOCOL_REPORT 1
 #define HID_PROTOCOL_BOOT 0
 struct k_work { int unused; };
@@ -41,6 +43,11 @@ static struct totem_hid_packet sent[256];
 static const uint8_t *dma_pointer;
 static size_t dma_length;
 static unsigned int dma_slot;
+static bool use_nrfx_driver, stop_driver_on_lock;
+static int *driver_lock;
+static bool *driver_ready;
+static int usb_dc_ep_write(uint8_t ep, const uint8_t *data, uint32_t length,
+                           uint32_t *ret_bytes);
 static void set_proto_cb(const struct device *dev, uint8_t protocol);
 static void usb_status_cb(enum usb_dc_status_code status, const uint8_t *params);
 static enum usb_dc_status_code zmk_usb_get_status(void);
@@ -51,6 +58,9 @@ static void k_spin_unlock(struct k_spinlock *lock, int key) {
 }
 static int k_mutex_lock(int *mutex, int delay) {
     if (*mutex) { assert(delay == K_NO_WAIT); return -EBUSY; }
+    if (mutex == driver_lock && stop_driver_on_lock) {
+        *driver_ready = false; stop_driver_on_lock = false;
+    }
     *mutex = 1; return 0;
 }
 static void k_mutex_unlock(int *mutex) {
@@ -75,6 +85,7 @@ static int hid_int_ep_write(const struct device *dev, const uint8_t *data, size_
     (void)dev; (void)unused;
     assert(usb_endpoint_lock && !report_queue_lock.held);
     if (write_error) { return write_error; }
+    if (use_nrfx_driver) { return usb_dc_ep_write(0x81, data, (uint32_t)len, NULL); }
     assert(!dma_pointer && writes < 256);
     /* Retain the pointer: nrfx does not copy this buffer on submission. */
     assert(data == in_flight_packet.data);
@@ -109,6 +120,91 @@ static void usb_report_work_cb(struct k_work *work);
 /* ACTUAL_CALLBACKS */
 /* ACTUAL_USB_STATUS */
 
+/* Minimal common-driver boundary; the recovery and ep_write bodies below are
+ * extracted unchanged from the pinned driver overlay, not modelled here. */
+typedef int nrfx_err_t;
+#define NRFX_SUCCESS 0
+#define NRFX_POWER_USB_STATE_DISCONNECTED 0
+#define NRFX_POWER_USB_EVT_DETECTED 1
+#define USB_DC_EP_CONTROL 0
+#define USB_DC_EP_INTERRUPT 1
+#define NRF_USBD_EPOUT_CHECK(ep) (((ep) & 0x80) == 0)
+struct nrf_usbd_ep_ctx {
+    struct { bool en; int type; uint32_t max_sz; } cfg;
+    bool write_in_progress, trans_zlp;
+};
+struct nrf_usbd_ctx {
+    void (*status_cb)(enum usb_dc_status_code, const uint8_t *);
+    int drv_lock;
+    bool ready, attached;
+    struct { uint32_t wLength; } setup;
+};
+static struct nrf_usbd_ctx usbd_ctx;
+static struct nrf_usbd_ep_ctx driver_ep;
+static bool common_initialized, power_attached;
+static unsigned int aborts, reset_notifications, detected, old_driver_events;
+struct nrfx_transfer { const uint8_t *data; uint32_t length; };
+#define NRF_USBD_COMMON_TRANSFER_IN(name, data_, length_, flags_) \
+    struct nrfx_transfer name = {data_, length_}
+static struct nrf_usbd_ctx *get_usbd_ctx(void) { return &usbd_ctx; }
+static bool dev_attached(void) { return usbd_ctx.attached; }
+static bool dev_ready(void) { return usbd_ctx.ready; }
+static struct nrf_usbd_ep_ctx *endpoint_ctx(uint8_t ep) {
+    assert(ep == 0x81); return &driver_ep;
+}
+static uint8_t ep_addr_to_nrfx(uint8_t ep) { return ep; }
+static uint8_t nrf_usbd_common_last_setup_dir_get(void) { return 0x81; }
+static void nrf_usbd_common_setup_clear(void) {}
+static void usbd_event_handler(void) {}
+static void nrfx_power_usbevt_disable(void) { assert(usbd_ctx.drv_lock); }
+static void nrf_usbd_common_disable(void) {
+    assert(usbd_ctx.drv_lock && !usbd_ctx.ready && common_initialized);
+    /* Stopping the real controller terminates DMA; no IN callback follows. */
+    dma_pointer = NULL; aborts++;
+}
+static int eps_ctx_init(void) {
+    assert(usbd_ctx.drv_lock && common_initialized && !dma_pointer);
+    driver_ep.write_in_progress = false; return 0;
+}
+static void nrf_usbd_common_uninit(void) {
+    assert(usbd_ctx.drv_lock && !dma_pointer && !driver_ep.write_in_progress);
+    common_initialized = false;
+}
+static void usbd_evt_flush(void) {
+    assert(usbd_ctx.drv_lock && !dma_pointer); old_driver_events = 0;
+}
+static int nrf_usbd_common_init(void (*handler)(void)) {
+    assert(handler == usbd_event_handler && usbd_ctx.drv_lock && !common_initialized);
+    common_initialized = true; return NRFX_SUCCESS;
+}
+static void nrfx_power_usbevt_enable(void) {
+    assert(common_initialized && !usbd_ctx.ready && !usbd_ctx.drv_lock);
+    assert(reset_notifications > 0 || usbd_ctx.status_cb == NULL);
+}
+static int nrfx_power_usbstatus_get(void) { return power_attached ? 1 : 0; }
+static void usb_dc_power_event_handler(int event) {
+    assert(event == NRFX_POWER_USB_EVT_DETECTED && common_initialized);
+    assert(!usbd_ctx.drv_lock && !usbd_ctx.ready); detected++;
+}
+static int nrf_usbd_common_ep_transfer(uint8_t ep, const struct nrfx_transfer *transfer) {
+    assert(ep == 0x81 && common_initialized && usbd_ctx.ready && usbd_ctx.drv_lock);
+    assert(!dma_pointer && writes < 256 && transfer->data == in_flight_packet.data);
+    dma_pointer = transfer->data; dma_length = transfer->length; dma_slot = writes++;
+    return NRFX_SUCCESS;
+}
+static void driver_status_cb(enum usb_dc_status_code status, const uint8_t *params) {
+    /* The real USB core disables interface endpoints before the app callback.
+     * Its driver must already be initialized, while writes stay prohibited. */
+    assert(status == USB_DC_RESET && !dma_pointer && !old_driver_events);
+    assert(!usbd_ctx.drv_lock && !usbd_ctx.ready && common_initialized);
+    assert(!driver_ep.write_in_progress); driver_ep.cfg.en = false;
+    reset_notifications++; usb_status_cb(status, params);
+    unsigned int previous_writes = writes;
+    usb_report_work_cb(&usb_report_work);
+    assert(writes == previous_writes); /* Cannot reuse the buffer during recovery. */
+}
+/* ACTUAL_NRFX_RECOVERY */
+
 static void reset(void) {
     memset(&report_queue, 0, sizeof(report_queue));
     memset(&in_flight_packet, 0, sizeof(in_flight_packet));
@@ -122,6 +218,13 @@ static void reset(void) {
     usb_status = USB_DC_CONFIGURED; is_configured = true;
     in_flight = reports_need_resync = false; hid_protocol = HID_PROTOCOL_REPORT;
     dma_pointer = NULL; dma_length = 0;
+    use_nrfx_driver = stop_driver_on_lock = false;
+    usbd_ctx = (struct nrf_usbd_ctx){.status_cb = driver_status_cb, .ready = true,
+                                   .attached = true};
+    driver_ep = (struct nrf_usbd_ep_ctx){.cfg = {true, USB_DC_EP_INTERRUPT, 64}};
+    driver_lock = &usbd_ctx.drv_lock; driver_ready = &usbd_ctx.ready;
+    common_initialized = power_attached = true;
+    aborts = reset_notifications = detected = old_driver_events = 0;
 }
 static void offer(uint8_t value) {
     keyboard_report.key = value; boot_report.keys[0] = value;
@@ -131,7 +234,7 @@ static void complete(void) {
     assert(dma_pointer);
     sent[dma_slot].length = (uint8_t)dma_length;
     memcpy(sent[dma_slot].data, dma_pointer, dma_length);
-    dma_pointer = NULL; in_ready_cb(hid_dev);
+    dma_pointer = NULL; driver_ep.write_in_progress = false; in_ready_cb(hid_dev);
 }
 static void abort_and_notify(enum usb_dc_status_code status) {
     /* The pinned driver aborts DMA before delivering these status callbacks. */
@@ -227,6 +330,45 @@ int main(void) {
     unsigned int previous_scheduled = scheduled;
     usb_report_work_cb(&usb_report_work);
     assert(wakes == 0 && writes == 0 && scheduled == previous_scheduled);
-    puts("14 actual USB pipeline scenarios passed");
+
+    /* Internal event-queue overflow drops completion: recovery must explicitly
+     * abort DMA and notify the stack, then send the current released state. */
+    reset(); use_nrfx_driver = true;
+    offer(4); mouse_report.body.buttons = 1;
+    assert(zmk_usb_hid_send_mouse_report() == 0);
+    usb_report_work_cb(&usb_report_work); assert(dma_pointer && hid_sem == 0);
+    offer(0); mouse_report.body.buttons = 0;
+    mouse_report.body.d_x = 88; mouse_report.body.d_y = -40;
+    assert(zmk_usb_hid_send_mouse_report() == 0); old_driver_events = 3;
+    usbd_reinit();
+    assert(aborts == 1 && reset_notifications == 1 && detected == 1);
+    assert(!dma_pointer && !in_flight && hid_sem == 1 && !is_configured);
+    assert(report_queue.count == 0 && reports_need_resync && writes == 1);
+    /* Connected alone is not configured: no early report is submitted. */
+    usbd_ctx.ready = true; usb_status_cb(USB_DC_CONNECTED, NULL);
+    usb_report_work_cb(&usb_report_work); assert(writes == 1);
+    driver_ep.cfg.en = true; usb_status_cb(USB_DC_CONFIGURED, NULL); drain();
+    assert(writes == 4 && sent[1].data[1] == 0 && sent[2].data[1] == 0);
+    memcpy(&repaired, sent[3].data, sizeof(repaired));
+    assert(repaired.body.buttons == 0 && repaired.body.d_x == 0 && repaired.body.d_y == 0);
+    assert(repaired.body.d_scroll_x == 0 && repaired.body.d_scroll_y == 0);
+    offer(7); offer(0); drain(); assert(writes == 6 && sent[5].data[1] == 0);
+
+    /* A write already waiting for drv_lock must recheck readiness, never
+     * restart DMA into the just-aborted controller before RESET is delivered. */
+    reset(); use_nrfx_driver = true; stop_driver_on_lock = true; offer(4);
+    usb_report_work_cb(&usb_report_work);
+    assert(writes == 0 && !dma_pointer && !in_flight && hid_sem == 1);
+    assert(diagnostics[TOTEM_DIAG_USB_RETRY] == 1 && report_queue.count == 1);
+    usbd_reinit(); assert(reset_notifications == 1);
+
+    reset(); use_nrfx_driver = true; power_attached = false;
+    usbd_reinit(); assert(reset_notifications == 1 && detected == 0 && hid_sem == 1);
+
+    reset(); use_nrfx_driver = true; usbd_ctx.status_cb = NULL;
+    /* A controller without an upper stack still aborts and restarts safely. */
+    usbd_reinit();
+    assert(aborts == 1 && detected == 1 && !usbd_ctx.ready);
+    puts("18 actual USB pipeline scenarios passed");
     return 0;
 }

@@ -77,6 +77,15 @@ static K_WORK_DELAYABLE_DEFINE(key_state_work, key_state_work_cb);
 static atomic_t transport_ready;
 #endif
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3) && IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
+/* Battery events are change notifications, so an unchanged level otherwise
+ * never reaches a rebooted dongle. Keep only an actually observed sample. */
+static uint8_t cached_battery_level;
+static bool cached_battery_valid;
+static void battery_refresh_work_cb(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(battery_refresh_work, battery_refresh_work_cb);
+#endif
+
 #define RX_RING_BUF_SIZE (RX_BUFFER_SIZE * CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS)
 static struct ring_buf rx_buf;
 /* ACK commands are accepted only on this half's own pipe. */
@@ -628,9 +637,62 @@ static int report_event_locked(const struct zmk_split_transport_peripheral_event
     return err;
 }
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3) && IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
+static void battery_refresh_schedule_locked(void) {
+    if (cached_battery_valid) {
+        k_work_reschedule(&battery_refresh_work, K_SECONDS(1));
+    }
+}
+
+static int cache_battery_event_locked(const struct zmk_split_transport_peripheral_event *event) {
+    if (event->data.battery_event.level > 100) {
+        return -EINVAL;
+    }
+    cached_battery_level = event->data.battery_event.level;
+    cached_battery_valid = true;
+    battery_refresh_schedule_locked();
+    return 0;
+}
+
+static void battery_refresh_work_cb(struct k_work *work) {
+    ARG_UNUSED(work);
+    k_mutex_lock(&event_mutex, K_FOREVER);
+    if (!cached_battery_valid || !atomic_get(&transport_ready) ||
+        get_secure_state() != ESB_V3_ESTABLISHED) {
+        /* SESSION_OK restarts refresh after startup/reconnection. No polling
+         * is needed while disconnected, and no fabricated 0% is transmitted. */
+        k_mutex_unlock(&event_mutex);
+        return;
+    }
+    int err = -ENOSPC;
+    if (k_msgq_num_used_get(&presession_events) == 0) {
+        struct zmk_split_transport_peripheral_event event = {
+            .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_BATTERY_EVENT,
+            .data.battery_event.level = cached_battery_level,
+        };
+        err = enqueue_wire_event(ESB_WIRE_EVENT_ZMK, &event);
+    }
+    /* Yield to ordered input edges. A rejected enqueue retries slowly; a
+     * successful enqueue is refreshed at the sensor reporting interval since
+     * radio ACK alone does not prove the dongle applied this sample. The
+     * normal heartbeat handles rekey if an enqueue exhausts its sequence. */
+    k_work_reschedule(&battery_refresh_work,
+                     K_SECONDS(err == 0 ? MAX(1, CONFIG_ZMK_BATTERY_REPORT_INTERVAL) : 1));
+    k_mutex_unlock(&event_mutex);
+}
+#endif
+
 static int
 split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_event *event) {
     k_mutex_lock(&event_mutex, K_FOREVER);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3) && IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
+    if (event->type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_BATTERY_EVENT) {
+        /* Coalesce metadata outside the bounded key-edge queue. */
+        int err = cache_battery_event_locked(event);
+        k_mutex_unlock(&event_mutex);
+        return err;
+    }
+#endif
     bool key_event = event->type ==
                      ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT;
     if (key_event) {
@@ -1080,6 +1142,9 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
         downlink_sequence = 0;
         wait_session_ok_started_at = 0;
         set_secure_state(ESB_V3_ESTABLISHED);
+#if IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
+        battery_refresh_schedule_locked();
+#endif
         k_mutex_unlock(&event_mutex);
         (void)k_work_cancel_delayable(&handshake_work);
         k_work_reschedule(&flush_presession_work, K_NO_WAIT);
@@ -1220,8 +1285,17 @@ static void process_rx_work_cb(struct k_work *work) {
     for (; processed < ESB_RX_WORK_BATCH_SIZE; processed++) {
         uint8_t pipe = 0;
         struct esb_command_envelope env = {0};
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+        /* RX selects and uses the same PSA handles that a producer rekey can
+         * retire. Keep them alive through decryption, including a PSA wait,
+         * without holding an IRQ lock or extending the lock into dispatch. */
+        k_mutex_lock(&event_mutex, K_FOREVER);
+#endif
         int item_err = zmk_split_esb_rx_get(&state, (uint8_t *)&env,
-                                           sizeof(env), true, &pipe);
+                                           sizeof(env), true, &pipe, NULL);
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+        k_mutex_unlock(&event_mutex);
+#endif
         if (item_err == -ENODATA) {
             break;
         }

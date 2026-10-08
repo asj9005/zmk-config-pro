@@ -33,6 +33,7 @@ static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
 #define ARC_VALUE_ANIM_DURATION 300
 
 static uint8_t peripheral_battery[PERIPHERAL_COUNT] = {0};
+static bool peripheral_battery_known[PERIPHERAL_COUNT] = {false};
 static bool peripheral_connected[PERIPHERAL_COUNT] = {false};
 
 static lv_style_t style_arc_ring_disconnected;
@@ -182,6 +183,7 @@ static void animate_arc_value(lv_obj_t *arc, int32_t target_value) {
  * snapshot so a later right event cannot overwrite an unrendered left event. */
 struct battery_circles_state {
     uint8_t level[PERIPHERAL_COUNT];
+    bool known[PERIPHERAL_COUNT];
     bool connected[PERIPHERAL_COUNT];
 };
 
@@ -192,7 +194,8 @@ static void update_peripheral_display(uint8_t source) {
 
     bool connected = peripheral_connected[source];
     uint8_t level = peripheral_battery[source];
-    bool low_battery = connected && level > 0 && level <= LOW_BATTERY_THRESHOLD;
+    bool known = peripheral_battery_known[source];
+    bool low_battery = connected && known && level <= LOW_BATTERY_THRESHOLD;
 
     lv_obj_t *arc = peripheral_arcs[source];
     lv_obj_t *bar = peripheral_bars[source];
@@ -252,7 +255,7 @@ static void update_peripheral_display(uint8_t source) {
             lv_label_set_text(label, connected ? "PRPH" : "DISC");
         } else if (PERIPHERAL_COUNT == 2) {
             char text[4];
-            if (connected && level > 0) {
+            if (connected && known) {
                 snprintf(text, sizeof(text), "%d", level);
             } else {
                 snprintf(text, sizeof(text), "-");
@@ -267,7 +270,7 @@ static void update_peripheral_display(uint8_t source) {
         lv_obj_add_style(battery_label, battery_style, LV_PART_MAIN);
 
         char text[5];
-        if (connected && level > 0) {
+        if (connected && known) {
             if (PERIPHERAL_COUNT == 1) {
                 snprintf(text, sizeof(text), "%d%%", level);
             } else {
@@ -296,10 +299,12 @@ static void battery_circles_update_cb(struct battery_circles_state state) {
         }
         for (uint8_t source = 0; source < PERIPHERAL_COUNT; source++) {
             if (peripheral_battery[source] == state.level[source] &&
+                peripheral_battery_known[source] == state.known[source] &&
                 peripheral_connected[source] == state.connected[source]) {
                 continue;
             }
             peripheral_battery[source] = state.level[source];
+            peripheral_battery_known[source] = state.known[source];
             peripheral_connected[source] = state.connected[source];
             update_peripheral_display(source);
         }
@@ -311,15 +316,17 @@ static struct battery_circles_state battery_circles_get_state(const zmk_event_t 
      * These pending values are separate from the display-thread render cache. */
     static struct battery_circles_state state;
     if (eh == NULL) {
-        /* Connections/battery reports may precede display initialization. The
-         * transport cache is authoritative; zero still displays '-' until a
-         * positive battery sample arrives, as in the pinned layout. */
+        /* The pinned transport getter returns success for an unreported slot
+         * initialized to zero. Only an observed event proves that 0% is real;
+         * retain that knowledge across display initialization. */
         for (uint8_t source = 0; source < PERIPHERAL_COUNT; source++) {
             state.connected[source] = totem_esb_peer_is_connected(source);
 #if IS_ENABLED(CONFIG_ZMK_SPLIT_BLE_CENTRAL_BATTERY_LEVEL_FETCHING)
             uint8_t level;
-            if (zmk_split_central_get_peripheral_battery_level(source, &level) == 0) {
+            if (zmk_split_central_get_peripheral_battery_level(source, &level) == 0 &&
+                level <= 100) {
                 state.level[source] = level;
+                state.known[source] |= level > 0;
             }
 #endif
         }
@@ -328,8 +335,9 @@ static struct battery_circles_state battery_circles_get_state(const zmk_event_t 
 
     const struct zmk_peripheral_battery_state_changed *bat_ev =
         as_zmk_peripheral_battery_state_changed(eh);
-    if (bat_ev != NULL && bat_ev->source < PERIPHERAL_COUNT) {
+    if (bat_ev != NULL && bat_ev->source < PERIPHERAL_COUNT && bat_ev->state_of_charge <= 100) {
         state.level[bat_ev->source] = bat_ev->state_of_charge;
+        state.known[bat_ev->source] = true;
     }
     const struct zmk_split_central_status_changed *conn_ev =
         as_zmk_split_central_status_changed(eh);
@@ -341,8 +349,20 @@ static struct battery_circles_state battery_circles_get_state(const zmk_event_t 
 
 ZMK_DISPLAY_WIDGET_LISTENER(widget_battery_circles, struct battery_circles_state,
                             battery_circles_update_cb, battery_circles_get_state);
-ZMK_SUBSCRIPTION(widget_battery_circles, zmk_peripheral_battery_state_changed);
-ZMK_SUBSCRIPTION(widget_battery_circles, zmk_split_central_status_changed);
+
+static int battery_circles_listener(const zmk_event_t *eh) {
+    if (!zmk_display_is_initialized()) {
+        /* Record real samples before objects exist, under the widget mutex.
+         * The usual listener deliberately skips events until display init. */
+        widget_battery_circles_refresh_state(eh);
+        return ZMK_EV_EVENT_BUBBLE;
+    }
+    return widget_battery_circles_cb(eh);
+}
+
+ZMK_LISTENER(widget_battery_circles_samples, battery_circles_listener);
+ZMK_SUBSCRIPTION(widget_battery_circles_samples, zmk_peripheral_battery_state_changed);
+ZMK_SUBSCRIPTION(widget_battery_circles_samples, zmk_split_central_status_changed);
 
 int zmk_widget_battery_circles_init(struct zmk_widget_battery_circles *widget, lv_obj_t *parent) {
     init_styles();

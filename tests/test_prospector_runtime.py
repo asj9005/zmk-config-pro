@@ -58,17 +58,26 @@ class ProspectorRuntimeTests(unittest.TestCase):
             battery = (OPERATOR / "battery_circles.c").read_text(encoding="utf-8")
             wpm = (OPERATOR / "wpm_meter.c").read_text(encoding="utf-8")
             output = (OPERATOR / "output.c").read_text(encoding="utf-8")
+            modifier = (OPERATOR / "modifier_indicator.c").read_text(encoding="utf-8")
             run("battery", battery)
             run("wpm", wpm)
             run("output", output)
+            run("modifier", modifier)
+            run("modifier-caps", "#define CONFIG_DT_HAS_ZMK_BEHAVIOR_CAPS_WORD_ENABLED 1\n" + modifier)
 
             mutations = {
                 "battery-forget-other-source": (battery, "static struct battery_circles_state state;", "struct battery_circles_state state = {0};"),
                 "battery-redraw-duplicates": (battery, "if (peripheral_battery[source] == state.level[source] &&", "if (false && peripheral_battery[source] == state.level[source] &&"),
                 "battery-init-before-ready": (battery, "widget->initialized = true;", "widget_battery_circles_init();\n    widget->initialized = true;"),
+                "battery-zero-hidden": (battery, "if (connected && known)", "if (connected && known && level > 0)"),
+                "battery-unknown-is-zero": (battery, "state.known[source] |= level > 0;", "state.known[source] = true;"),
+                "battery-loses-early-zero": (battery, "        widget_battery_circles_refresh_state(eh);", "        /* Mutation: discard the only evidence of a real 0% sample. */"),
+                "battery-known-change-ignored": (battery, "                peripheral_battery_known[source] == state.known[source] &&\n", ""),
                 "wpm-system-queue": (wpm, "k_work_schedule_for_queue(zmk_display_work_q(), &wpm_smooth_work, K_MSEC(33))", "k_work_schedule(&wpm_smooth_work, K_MSEC(33))"),
                 "wpm-init-after-schedule": (wpm, "k_work_init_delayable(&wpm_smooth_work, wpm_smooth_work_handler);", "/* missing work initialization */"),
                 "output-direct-render": (output, "return zmk_endpoint_get_selected().transport;", "output_update_cb(zmk_endpoint_get_selected().transport);\n    return zmk_endpoint_get_selected().transport;"),
+                "modifier-redraw-duplicates": (modifier, "if (rendered_modifiers_valid && rendered_modifiers == mask)", "if (false && rendered_modifiers_valid && rendered_modifiers == mask)"),
+                "modifier-new-widget-stale": (modifier, "    rendered_modifiers_valid = false;", "    /* Mutation: new widget skipped by global cache. */"),
             }
             for name, (source, before, after) in mutations.items():
                 self.assertIn(before, source, name)
@@ -78,7 +87,7 @@ class ProspectorRuntimeTests(unittest.TestCase):
                     # the widget joins the list.
                     mutated = mutated.replace("sys_slist_append(&widgets, &widget->node);\n    widget_battery_circles_init();", "sys_slist_append(&widgets, &widget->node);")
                 run(name, mutated, expect_pass=False)
-            print("Prospector: 3 complete overlays and 6 defect mutations checked")
+            print("Prospector: 4 complete overlays and 12 defect mutations checked")
 
 
 if __name__ == "__main__":

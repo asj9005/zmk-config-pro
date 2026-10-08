@@ -248,6 +248,8 @@ west build -p always -s zmk/app -d build/totem_dongle_esb_v3_prospector_benchmar
 
 동글→왼쪽→오른쪽 순서는 역할과 키 세트를 혼동하지 않기 위한 작업 순서이며, 프로토콜의 필수 플래시 순서는 아니다. 공개 테스트키에서 개인키로 바꾸는 동안에는 아직 다른 키를 쓰는 장치가 연결되지 않는 것이 정상이다. 세 장치의 업로드가 모두 끝난 뒤 판단한다.
 
+동글만 재부팅해도 배터리 표시가 복구되도록, v3 half는 실제 수신한 배터리 측정값을 보관하고 인증된 새 연결 후 약 1초 뒤 다시 보낸다. 이후 `CONFIG_ZMK_BATTERY_REPORT_INTERVAL` 간격으로 같은 값을 갱신해 일시적인 패킷 유실도 복구한다. 키 입력 대기열이 남아 있거나 송신 큐가 가득 차면 1초 뒤 재시도하며, 연결 전에는 배터리 재시도만을 위한 반복 작업을 하지 않는다. 아직 측정값이 없으면 0%를 만들어 보내지 않는다. 실물 확인은 양쪽 전원을 유지한 채 동글만 재연결하고, 입력과 배터리 표시가 함께 복구되는지 점검한다.
+
 **일반 v3 업데이트와 키 교체에 `settings_reset`은 필요하지 않다.** 현재 PSK는 빌드된 [생성 헤더](../CMakeLists.txt)에서 로드하고, [암호 구현](../src/totem_esb_v3_crypto.c)은 PSA 키를 volatile로 import한다. [Peripheral](../compat/zmk-feature-split-esb/src/split/esb/peripheral.c)은 부팅마다 새 random nonce로 handshake를 시작하고, [central](../compat/zmk-feature-split-esb/src/split/esb/central.c)의 session/replay 상태도 RAM에 둔다. ESB v3의 연결 키나 session을 settings에 저장·복원하는 경로가 없어 reset firmware를 먼저 넣을 이유가 없다. 기존 연결·재시작 실물 확인도 reset firmware 없이 진행했다.
 
 `settings_reset`은 BLE bond나 저장된 Studio 설정 등을 의도적으로 초기화할 때 사용한다. Pinned ZMK의 [NVS reset 구현](https://github.com/zmkfirmware/zmk/blob/904c9aec8822d79149d42c8a9a77e8828eb08f5a/app/src/settings/reset_settings_nvs.c)은 settings flash partition 전체를 지우므로, 현재 설정을 유지하려는 업데이트에 반복 적용하지 않는다. 키 불일치는 reset으로 해결되지 않으며 올바른 동일 세트의 세 UF2를 다시 빌드·업로드해야 한다.

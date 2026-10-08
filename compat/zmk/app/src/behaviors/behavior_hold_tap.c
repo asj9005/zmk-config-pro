@@ -13,6 +13,7 @@
 #include <zephyr/logging/log.h>
 #include <zmk/behavior.h>
 #include <totem/esb_diagnostics.h>
+#include <totem/esb_rx_timing.h>
 #include <zmk/matrix.h>
 #include <zmk/endpoints.h>
 #include <zmk/event_manager.h>
@@ -646,7 +647,8 @@ static int on_hold_tap_binding_pressed(struct zmk_behavior_binding *binding,
     // if this behavior was queued we have to adjust the timer to only
     // wait for the remaining time.
     int32_t tapping_term_ms_left = (hold_tap->timestamp + cfg->tapping_term_ms) - k_uptime_get();
-    k_work_schedule(&hold_tap->work, K_MSEC(tapping_term_ms_left));
+    k_work_schedule(&hold_tap->work, tapping_term_ms_left > 0
+                                       ? K_MSEC(tapping_term_ms_left) : K_NO_WAIT);
 
     return ZMK_BEHAVIOR_OPAQUE;
 }
@@ -867,6 +869,13 @@ void behavior_hold_tap_timer_work_handler(struct k_work *item) {
 
     if (hold_tap->work_is_cancelled) {
         clear_hold_tap(hold_tap);
+    } else if (hold_tap->status == STATUS_UNDECIDED &&
+               totem_esb_rx_pending_before(
+                   hold_tap->timestamp + hold_tap->config->tapping_term_ms)) {
+        /* RX and this timer run on the system workqueue. Yield behind the next
+         * bounded RX batch so an older release can decide its original tap.
+         * Packets arriving after the deadline cannot extend a genuine hold. */
+        k_work_schedule(&hold_tap->work, K_NO_WAIT);
     } else {
         decide_hold_tap(hold_tap, HT_TIMER_EVENT);
     }

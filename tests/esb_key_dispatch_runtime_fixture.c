@@ -102,7 +102,7 @@ static void wire_key(uint8_t source, uint32_t position, bool pressed) {
         .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT,
         .data.key_position_event = {.position = position, .pressed = pressed},
     };
-    dispatch_wire_zmk_event(source, &event);
+    dispatch_wire_zmk_event(source, &event, k_uptime_get());
 }
 static size_t snapshot(uint8_t source, const uint8_t desired[5]) {
     return totem_esb_key_state_reconcile(key_pos_states[source], desired, 38,
@@ -135,7 +135,7 @@ static void normal_edges_and_duplicate_release(void) {
     wire_key(0, 7, false);
     CHECK(transition_count == 4 && activity[0][7] == 0);
     for (size_t index = 0; index < 4; index++) {
-        expect_transition(index, 0, 7, index % 2 == 0, false);
+        expect_transition(index, 0, 7, index % 2 == 0, true);
     }
 }
 static void repeated_press_keeps_synthetic_release(void) {
@@ -143,13 +143,13 @@ static void repeated_press_keeps_synthetic_release(void) {
     wire_key(1, 37, true);
     wire_key(1, 37, true);
     CHECK(transition_count == 3 && activity[1][37] == 1);
-    expect_transition(0, 1, 37, true, false);
+    expect_transition(0, 1, 37, true, true);
     expect_transition(1, 1, 37, false, true);
-    expect_transition(2, 1, 37, true, false);
+    expect_transition(2, 1, 37, true, true);
     wire_key(1, 37, false);
     wire_key(1, 37, false);
     CHECK(transition_count == 4 && activity[1][37] == 0);
-    expect_transition(3, 1, 37, false, false);
+    expect_transition(3, 1, 37, false, true);
 }
 static void snapshot_recovers_missing_edges(void) {
     reset_fixture("snapshot_recovers_missing_edges");
@@ -175,7 +175,7 @@ static void snapshot_release_order_and_later_press(void) {
     expect_transition(2, 0, 0, true, false);
     wire_key(0, 0, true);
     expect_transition(3, 0, 0, false, true);
-    expect_transition(4, 0, 0, true, false);
+    expect_transition(4, 0, 0, true, true);
     wire_key(0, 0, false);
     CHECK(activity[0][0] == 0 && activity[0][37] == 0);
 }
@@ -202,8 +202,8 @@ static void cleanup_and_reconnect_keep_sources_independent(void) {
 static void non_key_events_are_unchanged(void) {
     reset_fixture("non_key_events_are_unchanged");
     struct zmk_split_transport_peripheral_event event = {.type = NON_KEY_EVENT, .data.other = 1234};
-    dispatch_wire_zmk_event(0, &event);
-    dispatch_wire_zmk_event(1, &event);
+    dispatch_wire_zmk_event(0, &event, k_uptime_get());
+    dispatch_wire_zmk_event(1, &event, k_uptime_get());
     CHECK(other_event_count == 2 && transition_count == 0);
 }
 static void invalid_source_and_position_stay_outside_zmk(void) {

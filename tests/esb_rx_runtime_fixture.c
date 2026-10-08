@@ -45,8 +45,27 @@ static k_spinlock_key_t k_spin_lock(struct k_spinlock *lock) {
 static void k_spin_unlock(struct k_spinlock *lock, k_spinlock_key_t key) {
     ARG_UNUSED(key); CHECK(lock->held && locks == 1); lock->held = 0; locks--;
 }
-static uint32_t now;
-static uint32_t k_uptime_get_32(void) { return now; }
+#if !TEST_CENTRAL && CONFIG_TOTEM_ESB_V3
+#define K_FOREVER (-1)
+static struct { bool held; } event_mutex;
+static unsigned int mutex_locks, mutex_unlocks, key_generation;
+static bool inject_rekey, rekey_waiting, decrypt_completed;
+static void k_mutex_lock(void *mutex, int timeout) {
+    CHECK(mutex == &event_mutex && timeout == K_FOREVER && locks == 0);
+    CHECK(!event_mutex.held); event_mutex.held = true; mutex_locks++;
+}
+static void k_mutex_unlock(void *mutex) {
+    CHECK(mutex == &event_mutex && event_mutex.held && locks == 0);
+    event_mutex.held = false; mutex_unlocks++;
+    if (rekey_waiting) {
+        /* A producer waiting to retire the selected key resumes here. */
+        CHECK(decrypt_completed); key_generation++; rekey_waiting = false;
+    }
+}
+#endif
+static int64_t now;
+static uint32_t k_uptime_get_32(void) { return (uint32_t)now; }
+static int64_t k_uptime_get(void) { return now; }
 struct ring_buf { uint8_t *buffer; uint32_t capacity, size, head; };
 static void ring_buf_init(struct ring_buf *r, uint32_t capacity, uint8_t *data) {
     *r = (struct ring_buf){.buffer = data, .capacity = capacity};
@@ -132,6 +151,18 @@ static int totem_esb_v3_open(uint8_t source, int direction, enum totem_esb_v3_ke
     CHECK(locks == 0 && source < CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT);
     CHECK(aad_len == sizeof(struct esb_msg_prefix) + sizeof(struct esb_v3_wire_payload_header));
     CHECK(body == aad + aad_len); ARG_UNUSED(body_len); ARG_UNUSED(direction); ARG_UNUSED(session); ARG_UNUSED(sequence);
+#if !TEST_CENTRAL
+    if (inject_rekey) {
+        unsigned int selected_key = key_generation;
+        inject_rekey = false;
+        /* Model a PSA operation yielding after it selects the old handle.
+         * A concurrent producer takes event_mutex before retiring that key. */
+        if (event_mutex.held) { rekey_waiting = true; }
+        else { key_generation++; }
+        if (key_generation != selected_key) { return -EIO; }
+        decrypt_completed = true;
+    }
+#endif
     last_stage = stage; crypto_calls++; return tag[0] == 0xee ? -EACCES : 0;
 }
 static void totem_esb_benchmark_security_drop(uint8_t source, const char *why, uint32_t sequence) {
@@ -194,18 +225,49 @@ static unsigned int delivered_count;
 static bool replenish;
 static void record_dispatch(uint8_t pipe, const test_envelope *env) {
     CHECK(locks == 0 && delivered_count < 512);
+#if !TEST_CENTRAL && CONFIG_TOTEM_ESB_V3
+    CHECK(!event_mutex.held);
+#endif
     delivered_pipes[delivered_count] = pipe; delivered[delivered_count++] = envelope_id(env);
     if (replenish && delivered_count < 32) { enqueue_id(first_pipe(), 1000 + delivered_count); }
 }
 /* ACTUAL_WORKER */
 static int pop(test_envelope *env, uint8_t *pipe) {
-    return zmk_split_esb_rx_get(&state, (uint8_t *)env, sizeof(*env), !TEST_CENTRAL, pipe);
+    return zmk_split_esb_rx_get(&state, (uint8_t *)env, sizeof(*env), !TEST_CENTRAL, pipe, NULL);
 }
 static void reset_fixture(const char *name) {
     scenario = name; init_rx_buffers(); memset(state.rx_pipe_bytes, 0, sizeof(state.rx_pipe_bytes));
     memset(state.rx_overflow_count, 0, sizeof(state.rx_overflow_count));
     scheduled = invalid_count = overflow_count = frame_errors = worker_errors = bad_positions = 0;
     delivered_count = 0; replenish = false; now = high_water = max_age = 0; CHECK(locks == 0);
+#if !TEST_CENTRAL && CONFIG_TOTEM_ESB_V3
+    CHECK(!event_mutex.held && !rekey_waiting);
+    mutex_locks = mutex_unlocks = key_generation = 0;
+    inject_rekey = decrypt_completed = false;
+#endif
+}
+
+static void rx_rekey_exclusion(void) {
+#if !TEST_CENTRAL && CONFIG_TOTEM_ESB_V3
+    /* References also keep the deliberately missing-lock mutation compilable. */
+    (void)k_mutex_lock; (void)k_mutex_unlock;
+    reset_fixture("rx_rekey_exclusion");
+    enqueue_id(first_pipe(), 81); inject_rekey = true;
+    struct k_work work = {0}; process_rx_work_cb(&work);
+    CHECK(decrypt_completed && key_generation == 1 && !rekey_waiting);
+    CHECK(delivered_count == 1 && delivered[0] == 81 && worker_errors == 0);
+    CHECK(!event_mutex.held && mutex_locks == 2 && mutex_unlocks == 2);
+    /* Authentication, malformed packets, and an empty queue must all unlock. */
+    reset_fixture("rx_rekey_error_unlock");
+    uint8_t packet[64]; size_t size = make_packet(packet, first_pipe(), 82, 0);
+    packet[size - sizeof(struct esb_msg_postfix)] = 0xee;
+    admit(first_pipe(), packet, size);
+    size = make_packet(packet, first_pipe(), 83, 0); packet[0] ^= 1;
+    admit(first_pipe(), packet, size);
+    process_rx_work_cb(&work);
+    CHECK(worker_errors == 2 && delivered_count == 0);
+    CHECK(!event_mutex.held && mutex_locks == 3 && mutex_unlocks == 3);
+#endif
 }
 
 static void storage_and_admission(void) {
@@ -310,7 +372,7 @@ static void wrap_and_age(void) {
     for (unsigned int i = 0; i < 600; i++) {
         now = i; enqueue_id(first_pipe(), i); CHECK(pop(&env, &pipe) == 0 && envelope_id(&env) == i);
     }
-    now = UINT32_MAX - 9U; enqueue_id(first_pipe(), 601); now = 15;
+    now = UINT32_MAX - 9U; enqueue_id(first_pipe(), 601); now = (int64_t)UINT32_MAX + 16;
     CHECK(pop(&env, &pipe) == 0 && max_age == 25);
     CHECK(high_water > sizeof(struct esb_rx_record));
 }
@@ -326,6 +388,37 @@ static void position_validation(void) {
     env.payload.body.event.data.key_position_event.position = 38; CHECK(!event_payload_size_is_valid(&env));
     env.payload.body.event.data.key_position_event.position = 255; CHECK(!event_payload_size_is_valid(&env));
     CHECK(bad_positions == 2);
+}
+static void ingress_time_and_timer_barrier(void) {
+    reset_fixture("ingress_time_and_timer_barrier");
+    test_envelope env; uint8_t pipe; int64_t received_at = -1;
+    now = (int64_t)UINT32_MAX - 9; enqueue_id(first_pipe(), 701);
+    now += 40;
+    CHECK(zmk_split_esb_rx_pending_before(&state, (int64_t)UINT32_MAX - 9));
+    CHECK(!zmk_split_esb_rx_pending_before(&state, (int64_t)UINT32_MAX - 10));
+    CHECK(zmk_split_esb_rx_get(&state, (uint8_t *)&env, sizeof(env), !TEST_CENTRAL,
+                              &pipe, &received_at) == 0);
+    CHECK(received_at == (int64_t)UINT32_MAX - 9 && envelope_id(&env) == 701);
+    CHECK(!zmk_split_esb_rx_pending_before(&state, now));
+    /* Later traffic never prolongs the older tapping deadline. */
+    enqueue_id(first_pipe(), 702);
+    CHECK(!zmk_split_esb_rx_pending_before(&state, now - 1));
+    CHECK(pop(&env, &pipe) == 0);
+    /* Malformed local metadata is cleared once rather than holding a timer. */
+    enqueue_id(first_pipe(), 703);
+    rx_buf.buffer[(rx_buf.head + offsetof(struct esb_rx_record, length)) % rx_buf.capacity] = 0;
+    unsigned int before = frame_errors;
+    CHECK(!zmk_split_esb_rx_pending_before(&state, now));
+    CHECK(frame_errors == before + 1 && ring_buf_is_empty(&rx_buf));
+    for (size_t p = 0; p < CONFIG_ESB_PIPE_COUNT; p++) { CHECK(state.rx_pipe_bytes[p] == 0); }
+    CHECK(!zmk_split_esb_rx_pending_before(&state, now) && frame_errors == before + 1);
+    /* Malformed RF payload keeps valid metadata: its normal dequeue releases
+     * the barrier without dispatching the unauthenticated event. */
+    uint8_t packet[64]; size_t size = make_packet(packet, first_pipe(), 704, 0);
+    packet[0] ^= 1; admit(first_pipe(), packet, size);
+    CHECK(zmk_split_esb_rx_pending_before(&state, now));
+    CHECK(pop(&env, &pipe) == -EPROTO);
+    CHECK(!zmk_split_esb_rx_pending_before(&state, now));
 }
 struct esb_payload { uint8_t pipe; uint16_t length; uint8_t data[64]; };
 static struct esb_payload radio_packets[2];
@@ -355,5 +448,7 @@ int main(void) {
     CHECK(crc32_ieee((const uint8_t *)"", 0) == 17);
     storage_and_admission(); arrival_order(); per_pipe_quota(); bounded_worker();
     packet_boundaries(); authentication_boundary(); wrap_and_age(); position_validation(); driver_buffer_lifetime();
-    puts("9 actual RX scenarios passed"); return 0;
+    rx_rekey_exclusion();
+    ingress_time_and_timer_barrier();
+    puts("11 actual RX scenarios passed"); return 0;
 }

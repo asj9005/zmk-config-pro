@@ -32,6 +32,7 @@ jobs:
             tests/test_esb_startup_runtime.py \
             tests/test_esb_admission_runtime.py \
             tests/test_esb_rx_runtime.py \
+            tests/test_esb_battery_runtime.py \
             tests/test_esb_tx_liveness_runtime.py \
             tests/test_esb_key_dispatch_runtime.py \
             tests/test_hold_tap_runtime.py \
@@ -41,6 +42,7 @@ jobs:
             tests/test_mouse_button_runtime.py \
             tests/test_auto_base.py \
             tests/test_owned_swapper.py \
+            tests/test_prospector_brightness_runtime.py \
             tests/test_prospector_runtime.py
 
   build:

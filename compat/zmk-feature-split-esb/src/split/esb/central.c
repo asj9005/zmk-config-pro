@@ -26,6 +26,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 #include <zmk/split/transport/types.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/position_state_changed.h>
+#include <totem/esb_rx_timing.h>
 #include <zmk/events/sensor_event.h>
 #include <zmk/pointing/input_split.h>
 #include <zmk/hid_indicators_types.h>
@@ -469,6 +470,11 @@ SYS_INIT(zmk_split_esb_central_init, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DE
 
 extern const struct zmk_split_transport_central *active_transport;
 
+bool totem_esb_rx_pending_before(int64_t deadline) {
+    return active_transport == &esb_central &&
+        zmk_split_esb_rx_pending_before(&state, deadline);
+}
+
 struct esb_rx_sequence_state {
     bool session_initialized;
     bool initialized;
@@ -591,7 +597,8 @@ static void emit_snapshot_key(void *context, uint8_t position, bool pressed) {
  * bitmap before emitting, so its synthetic transitions use emit_snapshot_key.
  */
 static void dispatch_wire_zmk_event(
-    uint8_t source, const struct zmk_split_transport_peripheral_event *event) {
+    uint8_t source, const struct zmk_split_transport_peripheral_event *event,
+    int64_t received_at) {
     if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT) {
         totem_esb_diag_event(TOTEM_DIAG_RX_INVALID_POSITION, -EADDRNOTAVAIL);
         return;
@@ -615,7 +622,7 @@ static void dispatch_wire_zmk_event(
                         .source = source,
                         .position = position,
                         .state = false,
-                        .timestamp = k_uptime_get(),
+                        .timestamp = received_at,
                     });
                 }
                 source_keys[position / 8] |= mask;
@@ -630,6 +637,16 @@ static void dispatch_wire_zmk_event(
                 source_keys[position / 8] &= (uint8_t)~mask;
             }
         }
+        /* The upstream transport helper stamps processing time, which stretches
+         * a short tap when its release waits in this FIFO. Keep ingress time
+         * for authenticated wire edges; synthetic recovery still uses now. */
+        raise_zmk_position_state_changed((struct zmk_position_state_changed){
+            .source = source,
+            .position = position,
+            .state = event->data.key_position_event.pressed,
+            .timestamp = received_at,
+        });
+        return;
     }
     zmk_split_transport_central_peripheral_event_handler(&esb_central, source, *event);
 }
@@ -1108,8 +1125,9 @@ static void process_rx_work_cb(struct k_work *work) {
     for (; processed < ESB_RX_WORK_BATCH_SIZE; processed++) {
         uint8_t pipe = 0;
         struct esb_event_envelope env = {0};
+        int64_t received_at = 0;
         int item_err = zmk_split_esb_rx_get(&state, (uint8_t *)&env,
-                                           sizeof(env), false, &pipe);
+                                           sizeof(env), false, &pipe, &received_at);
         if (item_err == -ENODATA) {
             break;
         }
@@ -1231,7 +1249,7 @@ static void process_rx_work_cb(struct k_work *work) {
                 break;
             }
 
-            dispatch_wire_zmk_event(source, &env.payload.body.event);
+            dispatch_wire_zmk_event(source, &env.payload.body.event, received_at);
             break;
         }
         case -EACCES:

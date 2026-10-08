@@ -335,8 +335,55 @@ static int decode_rx_packet(const uint8_t *packet, size_t packet_size,
     return diag_frame_result(0);
 }
 
+/* A queued record is necessarily from the current uptime epoch. Unsigned
+ * subtraction expands its 32-bit clock across wrap without changing the wire
+ * format. The bounded RX FIFO cannot legitimately retain traffic for 49 days. */
+static int64_t rx_record_timestamp(uint32_t received_at) {
+    int64_t now = k_uptime_get();
+    return now - (uint32_t)((uint32_t)now - received_at);
+}
+
+static bool rx_record_peek_valid(struct zmk_split_esb_state *state,
+                                  struct esb_rx_record *record) {
+    struct ring_buf *rx_buf = state->rx_buf;
+    return ring_buf_peek(rx_buf, (uint8_t *)record, sizeof(*record)) == sizeof(*record) &&
+        record->pipe < CONFIG_ESB_PIPE_COUNT &&
+        record->pipe >= state->rx_first_pipe && record->pipe <= state->rx_last_pipe &&
+        record->length != 0 && record->length <= CONFIG_ESB_MAX_PAYLOAD_LENGTH &&
+        ring_buf_size_get(rx_buf) >= sizeof(*record) + record->length &&
+        state->rx_pipe_bytes[record->pipe] >= sizeof(*record) + record->length;
+}
+
+static void rx_record_reset(struct zmk_split_esb_state *state) {
+    ring_buf_reset(state->rx_buf);
+    memset(state->rx_pipe_bytes, 0, sizeof(state->rx_pipe_bytes));
+}
+
+bool zmk_split_esb_rx_pending_before(struct zmk_split_esb_state *state,
+                                      int64_t deadline) {
+    struct esb_rx_record record;
+    k_spinlock_key_t key = k_spin_lock(&state->rx_lock);
+    if (ring_buf_is_empty(state->rx_buf)) {
+        k_spin_unlock(&state->rx_lock, key);
+        return false;
+    }
+    bool valid = rx_record_peek_valid(state, &record);
+    if (!valid) {
+        /* Match dequeue recovery; corrupt local metadata must not indefinitely
+         * defer a timer. A malformed radio payload is still dequeued normally. */
+        rx_record_reset(state);
+    }
+    k_spin_unlock(&state->rx_lock, key);
+    if (!valid) {
+        (void)diag_frame_result(-EIO);
+        return false;
+    }
+    return rx_record_timestamp(record.received_at) <= deadline;
+}
+
 int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
-                         size_t env_size, bool downlink, uint8_t *pipe) {
+                         size_t env_size, bool downlink, uint8_t *pipe,
+                         int64_t *received_at) {
     struct esb_rx_record record;
     uint8_t packet[CONFIG_ESB_MAX_PAYLOAD_LENGTH];
     k_spinlock_key_t key = k_spin_lock(&state->rx_lock);
@@ -347,14 +394,8 @@ int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
     }
     /* These metadata bytes are generated locally, never supplied by a peer.
      * Protect the queue against an internal invariant failure as well. */
-    if (ring_buf_peek(rx_buf, (uint8_t *)&record, sizeof(record)) != sizeof(record) ||
-        record.pipe >= CONFIG_ESB_PIPE_COUNT ||
-        record.pipe < state->rx_first_pipe || record.pipe > state->rx_last_pipe ||
-        record.length == 0 || record.length > sizeof(packet) ||
-        ring_buf_size_get(rx_buf) < sizeof(record) + record.length ||
-        state->rx_pipe_bytes[record.pipe] < sizeof(record) + record.length) {
-        ring_buf_reset(rx_buf);
-        memset(state->rx_pipe_bytes, 0, sizeof(state->rx_pipe_bytes));
+    if (!rx_record_peek_valid(state, &record)) {
+        rx_record_reset(state);
         k_spin_unlock(&state->rx_lock, key);
         return diag_frame_result(-EIO);
     }
@@ -365,6 +406,9 @@ int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
     k_spin_unlock(&state->rx_lock, key);
 
     *pipe = record.pipe;
+    if (received_at != NULL) {
+        *received_at = rx_record_timestamp(record.received_at);
+    }
     totem_esb_diag_rx_observe(queued_bytes, k_uptime_get_32() - record.received_at);
     return decode_rx_packet(packet, record.length, env, env_size, downlink, *pipe);
 }

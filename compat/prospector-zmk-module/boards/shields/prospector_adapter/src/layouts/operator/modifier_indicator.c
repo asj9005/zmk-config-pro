@@ -14,6 +14,8 @@
 #include "display_colors.h"
 
 static sys_slist_t widgets = SYS_SLIST_STATIC_INIT(&widgets);
+static uint8_t rendered_modifiers;
+static bool rendered_modifiers_valid;
 
 struct modifier_indicator_state {
     bool mods[4];
@@ -33,6 +35,19 @@ static void set_modifier_color(lv_obj_t *label, bool active) {
 }
 
 static void modifier_indicator_update_cb(struct modifier_indicator_state state) {
+    /* The display listener coalesces bursts, but ordinary key events still
+     * reach it with identical modifier state. Avoid invalidating four labels
+     * for every letter. All widgets are initialized/rendered on this queue. */
+    uint8_t mask = 0;
+    for (int i = 0; i < 4; i++) {
+        mask |= state.mods[i] ? (1U << i) : 0;
+    }
+#ifdef CONFIG_DT_HAS_ZMK_BEHAVIOR_CAPS_WORD_ENABLED
+    mask |= state.caps_word ? (1U << 4) : 0;
+#endif
+    if (rendered_modifiers_valid && rendered_modifiers == mask) {
+        return;
+    }
     struct zmk_widget_modifier_indicator *widget;
     SYS_SLIST_FOR_EACH_CONTAINER(&widgets, widget, node) {
         for (int i = 0; i < 4; i++) {
@@ -47,6 +62,8 @@ static void modifier_indicator_update_cb(struct modifier_indicator_state state) 
             set_modifier_color(widget->mod_labels[i], state.mods[type]);
         }
     }
+    rendered_modifiers = mask;
+    rendered_modifiers_valid = true;
 }
 
 static struct modifier_indicator_state modifier_indicator_get_state(const zmk_event_t *eh) {
@@ -124,6 +141,8 @@ int zmk_widget_modifier_indicator_init(struct zmk_widget_modifier_indicator *wid
     }
 
     sys_slist_append(&widgets, &widget->node);
+    /* A newly added widget needs the current state even if it is unchanged. */
+    rendered_modifiers_valid = false;
     widget_modifier_indicator_init();
 
     return 0;

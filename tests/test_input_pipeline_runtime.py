@@ -42,6 +42,10 @@ class InputPipelineTests(unittest.TestCase):
                                         'zmk_usb_is_hid_ready', 'usb_status_cb')
                     status_callbacks = '\n'.join(braced_definition(status_source, rf'^[^\n;{{}}]*\b{name}\([^;{{}}]*\)\s*\{{') for name in status_functions)
                     fixture = fixture.replace('/* ACTUAL_USB_STATUS */', status_callbacks)
+                    driver_source = (ROOT / 'compat/zephyr/drivers/usb/device/usb_dc_nrfx.c').read_text(encoding='utf-8')
+                    driver_callbacks = '\n'.join(braced_definition(driver_source, rf'^[^\n;{{}}]*\b{name}\([^;{{}}]*\)\s*\{{')
+                                                 for name in ('usbd_reinit', 'usb_dc_ep_write'))
+                    fixture = fixture.replace('/* ACTUAL_NRFX_RECOVERY */', driver_callbacks)
                 fixture = fixture.replace('/* ACTUAL_CALLBACKS */', callbacks)
                 cases = [('current', fixture, True)]
                 if variant == 'usb':
@@ -54,6 +58,14 @@ class InputPipelineTests(unittest.TestCase):
                          '        /* Mutation: retain the old protocol queue. */'),
                         ('stale_pop', 'if (generation == report_queue.generation)',
                          'if (generation == report_queue.generation || true)'),
+                        ('silent_driver_abort', '\t\tctx->status_cb(USB_DC_RESET, NULL);',
+                         '\t\t/* Mutation: omit the aborted transfer notification. */'),
+                        ('early_driver_notification', '\tctx->ready = false;\n\tnrfx_power_usbevt_disable();',
+                         '\tctx->status_cb(USB_DC_RESET, NULL);\n\tctx->ready = false;\n\tnrfx_power_usbevt_disable();'),
+                        ('unlocked_driver_abort', '\tk_mutex_lock(&ctx->drv_lock, K_FOREVER);\n\tctx->ready = false;',
+                         '\t/* Mutation: let a producer race DMA abort. */\n\tctx->ready = false;'),
+                        ('stale_driver_readiness', '\t/* Recovery may have stopped USBD while this caller waited for drv_lock. */\n\tif (!dev_attached() || !dev_ready()) {',
+                         '\t/* Mutation: stale ready check permits DMA after abort. */\n\tif (false) {'),
                     )
                     for name, old, new in mutations:
                         self.assertIn(old, fixture)

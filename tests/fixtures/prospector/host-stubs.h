@@ -91,11 +91,31 @@ static void sys_slist_append(sys_slist_t *list, sys_snode_t *node) {
 
 struct zmk_peripheral_battery_state_changed { uint8_t source, state_of_charge; };
 struct zmk_split_central_status_changed { uint8_t slot; bool connected; };
+struct zmk_caps_word_state_changed { bool active; };
 typedef struct {
-    enum { BATTERY, CONNECTION, ENDPOINT, OTHER } kind;
+    enum { BATTERY, CONNECTION, ENDPOINT, CAPS_WORD, OTHER } kind;
     struct zmk_peripheral_battery_state_changed battery;
     struct zmk_split_central_status_changed connection;
+    struct zmk_caps_word_state_changed caps_word;
 } zmk_event_t;
+static const struct zmk_caps_word_state_changed *as_zmk_caps_word_state_changed(const zmk_event_t *event) {
+    return event->kind == CAPS_WORD ? &event->caps_word : NULL;
+}
+typedef uint8_t zmk_mod_flags_t;
+#define MOD_LCTL 1
+#define MOD_LSFT 2
+#define MOD_LALT 4
+#define MOD_LGUI 8
+#define MOD_RCTL 16
+#define MOD_RSFT 32
+#define MOD_RALT 64
+#define MOD_RGUI 128
+static zmk_mod_flags_t fake_mods;
+static zmk_mod_flags_t zmk_hid_get_explicit_mods(void) { return fake_mods; }
+enum modifier_type { MOD_TYPE_GUI, MOD_TYPE_ALT, MOD_TYPE_CTRL, MOD_TYPE_SHIFT };
+static const enum modifier_type modifier_order[] = { MOD_TYPE_CTRL, MOD_TYPE_GUI, MOD_TYPE_SHIFT, MOD_TYPE_ALT };
+static enum modifier_type modifier_order_get(int index) { return modifier_order[index]; }
+static const char *modifier_order_get_text(int index) { return "mod"; }
 static const struct zmk_peripheral_battery_state_changed *as_zmk_peripheral_battery_state_changed(const zmk_event_t *event) {
     return event->kind == BATTERY ? &event->battery : NULL;
 }
@@ -121,10 +141,11 @@ static uint8_t zmk_keymap_layer_index_to_id(uint8_t index) { return index; }
 static const char *zmk_keymap_layer_name(uint8_t id) { return "Base"; }
 
 typedef uint32_t lv_color_t;
-typedef struct { char text[32]; int value; } lv_obj_t;
+typedef struct { char text[32]; int value; lv_color_t text_color; } lv_obj_t;
 typedef struct { int unused; } lv_style_t;
 typedef struct { int32_t act_time, duration, end_value, start_value; } lv_anim_t;
 static unsigned int lvgl_calls;
+static unsigned int color_writes;
 static lv_obj_t objects[256];
 static unsigned int object_count;
 static void fake_lvgl(void) { assert(current_queue == &display_queue); lvgl_calls++; }
@@ -177,7 +198,11 @@ static int lv_anim_path_ease_out(const lv_anim_t *animation) { return 0; }
 #define lv_obj_set_style_text_align(...) fake_lvgl()
 #define lv_bar_set_range(...) fake_lvgl()
 #define lv_obj_add_flag(...) fake_lvgl()
-#define lv_obj_set_style_text_color(...) fake_lvgl()
+static void lv_obj_set_style_text_color(lv_obj_t *object, lv_color_t color, int part) {
+    fake_lvgl(); color_writes++; object->text_color = color;
+}
+#define lv_obj_set_flex_flow(...) fake_lvgl()
+#define lv_obj_set_flex_align(...) fake_lvgl()
 #define lv_obj_set_style_pad_hor(...) fake_lvgl()
 #define lv_obj_set_style_pad_ver(...) fake_lvgl()
 #define lv_obj_set_style_pad_top(...) fake_lvgl()
@@ -194,3 +219,4 @@ struct zmk_widget_wpm_meter {
 struct zmk_widget_output {
     sys_snode_t node; lv_obj_t *obj; lv_obj_t *usb_btn, *esb_btn; lv_obj_t *slots[2];
 };
+struct zmk_widget_modifier_indicator { sys_snode_t node; lv_obj_t *obj; lv_obj_t *mod_labels[4]; };

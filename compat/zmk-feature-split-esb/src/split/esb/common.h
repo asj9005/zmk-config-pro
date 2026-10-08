@@ -172,6 +172,10 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
 int zmk_split_esb_finalize_item(uint8_t *env, size_t env_len,
                                 bool downlink, struct esb_msg_postfix *postfix);
 /* One admitted radio packet per call; -ENODATA means the queue is empty.
- * Authentication and dispatch happen outside the short RX queue lock. */
+ * Authentication and dispatch happen outside the short RX queue lock.
+ * received_at, when non-NULL, is local ingress uptime, not peer clock time. */
 int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
-                         size_t env_size, bool downlink, uint8_t *pipe);
+                         size_t env_size, bool downlink, uint8_t *pipe,
+                         int64_t *received_at);
+bool zmk_split_esb_rx_pending_before(struct zmk_split_esb_state *state,
+                                      int64_t deadline);

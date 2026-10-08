@@ -47,6 +47,25 @@ foreach(TOTEM_ZMK_FILE src/physical_layouts.c src/usb.c src/usb_hid.c src/behavi
     endif()
 endforeach()
 
+# The USB abort notification is specific to this pinned legacy nrfx driver.
+# Restore it for non-ESB configurations in the same sequential west workspace.
+set(TOTEM_USB_NRFX_DRIVER "${ZEPHYR_BASE}/drivers/usb/device/usb_dc_nrfx.c")
+if(CONFIG_TOTEM_ESB_COMPAT)
+    execute_process(COMMAND git -C "${ZEPHYR_BASE}" rev-parse HEAD
+        RESULT_VARIABLE TOTEM_ZEPHYR_REVISION_RESULT
+        OUTPUT_VARIABLE TOTEM_ZEPHYR_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(NOT TOTEM_ZEPHYR_REVISION_RESULT EQUAL 0 OR
+       NOT TOTEM_ZEPHYR_REVISION STREQUAL "9df4b12b5af3438a8b9d7a33780dc3b3b2f516c1")
+        message(FATAL_ERROR "USB recovery overlay requires the pinned Zephyr revision")
+    endif()
+    totem_overlay_pinned_file(
+        "${ZEPHYR_CURRENT_MODULE_DIR}/compat/zephyr/drivers/usb/device/usb_dc_nrfx.c"
+        "${TOTEM_USB_NRFX_DRIVER}")
+else()
+    totem_restore_pinned_file("${TOTEM_USB_NRFX_DRIVER}")
+endif()
+
 # Owned Alt updates HID state directly, so its display notification must also
 # be observed in retained BLE central builds. Restore the pinned widget when
 # another keymap/configuration does not use this behavior in the same workspace.
@@ -61,6 +80,17 @@ if(EXISTS "${TOTEM_MODIFIER_WIDGET}")
     else()
         totem_restore_pinned_file("${TOTEM_MODIFIER_WIDGET}")
     endif()
+endif()
+
+# Apply sensor/PWM error handling only where the Prospector screen is built.
+set(TOTEM_BRIGHTNESS_SOURCE
+    "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/brightness.c")
+if(CONFIG_TOTEM_ESB_COMPAT AND CONFIG_TOTEM_ESB_PROSPECTOR)
+    totem_overlay_pinned_file(
+        "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/brightness.c"
+        "${TOTEM_BRIGHTNESS_SOURCE}")
+else()
+    totem_restore_pinned_file("${TOTEM_BRIGHTNESS_SOURCE}")
 endif()
 
 # The pinned upstream ESB module edits this ZMK header in place. Always make

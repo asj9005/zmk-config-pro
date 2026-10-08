@@ -3,8 +3,9 @@
 """Actual RX admission/decode/dequeue/bounded worker, with ring/PSA/work fakes.
 
 Only the worker's protocol dispatch switch is replaced by a recorder. Packet
-validation and key-stage selection are actual C; crypto results are controlled.
-No real IRQ preemption, scheduler, radio or hardware cryptography is modeled.
+validation, key-stage selection and peripheral RX mutex ownership are actual C;
+crypto results and a producer rekey during a PSA wait are controlled. No real
+IRQ preemption, scheduler, radio or hardware cryptography is modeled.
 """
 from __future__ import annotations
 import os
@@ -43,6 +44,10 @@ def fixture_source(role: str) -> str:
         r"^void zmk_split_esb_cb\([^;{}]*\)\s*\{",
         r"^static inline int diag_frame_result\([^;{}]*\)\s*\{",
         r"^static int decode_rx_packet\([^;{}]*\)\s*\{",
+        r"^static int64_t rx_record_timestamp\([^;{}]*\)\s*\{",
+        r"^static bool rx_record_peek_valid\([^;{}]*\)\s*\{",
+        r"^static void rx_record_reset\([^;{}]*\)\s*\{",
+        r"^bool zmk_split_esb_rx_pending_before\([^;{}]*\)\s*\{",
         r"^int zmk_split_esb_rx_get\([^;{}]*\)\s*\{",
     ))
     central = (ESB / "central.c").read_text(encoding="utf-8")
@@ -84,6 +89,7 @@ class ActualRxRuntimeTest(unittest.TestCase):
             ("left_v2", 1, 3, 0, 1, None),
             ("no_budget", 0, 3, 1, 1, "budget"), ("no_quota", 0, 3, 1, 1, "quota"),
             ("no_exact_length", 0, 3, 1, 1, "length"),
+            ("left_no_rx_lock", 1, 3, 1, 1, "rx_lock"),
         ]
         mutations = {
             "budget": ("processed < ESB_RX_WORK_BATCH_SIZE", "processed < 10000U", "bounded_worker"),
@@ -96,7 +102,13 @@ class ActualRxRuntimeTest(unittest.TestCase):
             for name, peer, pipes, v3, crc, negative in variants:
                 with self.subTest(variant=name):
                     generated = fixture_source("central" if peer == 0 else "peripheral")
-                    if negative:
+                    if negative == "rx_lock":
+                        for call in ("        k_mutex_lock(&event_mutex, K_FOREVER);",
+                                     "        k_mutex_unlock(&event_mutex);"):
+                            self.assertIn(call, generated)
+                            generated = generated.replace(call, "", 1)
+                        failure = "rx_rekey_exclusion"
+                    elif negative:
                         old, new, failure = mutations[negative]
                         self.assertIn(old, generated)
                         generated = generated.replace(old, new, 1)
@@ -122,7 +134,7 @@ class ActualRxRuntimeTest(unittest.TestCase):
                         self.assertIn(failure, output)
                     else:
                         self.assertEqual(result.returncode, 0, output)
-                        self.assertIn("9 actual RX scenarios passed", output)
+                        self.assertIn("11 actual RX scenarios passed", output)
 
 
 if __name__ == "__main__":

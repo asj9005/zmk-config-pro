@@ -33,6 +33,15 @@ class ActualHoldTapRuntimeTests(unittest.TestCase):
         source = (ROOT / "compat/zmk/app/src/behaviors/behavior_hold_tap.c").read_text(encoding="utf-8")
         source = re.sub(r"^#include[^\n]*\n", "", source, flags=re.MULTILINE)
         central = (ROOT / "compat/zmk-feature-split-esb/src/split/esb/central.c").read_text(encoding="utf-8")
+        common = (ROOT / "compat/zmk-feature-split-esb/src/split/esb/common.c").read_text(encoding="utf-8")
+        common_h = (ROOT / "compat/zmk-feature-split-esb/src/split/esb/common.h").read_text(encoding="utf-8")
+        timing_helpers = "\n\n".join(braced_definition(common, pattern) for pattern in (
+            r"^static int64_t rx_record_timestamp\([^;{}]*\)\s*\{",
+            r"^static bool rx_record_peek_valid\([^;{}]*\)\s*\{",
+            r"^static void rx_record_reset\([^;{}]*\)\s*\{",
+            r"^bool zmk_split_esb_rx_pending_before\([^;{}]*\)\s*\{",
+        ))
+        timing_hook = braced_definition(central, r"^bool totem_esb_rx_pending_before\([^;{}]*\)\s*\{")
         central_helpers = "\n\n".join(
             braced_definition(central, rf"^static void\s+{name}\([^;{{}}]*\)\s*\{{")
             for name in ("release_source_keys", "emit_snapshot_key", "dispatch_wire_zmk_event")
@@ -62,10 +71,16 @@ class ActualHoldTapRuntimeTests(unittest.TestCase):
             "unchecked_held_slots": source.replace(
                 "zmk_behavior_invoke_binding(&tap, event, true);", "(void)tap;").replace(
                 "zmk_behavior_invoke_binding(&tap, event, false);", "(void)event;"),
+            "timer_overtakes_rx": source.replace(
+                "totem_esb_rx_pending_before(", "false && totem_esb_rx_pending_before(", 1),
+            "negative_expired_delay": source.replace(
+                "tapping_term_ms_left > 0\n                                       ? K_MSEC(tapping_term_ms_left) : K_NO_WAIT",
+                "K_MSEC(tapping_term_ms_left)", 1),
         }
         for name, candidate in variants.items():
             if name != "current":
                 self.assertNotEqual(candidate, source, name)
+        variants["processing_timestamp"] = source
         with tempfile.TemporaryDirectory(prefix="totem-hold-tap-") as directory:
             work = Path(directory)
             # Relative filenames avoid MinGW's handling of non-ASCII source paths.
@@ -76,6 +91,14 @@ class ActualHoldTapRuntimeTests(unittest.TestCase):
                     generated = fixture.replace("/* ACTUAL_HOLD_TAP_SOURCE */", actual)
                     generated = generated.replace("/* ACTUAL_CENTRAL_HELPERS */", central_helpers)
                     generated = generated.replace("/* ACTUAL_AUTO_BASE_HELPERS */", auto_helpers)
+                    generated = generated.replace("/* ACTUAL_RX_RECORD */", braced_definition(
+                        common_h, r"^struct esb_rx_record\s*\{") + ";")
+                    generated = generated.replace("/* ACTUAL_RX_TIMING_HELPERS */", timing_helpers)
+                    generated = generated.replace("/* ACTUAL_CENTRAL_TIMING_HOOK */", timing_hook)
+                    if variant == "processing_timestamp":
+                        self.assertIn(".timestamp = received_at,", generated)
+                        generated = generated.replace(".timestamp = received_at,", ".timestamp = k_uptime_get(),")
+                    self.assertNotIn("/* ACTUAL_", generated)
                     test_c = variant + ".c"
                     executable = variant + (".exe" if os.name == "nt" else "")
                     (work / test_c).write_text(generated, encoding="utf-8")
