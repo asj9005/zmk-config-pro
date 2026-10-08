@@ -53,6 +53,9 @@ class ActualComboRuntimeTests(unittest.TestCase):
                 "return first_timeout == LLONG_MAX ? LLONG_MAX\n"
                 "                                     : pressed_keys[0].data.timestamp + first_timeout;",
                 "return pressed_keys[0].data.timestamp + first_timeout;", 1),
+            "truncated_combo_timestamps": source.replace(
+                "int64_t timestamp) {\n    struct zmk_behavior_binding_event event",
+                "int32_t timestamp) {\n    struct zmk_behavior_binding_event event"),
         }
         environment = os.environ.copy()
         compiler_path = shutil.which(compiler[0]) or compiler[0]

@@ -396,6 +396,16 @@ static void ingress_timing_scenarios(void) {
     CHECK(find_hold_tap(2)->work.due == now); drain_timed_keys(8);
     CHECK(tap_press_count == 1 && tap_release_count == 1); expect_idle();
 
+    reset_fixture("timer_first_snapshot_observation_recovers_short_release");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(0, 2, false, 1080); fire_timeout(2, 1250);
+    CHECK(hold_press_count == 0); rx_record_reset(&state);
+    uint8_t released_keys[5] = {0};
+    struct zmk_position_state_changed observed = {.source = 0, .timestamp = 1080};
+    CHECK(totem_esb_key_state_reconcile(key_pos_states[0], released_keys, 38,
+                                       emit_snapshot_key, &observed) == 1);
+    CHECK(tap_press_count == 1 && tap_release_count == 1); expect_idle();
+
     reset_fixture("expired_queued_press_uses_immediate_nonnegative_timer");
     bind_ht(2, 0, false, false);
     enqueue_timed_key(0, 2, true, 1000); enqueue_timed_key(0, 2, false, 1080);
@@ -551,7 +561,9 @@ int main(void) {
     wire_key(0, 2, true, 1000); wire_key(1, 7, true, 1010);
     CHECK(totem_esb_key_state_get(key_pos_states[1], 7) && buffered() == 1 && mouse_refs == 0);
     uint8_t empty[5] = {0}, source = 1;
-    now = 1020; CHECK(totem_esb_key_state_reconcile(key_pos_states[1], empty, 38, emit_snapshot_key, &source) == 1);
+    now = 1020;
+    struct zmk_position_state_changed snapshot_observation = {.source = source, .timestamp = now};
+    CHECK(totem_esb_key_state_reconcile(key_pos_states[1], empty, 38, emit_snapshot_key, &snapshot_observation) == 1);
     CHECK(!totem_esb_key_state_get(key_pos_states[1], 7) && buffered() == 2);
     wire_key(1, 7, false, 1030); CHECK(buffered() == 2);
     wire_key(0, 2, false, 1040);

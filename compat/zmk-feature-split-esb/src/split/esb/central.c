@@ -585,12 +585,12 @@ static void release_source_keys(uint8_t source) {
 }
 
 static void emit_snapshot_key(void *context, uint8_t position, bool pressed) {
-    uint8_t source = *(uint8_t *)context;
-    struct zmk_split_transport_peripheral_event event = {
-        .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT,
-        .data.key_position_event = {.position = position, .pressed = pressed},
-    };
-    zmk_split_transport_central_peripheral_event_handler(&esb_central, source, event);
+    /* The snapshot's ingress is an observation time, not the missing physical
+     * edge time. Preserve that observation's order with later queued edges. */
+    struct zmk_position_state_changed event = *(struct zmk_position_state_changed *)context;
+    event.position = position;
+    event.state = pressed;
+    raise_zmk_position_state_changed(event);
 }
 
 /* Only wire edges enter here. Snapshot reconciliation already commits its
@@ -639,7 +639,7 @@ static void dispatch_wire_zmk_event(
         }
         /* The upstream transport helper stamps processing time, which stretches
          * a short tap when its release waits in this FIFO. Keep ingress time
-         * for authenticated wire edges; synthetic recovery still uses now. */
+         * for authenticated wire edges; disconnect cleanup still uses now. */
         raise_zmk_position_state_changed((struct zmk_position_state_changed){
             .source = source,
             .position = position,
@@ -1241,10 +1241,13 @@ static void process_rx_work_cb(struct k_work *work) {
             if (!accepted_for_zmk) {
                 if (accept && env.payload.wire_type == ESB_WIRE_EVENT_KEY_STATE &&
                     &esb_central == active_transport) {
+                    struct zmk_position_state_changed observation = {
+                        .source = source, .timestamp = received_at,
+                    };
                     totem_esb_key_state_reconcile(
                         key_pos_states[source], env.payload.body.key_state.keys,
                         CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX,
-                        emit_snapshot_key, &source);
+                        emit_snapshot_key, &observation);
                 }
                 break;
             }

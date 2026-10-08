@@ -52,7 +52,7 @@ endforeach()
 # Restore it for non-ESB configurations in the same sequential west workspace.
 set(TOTEM_USB_NRFX_DRIVER "${ZEPHYR_BASE}/drivers/usb/device/usb_dc_nrfx.c")
 if(CONFIG_TOTEM_ESB_COMPAT)
-    execute_process(COMMAND git -C "${ZEPHYR_BASE}" rev-parse HEAD
+    execute_process(COMMAND git -c "safe.directory=${ZEPHYR_BASE}" -C "${ZEPHYR_BASE}" rev-parse HEAD
         RESULT_VARIABLE TOTEM_ZEPHYR_REVISION_RESULT
         OUTPUT_VARIABLE TOTEM_ZEPHYR_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET)

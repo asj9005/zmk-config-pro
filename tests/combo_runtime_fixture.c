@@ -235,6 +235,18 @@ int main(void) {
     key(5, false, 1090); CHECK(behavior_count == 2 && !behavior_events[1].pressed);
     CHECK(normal_count == 0 && active_combo_count == 0);
     scenarios++;
+
+    /* Combo output and prior-idle bookkeeping retain the complete 64-bit uptime. */
+    reset((int64_t)INT32_MAX + 10000);
+    key(2, true, now); key(3, true, now + 30);
+    CHECK(behavior_count == 1 && behavior_events[0].timestamp == now);
+    CHECK(last_combo_timestamp == now);
+    store_last_tapped(now - 1);
+    CHECK(last_tapped_timestamp == INT32_MIN);
+    key(2, false, now + 40); key(3, false, now + 50);
+    CHECK(behavior_count == 2 && behavior_events[1].timestamp == now + 40);
+    CHECK(normal_count == 0 && active_combo_count == 0);
+    scenarios++;
     printf("%u actual combo scenarios passed\n", scenarios);
     return 0;
 }

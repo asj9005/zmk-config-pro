@@ -5,8 +5,8 @@
  */
 
 /* Overlay for ZMK 904c9aec8822d79149d42c8a9a77e8828eb08f5a:
- * preserve ingress-time ordering across bounded ESB RX batches and use an
- * unambiguous 64-bit no-candidate timeout sentinel. Combo policy is unchanged. */
+ * preserve ingress-time ordering across bounded ESB RX batches and use
+ * 64-bit event timestamps/no-candidate sentinel. Combo policy is unchanged. */
 
 #define DT_DRV_COMPAT zmk_combos
 
@@ -285,7 +285,7 @@ static int release_pressed_keys() {
 }
 
 static inline int press_combo_behavior(int combo_idx, const struct combo_cfg *combo,
-                                       int32_t timestamp) {
+                                       int64_t timestamp) {
     struct zmk_behavior_binding_event event = {
         .position = ZMK_VIRTUAL_KEY_POSITION_COMBO(combo_idx),
         .timestamp = timestamp,
@@ -300,7 +300,7 @@ static inline int press_combo_behavior(int combo_idx, const struct combo_cfg *co
 }
 
 static inline int release_combo_behavior(int combo_idx, const struct combo_cfg *combo,
-                                         int32_t timestamp) {
+                                         int64_t timestamp) {
     struct zmk_behavior_binding_event event = {
         .position = ZMK_VIRTUAL_KEY_POSITION_COMBO(combo_idx),
         .timestamp = timestamp,

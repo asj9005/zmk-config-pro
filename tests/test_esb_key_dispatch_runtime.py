@@ -38,7 +38,7 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
         environment["PATH"] = str(Path(compiler_path).resolve().parent) + os.pathsep + environment.get("PATH", "")
         with tempfile.TemporaryDirectory(prefix="esb-key-dispatch-") as directory:
             work = Path(directory)
-            for negative in (None, "orphan", "position", "source"):
+            for negative in (None, "orphan", "position", "source", "snapshot_time"):
                 with self.subTest(removed_guard=negative):
                     test_c = work / f"guard_{negative}.c"
                     executable = work / (test_c.stem + (".exe" if os.name == "nt" else ""))
@@ -51,6 +51,9 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
                             "            position >= ZMK_KEYMAP_LEN)", "if (false)", 1)
                     elif negative == "source":
                         variant = variant.replace("if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT)", "if (false)", 1)
+                    elif negative == "snapshot_time":
+                        variant = variant.replace("    event.position = position;",
+                            "    event.timestamp = k_uptime_get();\n    event.position = position;", 1)
                     if negative:
                         self.assertNotEqual(variant, generated)
                     test_c.write_text(variant, encoding="utf-8")
@@ -67,11 +70,13 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
                                          capture_output=True, text=True, timeout=10)
                     if negative:
                         self.assertNotEqual(run.returncode, 0)
-                        self.assertIn("orphan_release_stays_idle" if negative == "orphan" else
-                                      "invalid_source_and_position_stay_outside_zmk", run.stderr)
+                        expected = ("orphan_release_stays_idle" if negative == "orphan" else
+                                    "wire_and_snapshot_keep_ingress_order" if negative == "snapshot_time" else
+                                    "invalid_source_and_position_stay_outside_zmk")
+                        self.assertIn(expected, run.stderr)
                     else:
                         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-                        self.assertIn("8 actual central dispatch/snapshot/cleanup scenarios passed", run.stdout)
+                        self.assertIn("9 actual central dispatch/snapshot/cleanup scenarios passed", run.stdout)
 
 
 if __name__ == "__main__":

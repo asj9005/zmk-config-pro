@@ -35,7 +35,7 @@ struct zmk_position_state_changed {
     bool state;
     int64_t timestamp;
 };
-struct transition { uint8_t source; uint32_t position; bool pressed; bool direct; };
+struct transition { uint8_t source; uint32_t position; bool pressed; bool direct; int64_t timestamp; };
 static const char *scenario;
 static uint8_t key_pos_states[2][5];
 static int activity[2][38];
@@ -54,15 +54,16 @@ static void totem_esb_diag_event(int event, int result) {
 }
 
 static int64_t k_uptime_get(void) { return ++now; }
-static void record_transition(uint8_t source, uint32_t position, bool pressed, bool direct) {
+static void record_transition(uint8_t source, uint32_t position, bool pressed, bool direct,
+                              int64_t timestamp) {
     CHECK(source < 2 && position < 38);
     CHECK(transition_count < 128);
-    transitions[transition_count++] = (struct transition){source, position, pressed, direct};
+    transitions[transition_count++] = (struct transition){source, position, pressed, direct, timestamp};
     activity[source][position] += pressed ? 1 : -1;
 }
 static int raise_zmk_position_state_changed(struct zmk_position_state_changed event) {
     CHECK(event.timestamp > 0);
-    record_transition(event.source, event.position, event.state, true);
+    record_transition(event.source, event.position, event.state, true, event.timestamp);
     return 0;
 }
 static int zmk_split_transport_central_peripheral_event_handler(
@@ -70,7 +71,7 @@ static int zmk_split_transport_central_peripheral_event_handler(
     CHECK(transport == &esb_central);
     if (event.type == ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT) {
         record_transition(source, event.data.key_position_event.position,
-                          event.data.key_position_event.pressed, false);
+                          event.data.key_position_event.pressed, false, k_uptime_get());
     } else {
         CHECK(event.type == NON_KEY_EVENT && event.data.other == 1234U);
         other_event_count++;
@@ -105,8 +106,9 @@ static void wire_key(uint8_t source, uint32_t position, bool pressed) {
     dispatch_wire_zmk_event(source, &event, k_uptime_get());
 }
 static size_t snapshot(uint8_t source, const uint8_t desired[5]) {
+    struct zmk_position_state_changed observation = {.source = source, .timestamp = k_uptime_get()};
     return totem_esb_key_state_reconcile(key_pos_states[source], desired, 38,
-                                         emit_snapshot_key, &source);
+                                         emit_snapshot_key, &observation);
 }
 static void expect_transition(size_t index, uint8_t source, uint32_t position,
                               bool pressed, bool direct) {
@@ -171,8 +173,8 @@ static void snapshot_release_order_and_later_press(void) {
     uint8_t desired[5] = {1};
     wire_key(0, 37, true);
     CHECK(snapshot(0, desired) == 2);
-    expect_transition(1, 0, 37, false, false);
-    expect_transition(2, 0, 0, true, false);
+    expect_transition(1, 0, 37, false, true);
+    expect_transition(2, 0, 0, true, true);
     wire_key(0, 0, true);
     expect_transition(3, 0, 0, false, true);
     expect_transition(4, 0, 0, true, true);
@@ -220,6 +222,25 @@ static void invalid_source_and_position_stay_outside_zmk(void) {
     wire_key(1, 37, false);
     CHECK(transition_count == 2 && activity[1][37] == 0);
 }
+static void wire_and_snapshot_keep_ingress_order(void) {
+    reset_fixture("wire_and_snapshot_keep_ingress_order");
+    now = 1500;
+    struct zmk_split_transport_peripheral_event event = {
+        .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT,
+        .data.key_position_event = {.position = 2, .pressed = true},
+    };
+    dispatch_wire_zmk_event(0, &event, 1000);
+    struct zmk_position_state_changed observation = {.source = 0, .timestamp = 1080};
+    uint8_t empty[5] = {0};
+    CHECK(totem_esb_key_state_reconcile(key_pos_states[0], empty, 38,
+                                       emit_snapshot_key, &observation) == 1);
+    dispatch_wire_zmk_event(0, &event, 1090);
+    CHECK(transition_count == 3);
+    CHECK(transitions[0].timestamp == 1000 && transitions[1].timestamp == 1080 &&
+          transitions[2].timestamp == 1090);
+    release_source_keys(0);
+    CHECK(transitions[3].timestamp > 1500 && activity[0][2] == 0);
+}
 int main(void) {
     orphan_release_stays_idle();
     normal_edges_and_duplicate_release();
@@ -229,6 +250,7 @@ int main(void) {
     cleanup_and_reconnect_keep_sources_independent();
     non_key_events_are_unchanged();
     invalid_source_and_position_stay_outside_zmk();
-    puts("8 actual central dispatch/snapshot/cleanup scenarios passed");
+    wire_and_snapshot_keep_ingress_order();
+    puts("9 actual central dispatch/snapshot/cleanup scenarios passed");
     return 0;
 }
