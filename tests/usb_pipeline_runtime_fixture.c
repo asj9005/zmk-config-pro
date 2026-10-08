@@ -290,10 +290,10 @@ int main(void) {
     usb_report_work_cb(&usb_report_work); assert(writes == 1 && dma_pointer[1] == 31);
     complete(); assert(sent[0].data[1] == 31); drain();
 
-    const enum usb_dc_status_code aborts[] = {USB_DC_RESET, USB_DC_DISCONNECTED};
+    const enum usb_dc_status_code abort_statuses[] = {USB_DC_RESET, USB_DC_DISCONNECTED};
     for (unsigned int i = 0; i < 2; i++) {
         reset(); offer(4); usb_report_work_cb(&usb_report_work); offer(0);
-        assert(hid_sem == 0); abort_and_notify(aborts[i]);
+        assert(hid_sem == 0); abort_and_notify(abort_statuses[i]);
         assert(hid_sem == 1 && !in_flight && report_queue.count == 0);
         in_ready_cb(hid_dev); usb_report_work_cb(&usb_report_work); assert(writes == 1);
         usb_status_cb(USB_DC_CONNECTED, NULL); usb_report_work_cb(&usb_report_work);

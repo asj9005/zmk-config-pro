@@ -36,8 +36,9 @@ function(totem_restore_pinned_file UPSTREAM_FILE)
 endfunction()
 
 # Keep pinned ZMK fixes deterministic across sequential ESB/BLE builds.
-foreach(TOTEM_ZMK_FILE src/physical_layouts.c src/usb.c src/usb_hid.c src/behaviors/behavior_hold_tap.c
-                       src/behaviors/behavior_mouse_key_press.c)
+foreach(TOTEM_ZMK_FILE src/physical_layouts.c src/usb.c src/usb_hid.c src/combo.c src/behaviors/behavior_hold_tap.c
+                       src/behaviors/behavior_mouse_key_press.c
+                       src/behaviors/behavior_tap_dance.c src/behaviors/behavior_sticky_key.c)
     if(CONFIG_TOTEM_ESB_COMPAT)
         totem_overlay_pinned_file(
             "${ZEPHYR_CURRENT_MODULE_DIR}/compat/zmk/app/${TOTEM_ZMK_FILE}"

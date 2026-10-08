@@ -73,9 +73,6 @@ class ActualHoldTapRuntimeTests(unittest.TestCase):
                 "zmk_behavior_invoke_binding(&tap, event, false);", "(void)event;"),
             "timer_overtakes_rx": source.replace(
                 "totem_esb_rx_pending_before(", "false && totem_esb_rx_pending_before(", 1),
-            "negative_expired_delay": source.replace(
-                "tapping_term_ms_left > 0\n                                       ? K_MSEC(tapping_term_ms_left) : K_NO_WAIT",
-                "K_MSEC(tapping_term_ms_left)", 1),
         }
         for name, candidate in variants.items():
             if name != "current":

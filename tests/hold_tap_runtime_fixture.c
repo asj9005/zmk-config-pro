@@ -35,7 +35,8 @@
 #define ZMK_EV_EVENT_CAPTURED 2
 #define BIT(bit) (1U << (bit))
 #define CONTAINER_OF(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
-#define K_MSEC(ms) (ms)
+/* Pinned Zephyr Z_TIMEOUT_MS clamps a negative relative delay to zero. */
+#define K_MSEC(ms) ((ms) > 0 ? (ms) : 0)
 #define K_NO_WAIT 0
 #define CHECK(condition) do { if (!(condition)) { \
     fprintf(stderr, "CHECK failed %s:%d: %s\n", scenario, __LINE__, #condition); exit(87); \
