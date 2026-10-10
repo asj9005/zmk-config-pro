@@ -54,3 +54,50 @@ include:
     shield: totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3 totem_esb_benchmark
     cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y
     artifact-name: ci_only_totem_dongle_esb_v3_prospector_benchmark_testkey
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y
+    artifact-name: ci_only_totem_left_esb_v3_diagnostic_testkey
+  # Timing-only comparison: leave normal startup unchanged and wait once.
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000
+    artifact-name: ci_only_totem_left_esb_v3_startdelay_testkey
+  # Isolate the battery-report caller stack from the matching startdelay build.
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000 -DCONFIG_ZMK_LOW_PRIORITY_THREAD_STACK_SIZE=4096
+    artifact-name: ci_only_totem_left_esb_v3_lowprioprobe_testkey
+  # Controlled startup comparison: identical to the left diagnostic except
+  # for the main stack. Keep the original diagnostic available for A/B checks.
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_MAIN_STACK_SIZE=4096
+    artifact-name: ci_only_totem_left_esb_v3_stackprobe_testkey
+  - board: xiao_ble//zmk
+    shield: totem_left totem_esb_left totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_UART_LINE_CTRL=y -DCONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START=y
+    artifact-name: ci_only_totem_left_esb_v3_usbstart_testkey
+  - board: xiao_ble//zmk
+    shield: totem_right totem_esb_right totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y
+    artifact-name: ci_only_totem_right_esb_v3_diagnostic_testkey
+  - board: xiao_ble//zmk
+    shield: totem_right totem_esb_right totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000
+    artifact-name: ci_only_totem_right_esb_v3_startdelay_testkey
+  - board: xiao_ble//zmk
+    shield: totem_right totem_esb_right totem_esb_v3
+    cmake-args: -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000 -DCONFIG_ZMK_LOW_PRIORITY_THREAD_STACK_SIZE=4096
+    artifact-name: ci_only_totem_right_esb_v3_lowprioprobe_testkey
+  - board: xiao_ble//zmk
+    shield: totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3
+    snippet: studio-rpc-usb-uart
+    cmake-args: -DCONFIG_ZMK_STUDIO=y -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y
+    artifact-name: ci_only_totem_dongle_esb_v3_prospector_diagnostic_testkey
+  # Preserve the known-good ram25 artifact name; the default now also uses 25.
+  - board: xiao_ble//zmk
+    shield: totem_dongle prospector_adapter totem_esb_dongle totem_esb_v3
+    snippet: studio-rpc-usb-uart
+    cmake-args: -DCONFIG_ZMK_STUDIO=y -DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=y -DCONFIG_TOTEM_ESB_DIAGNOSTICS=y -DCONFIG_LV_Z_VDB_SIZE=25
+    artifact-name: ci_only_totem_dongle_esb_v3_prospector_ram25_testkey

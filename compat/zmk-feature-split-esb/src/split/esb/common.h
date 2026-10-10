@@ -8,6 +8,7 @@
 
 #include <zephyr/sys/ring_buffer.h>
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 
 #include <zmk/split/transport/types.h>
 #include <totem/esb_benchmark.h>
@@ -58,7 +59,15 @@ enum esb_wire_event_type {
     ESB_WIRE_EVENT_V3_RECOVERY,
     ESB_WIRE_EVENT_V3_READY,
 #endif
+    /* Keep every existing wire value; snapshots use the same value in v2/v3. */
+    ESB_WIRE_EVENT_KEY_STATE = 6,
 };
+
+#define ESB_KEY_STATE_BYTES ((CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX + 7) / 8)
+
+struct esb_key_state_payload {
+    uint8_t keys[ESB_KEY_STATE_BYTES];
+} __packed;
 
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 enum esb_wire_command_type {
@@ -94,6 +103,7 @@ struct esb_event_payload {
     union {
         struct zmk_split_transport_peripheral_event event;
         struct totem_esb_link_metric_payload link_metric;
+        struct esb_key_state_payload key_state;
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
         struct esb_v3_recovery_payload recovery;
 #endif
@@ -133,11 +143,25 @@ struct esb_msg_meta {
 
 typedef void (*zmk_split_esb_process_rx_callback_t)(uint8_t pipe);
 
+/* Local metadata only: never sent over the radio or included in CCM input. */
+struct esb_rx_record {
+    uint32_t received_at;
+    uint8_t pipe;
+    uint8_t length;
+} __packed;
+
+#define ESB_RX_WORK_BATCH_SIZE 8U
+
 struct zmk_split_esb_state {
     uint8_t tx_pipe;
     zmk_split_esb_process_rx_callback_t process_rx_callback;
     struct ring_buf *tx_buf;
-    struct ring_buf *rx_bufs;
+    struct ring_buf *rx_buf;
+    uint8_t rx_first_pipe;
+    uint8_t rx_last_pipe;
+    uint32_t rx_pipe_capacity;
+    uint32_t rx_pipe_bytes[CONFIG_ESB_PIPE_COUNT];
+    struct k_spinlock rx_lock;
     uint32_t rx_overflow_count[CONFIG_ESB_PIPE_COUNT];
 };
 
@@ -147,5 +171,11 @@ void zmk_split_esb_cb(app_esb_event_t *event, struct zmk_split_esb_state *state)
 
 int zmk_split_esb_finalize_item(uint8_t *env, size_t env_len,
                                 bool downlink, struct esb_msg_postfix *postfix);
-int zmk_split_esb_get_item(struct ring_buf *rx_buf, uint8_t *env, size_t env_size,
-                           bool downlink, uint8_t expected_pipe);
+/* One admitted radio packet per call; -ENODATA means the queue is empty.
+ * Authentication and dispatch happen outside the short RX queue lock.
+ * received_at, when non-NULL, is local ingress uptime, not peer clock time. */
+int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
+                         size_t env_size, bool downlink, uint8_t *pipe,
+                         int64_t *received_at);
+bool zmk_split_esb_rx_pending_before(struct zmk_split_esb_state *state,
+                                      int64_t deadline);

@@ -3,8 +3,20 @@
 
 zephyr_library()
 
+# Keymap behaviors run on the central (also in the retained BLE builds).
+if((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
+    target_sources(app PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_auto_base.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_mouse_move.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/behavior_owned_swapper.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/owned_swapper_replay_listener.c)
+    target_include_directories(app PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/owned-swapper-order.cmake)
+endif()
+
 set(TOTEM_WEST_TOPDIR "${APPLICATION_SOURCE_DIR}/../..")
 set(TOTEM_ESB_MODULE_DIR "${TOTEM_WEST_TOPDIR}/zmk-feature-split-esb")
+set(TOTEM_NRF_MODULE_DIR "${TOTEM_WEST_TOPDIR}/nrf")
 set(TOTEM_PROSPECTOR_MODULE_DIR "${TOTEM_WEST_TOPDIR}/prospector-zmk-module")
 set(TOTEM_ZMK_CENTRAL_H "${APPLICATION_SOURCE_DIR}/include/zmk/split/central.h")
 
@@ -22,6 +34,65 @@ function(totem_restore_pinned_file UPSTREAM_FILE)
         configure_file("${UPSTREAM_BACKUP}" "${UPSTREAM_FILE}" COPYONLY)
     endif()
 endfunction()
+
+# Keep pinned ZMK fixes deterministic across sequential ESB/BLE builds.
+foreach(TOTEM_ZMK_FILE src/physical_layouts.c src/usb.c src/usb_hid.c src/combo.c src/behaviors/behavior_hold_tap.c
+                       src/behaviors/behavior_mouse_key_press.c
+                       src/behaviors/behavior_tap_dance.c src/behaviors/behavior_sticky_key.c)
+    if(CONFIG_TOTEM_ESB_COMPAT)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/zmk/app/${TOTEM_ZMK_FILE}"
+            "${APPLICATION_SOURCE_DIR}/${TOTEM_ZMK_FILE}")
+    else()
+        totem_restore_pinned_file("${APPLICATION_SOURCE_DIR}/${TOTEM_ZMK_FILE}")
+    endif()
+endforeach()
+
+# The USB abort notification is specific to this pinned legacy nrfx driver.
+# Restore it for non-ESB configurations in the same sequential west workspace.
+set(TOTEM_USB_NRFX_DRIVER "${ZEPHYR_BASE}/drivers/usb/device/usb_dc_nrfx.c")
+if(CONFIG_TOTEM_ESB_COMPAT)
+    execute_process(COMMAND git -c "safe.directory=${ZEPHYR_BASE}" -C "${ZEPHYR_BASE}" rev-parse HEAD
+        RESULT_VARIABLE TOTEM_ZEPHYR_REVISION_RESULT
+        OUTPUT_VARIABLE TOTEM_ZEPHYR_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(NOT TOTEM_ZEPHYR_REVISION_RESULT EQUAL 0 OR
+       NOT TOTEM_ZEPHYR_REVISION STREQUAL "9df4b12b5af3438a8b9d7a33780dc3b3b2f516c1")
+        message(FATAL_ERROR "USB recovery overlay requires the pinned Zephyr revision")
+    endif()
+    totem_overlay_pinned_file(
+        "${ZEPHYR_CURRENT_MODULE_DIR}/compat/zephyr/drivers/usb/device/usb_dc_nrfx.c"
+        "${TOTEM_USB_NRFX_DRIVER}")
+else()
+    totem_restore_pinned_file("${TOTEM_USB_NRFX_DRIVER}")
+endif()
+
+# Owned Alt updates HID state directly, so its display notification must also
+# be observed in retained BLE central builds. Restore the pinned widget when
+# another keymap/configuration does not use this behavior in the same workspace.
+set(TOTEM_MODIFIER_WIDGET
+    "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/modifier_indicator.c")
+if(EXISTS "${TOTEM_MODIFIER_WIDGET}")
+    if(((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL) AND
+       CONFIG_DT_HAS_TOTEM_BEHAVIOR_OWNED_SWAPPER_ENABLED)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/layouts/operator/modifier_indicator.c"
+            "${TOTEM_MODIFIER_WIDGET}")
+    else()
+        totem_restore_pinned_file("${TOTEM_MODIFIER_WIDGET}")
+    endif()
+endif()
+
+# Apply sensor/PWM error handling only where the Prospector screen is built.
+set(TOTEM_BRIGHTNESS_SOURCE
+    "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/brightness.c")
+if(CONFIG_TOTEM_ESB_COMPAT AND CONFIG_TOTEM_ESB_PROSPECTOR)
+    totem_overlay_pinned_file(
+        "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/brightness.c"
+        "${TOTEM_BRIGHTNESS_SOURCE}")
+else()
+    totem_restore_pinned_file("${TOTEM_BRIGHTNESS_SOURCE}")
+endif()
 
 # The pinned upstream ESB module edits this ZMK header in place. Always make
 # configuration deterministic so an ESB build cannot contaminate a later BLE
@@ -46,6 +117,13 @@ if(EXISTS "${TOTEM_ZMK_CENTRAL_H}")
 endif()
 
 if(CONFIG_TOTEM_ESB_COMPAT)
+    # The pinned SDK needs per-pipe ACK cleanup to preserve the other half's
+    # RX/PID state when an offline peer's pending response expires.
+    foreach(TOTEM_NRF_FILE include/esb.h subsys/esb/esb.c)
+        totem_overlay_pinned_file(
+            "${ZEPHYR_CURRENT_MODULE_DIR}/compat/sdk-nrf/${TOTEM_NRF_FILE}"
+            "${TOTEM_NRF_MODULE_DIR}/${TOTEM_NRF_FILE}")
+    endforeach()
     if(NOT EXISTS "${TOTEM_ESB_MODULE_DIR}/src/split/esb/central.c")
         message(FATAL_ERROR "Pinned zmk-feature-split-esb project was not found")
     endif()
@@ -58,6 +136,64 @@ if(CONFIG_TOTEM_ESB_COMPAT)
 
     zephyr_include_directories(include)
     zephyr_library_sources(src/totem_esb_hooks.c)
+    zephyr_library_sources_ifdef(CONFIG_TOTEM_ESB_DIAGNOSTICS src/esb_diagnostics.c)
+
+    if(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        # Identify this source checkout, not a containing workspace repository.
+        # Generated key/config files live outside this source tree.
+        set(TOTEM_FIELD_SOURCE_DIR "${ZEPHYR_CURRENT_MODULE_DIR}")
+        set(TOTEM_FIELD_BUILD_SHA "unknown")
+        set(TOTEM_FIELD_BUILD_TREE "unknown")
+        set(TOTEM_FIELD_BUILD_DIRTY 2)
+        execute_process(COMMAND git -c "safe.directory=${TOTEM_FIELD_SOURCE_DIR}"
+            -C "${TOTEM_FIELD_SOURCE_DIR}" rev-parse --show-toplevel
+            RESULT_VARIABLE TOTEM_FIELD_ROOT_RESULT OUTPUT_VARIABLE TOTEM_FIELD_GIT_ROOT
+            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        file(REAL_PATH "${TOTEM_FIELD_SOURCE_DIR}" TOTEM_FIELD_SOURCE_REAL)
+        if(TOTEM_FIELD_ROOT_RESULT EQUAL 0)
+            file(REAL_PATH "${TOTEM_FIELD_GIT_ROOT}" TOTEM_FIELD_GIT_REAL)
+        endif()
+        if(TOTEM_FIELD_ROOT_RESULT EQUAL 0 AND
+           TOTEM_FIELD_GIT_REAL STREQUAL TOTEM_FIELD_SOURCE_REAL)
+            execute_process(COMMAND git -c "safe.directory=${TOTEM_FIELD_SOURCE_DIR}"
+                -C "${TOTEM_FIELD_SOURCE_DIR}" rev-parse HEAD "HEAD^{tree}"
+                RESULT_VARIABLE TOTEM_FIELD_REV_RESULT OUTPUT_VARIABLE TOTEM_FIELD_REVISIONS
+                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+            string(REPLACE "\n" ";" TOTEM_FIELD_REV_LIST "${TOTEM_FIELD_REVISIONS}")
+            list(LENGTH TOTEM_FIELD_REV_LIST TOTEM_FIELD_REV_COUNT)
+            if(TOTEM_FIELD_REV_RESULT EQUAL 0 AND TOTEM_FIELD_REV_COUNT EQUAL 2)
+                list(GET TOTEM_FIELD_REV_LIST 0 TOTEM_FIELD_SHA_CANDIDATE)
+                list(GET TOTEM_FIELD_REV_LIST 1 TOTEM_FIELD_TREE_CANDIDATE)
+                string(LENGTH "${TOTEM_FIELD_SHA_CANDIDATE}" TOTEM_FIELD_SHA_LENGTH)
+                string(LENGTH "${TOTEM_FIELD_TREE_CANDIDATE}" TOTEM_FIELD_TREE_LENGTH)
+                if(TOTEM_FIELD_SHA_LENGTH EQUAL 40 AND TOTEM_FIELD_TREE_LENGTH EQUAL 40 AND
+                   TOTEM_FIELD_SHA_CANDIDATE MATCHES "^[0-9a-f]+$" AND
+                   TOTEM_FIELD_TREE_CANDIDATE MATCHES "^[0-9a-f]+$")
+                    set(TOTEM_FIELD_BUILD_SHA "${TOTEM_FIELD_SHA_CANDIDATE}")
+                    set(TOTEM_FIELD_BUILD_TREE "${TOTEM_FIELD_TREE_CANDIDATE}")
+                    execute_process(COMMAND git -c "safe.directory=${TOTEM_FIELD_SOURCE_DIR}"
+                        -C "${TOTEM_FIELD_SOURCE_DIR}" status --porcelain --untracked-files=normal
+                        RESULT_VARIABLE TOTEM_FIELD_DIRTY_RESULT OUTPUT_VARIABLE TOTEM_FIELD_STATUS
+                        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+                    if(TOTEM_FIELD_DIRTY_RESULT EQUAL 0)
+                        if(TOTEM_FIELD_STATUS STREQUAL "")
+                            set(TOTEM_FIELD_BUILD_DIRTY 0)
+                        else()
+                            set(TOTEM_FIELD_BUILD_DIRTY 1)
+                        endif()
+                    endif()
+                endif()
+            endif()
+        endif()
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/totem")
+        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/totem/field_build_info.h"
+            "/* Generated public source identity; no key material. */\n#pragma once\n"
+            "#define TOTEM_FIELD_BUILD_SHA \"${TOTEM_FIELD_BUILD_SHA}\"\n"
+            "#define TOTEM_FIELD_BUILD_TREE \"${TOTEM_FIELD_BUILD_TREE}\"\n"
+            "#define TOTEM_FIELD_BUILD_DIRTY ${TOTEM_FIELD_BUILD_DIRTY}\n")
+        zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
+        zephyr_library_sources(src/field_diagnostics.c)
+    endif()
 
     if(CONFIG_TOTEM_ESB_V3)
         function(totem_esb_v3_hex_key_to_initializer KEY_HEX OUTPUT_VARIABLE)
@@ -114,7 +250,7 @@ if(CONFIG_TOTEM_ESB_COMPAT)
         totem_overlay_pinned_file(
             "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/src/split/bluetooth/central_status_changed_observer.c"
             "${TOTEM_PROSPECTOR_MODULE_DIR}/src/split/bluetooth/central_status_changed_observer.c")
-        foreach(TOTEM_OPERATOR_FILE output.c output.h)
+        foreach(TOTEM_OPERATOR_FILE output.c output.h battery_circles.c wpm_meter.c)
             totem_overlay_pinned_file(
                 "${ZEPHYR_CURRENT_MODULE_DIR}/compat/prospector-zmk-module/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}"
                 "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}")
@@ -124,11 +260,14 @@ if(CONFIG_TOTEM_ESB_COMPAT)
             PERIPHERAL_COUNT=${CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT})
     endif()
 else()
-    # An ESB configure overlays three files in the pinned Prospector checkout.
+    foreach(TOTEM_NRF_FILE include/esb.h subsys/esb/esb.c)
+        totem_restore_pinned_file("${TOTEM_NRF_MODULE_DIR}/${TOTEM_NRF_FILE}")
+    endforeach()
+    # Restore ESB widget changes before a standard BLE build in this workspace.
     # Restore them before any subsequent standard BLE build in this workspace.
     totem_restore_pinned_file(
         "${TOTEM_PROSPECTOR_MODULE_DIR}/src/split/bluetooth/central_status_changed_observer.c")
-    foreach(TOTEM_OPERATOR_FILE output.c output.h)
+    foreach(TOTEM_OPERATOR_FILE output.c output.h battery_circles.c wpm_meter.c)
         totem_restore_pinned_file(
             "${TOTEM_PROSPECTOR_MODULE_DIR}/boards/shields/prospector_adapter/src/layouts/operator/${TOTEM_OPERATOR_FILE}")
     endforeach()
