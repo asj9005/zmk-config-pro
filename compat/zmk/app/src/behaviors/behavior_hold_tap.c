@@ -14,6 +14,8 @@
 #include <zmk/behavior.h>
 #include <totem/esb_diagnostics.h>
 #include <totem/esb_rx_timing.h>
+#include <totem/field_diagnostics.h>
+#include <string.h>
 #include <zmk/matrix.h>
 #include <zmk/endpoints.h>
 #include <zmk/event_manager.h>
@@ -88,6 +90,10 @@ struct active_hold_tap {
     const struct behavior_hold_tap_config *config;
     struct k_work_delayable work;
     bool work_is_cancelled;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    enum totem_field_group field_group;
+    bool field_timer_observed;
+#endif
 
     // initialized to -1, which is to be interpreted as "no other key has been pressed yet"
     int32_t position_of_first_other_key_pressed;
@@ -130,6 +136,43 @@ struct last_tapped {
 // Set time stamp to large negative number initially for test suites, but not
 // int64 min since it will overflow if -1 is added
 struct last_tapped last_tapped = {INT32_MIN, INT32_MIN};
+
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+/* Classify only behavior identity and the two configured Base layer parameters.
+ * No keycode, physical position, or individual decision timestamp is recorded. */
+static enum totem_field_group hold_tap_field_group(const char *behavior, uint32_t param_hold) {
+    if (strcmp(behavior, "SIGN_LAYER") == 0) {
+        if (param_hold == 2) {
+            return TOTEM_FIELD_BASE_E;
+        }
+        if (param_hold == 3) {
+            return TOTEM_FIELD_BASE_R;
+        }
+    } else if (strcmp(behavior, "AUTOLAYER_FAST") == 0) {
+        return TOTEM_FIELD_MOUSE_FAST;
+    } else if (strcmp(behavior, "AUTOLAYER_SLOW") == 0) {
+        return TOTEM_FIELD_MOUSE_SLOW;
+    }
+    return TOTEM_FIELD_OTHER;
+}
+
+static void hold_tap_field_decided(const struct active_hold_tap *hold_tap) {
+    static const enum totem_field_metric metrics[] = {
+        [TOTEM_FIELD_BASE_E] = TOTEM_FIELD_HOLD_TAP_BASE_E,
+        [TOTEM_FIELD_BASE_R] = TOTEM_FIELD_HOLD_TAP_BASE_R,
+        [TOTEM_FIELD_MOUSE_FAST] = TOTEM_FIELD_HOLD_TAP_MOUSE_FAST,
+        [TOTEM_FIELD_MOUSE_SLOW] = TOTEM_FIELD_HOLD_TAP_MOUSE_SLOW,
+        [TOTEM_FIELD_OTHER] = TOTEM_FIELD_HOLD_TAP_OTHER,
+    };
+    uint64_t now_us = totem_field_now_us();
+    uint64_t pressed_at_us = (uint64_t)hold_tap->timestamp * 1000U;
+    /* The preserved event timestamp is local to this MCU; this elapsed time
+     * includes captured-event waiting, but is not radio-to-host latency. */
+    totem_field_observe(metrics[hold_tap->field_group],
+                        now_us >= pressed_at_us ? now_us - pressed_at_us : 0);
+    totem_field_hold_tap(hold_tap->field_group, hold_tap->status != STATUS_TAP);
+}
+#endif
 
 static void store_last_tapped(int64_t timestamp) {
     if (timestamp > last_tapped.timestamp) {
@@ -272,6 +315,10 @@ static struct active_hold_tap *store_hold_tap(struct zmk_behavior_binding_event 
         active_hold_taps[i].param_hold = param_hold;
         active_hold_taps[i].param_tap = param_tap;
         active_hold_taps[i].timestamp = event->timestamp;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        active_hold_taps[i].field_group = TOTEM_FIELD_OTHER;
+        active_hold_taps[i].field_timer_observed = false;
+#endif
         active_hold_taps[i].position_of_first_other_key_pressed = -1;
         return &active_hold_taps[i];
     }
@@ -567,6 +614,11 @@ static void decide_hold_tap(struct active_hold_tap *hold_tap,
     }
 
     decide_positional_hold(hold_tap);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    /* Count the first tracked decision only. A later retro-tap conversion is
+     * existing behavior, not a second scheduling/decision-latency sample. */
+    hold_tap_field_decided(hold_tap);
+#endif
 
     // Since the hold-tap has been decided, clean up undecided_hold_tap and
     // execute the decided behavior.
@@ -636,6 +688,9 @@ static int on_hold_tap_binding_pressed(struct zmk_behavior_binding *binding,
     }
 
     LOG_DBG("%d new undecided hold_tap", event.position);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    hold_tap->field_group = hold_tap_field_group(binding->behavior_dev, binding->param1);
+#endif
     undecided_hold_tap = hold_tap;
 
     if (is_quick_tap(hold_tap)) {
@@ -866,6 +921,21 @@ ZMK_SUBSCRIPTION(behavior_hold_tap, zmk_keycode_state_changed);
 void behavior_hold_tap_timer_work_handler(struct k_work *item) {
     struct k_work_delayable *d_work = k_work_delayable_from_work(item);
     struct active_hold_tap *hold_tap = CONTAINER_OF(d_work, struct active_hold_tap, work);
+
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    if (hold_tap->position != ZMK_BHV_HOLD_TAP_POSITION_NOT_USED &&
+        !hold_tap->work_is_cancelled && hold_tap->status == STATUS_UNDECIDED &&
+        !hold_tap->field_timer_observed) {
+        hold_tap->field_timer_observed = true;
+        uint64_t now_us = totem_field_now_us();
+        uint64_t deadline_us = (uint64_t)(hold_tap->timestamp + hold_tap->config->tapping_term_ms)
+                               * 1000U;
+        /* First real timer callback only: release-inferred deadlines and RX
+         * yield retries are not additional scheduler-lateness observations. */
+        totem_field_observe(TOTEM_FIELD_TIMER_LATE,
+                            now_us >= deadline_us ? now_us - deadline_us : 0);
+    }
+#endif
 
     if (hold_tap->work_is_cancelled) {
         clear_hold_tap(hold_tap);

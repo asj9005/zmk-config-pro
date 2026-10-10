@@ -90,12 +90,16 @@ class ActualRxRuntimeTest(unittest.TestCase):
             ("no_budget", 0, 3, 1, 1, "budget"), ("no_quota", 0, 3, 1, 1, "quota"),
             ("no_exact_length", 0, 3, 1, 1, "length"),
             ("left_no_rx_lock", 1, 3, 1, 1, "rx_lock"),
+            ("wrong_field_age", 0, 3, 1, 1, "field_age"),
+            ("missing_decode_time", 0, 3, 1, 1, "field_decode"),
         ]
         mutations = {
             "budget": ("processed < ESB_RX_WORK_BATCH_SIZE", "processed < 10000U", "bounded_worker"),
             "quota": ("state->rx_pipe_bytes[event->pipe] + record_size >\n"
                       "                    state->rx_pipe_capacity", "false", "per_pipe_quota"),
             "length": ("if (packet_size != (payload_to_read", "if (packet_size < (payload_to_read", "packet_boundaries"),
+            "field_age": ("record.received_at) * 1000U", "record.received_at) * 1U", "wrap_and_age"),
+            "field_decode": ("totem_field_now_us() - decode_started", "decode_started - decode_started", "wrap_and_age"),
         }
         with tempfile.TemporaryDirectory(prefix="esb-rx-runtime-") as directory:
             work = Path(directory)

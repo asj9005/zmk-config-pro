@@ -78,14 +78,20 @@ class ActualHoldTapRuntimeTests(unittest.TestCase):
             if name != "current":
                 self.assertNotEqual(candidate, source, name)
         variants["processing_timestamp"] = source
+        variants["field"] = "#define CONFIG_TOTEM_FIELD_DIAGNOSTICS 1\n" + source
+        variants["field_duplicate_timer"] = variants["field"].replace(
+            "!hold_tap->field_timer_observed)", "true)", 1)
         with tempfile.TemporaryDirectory(prefix="totem-hold-tap-") as directory:
             work = Path(directory)
             # Relative filenames avoid MinGW's handling of non-ASCII source paths.
             shutil.copyfile(ROOT / "include/totem/esb_key_state.h", work / "esb_key_state.h")
             shutil.copyfile(ROOT / "include/totem/esb_diagnostics.h", work / "esb_diagnostics.h")
+            shutil.copyfile(ROOT / "include/totem/field_diagnostics.h", work / "field_diagnostics.h")
             for variant, actual in variants.items():
                 with self.subTest(variant=variant):
                     generated = fixture.replace("/* ACTUAL_HOLD_TAP_SOURCE */", actual)
+                    if variant.startswith("field"):
+                        generated = "#define CONFIG_TOTEM_FIELD_DIAGNOSTICS 1\n" + generated
                     generated = generated.replace("/* ACTUAL_CENTRAL_HELPERS */", central_helpers)
                     generated = generated.replace("/* ACTUAL_AUTO_BASE_HELPERS */", auto_helpers)
                     generated = generated.replace("/* ACTUAL_RX_RECORD */", braced_definition(
@@ -111,7 +117,7 @@ class ActualHoldTapRuntimeTests(unittest.TestCase):
                     self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
                     run = subprocess.run([str(work / executable)], cwd=work, env=environment,
                                          capture_output=True, text=True, timeout=10)
-                    if variant == "current":
+                    if variant in ("current", "field"):
                         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
                         self.assertIn("actual hold-tap scenarios passed", run.stdout)
                         print(run.stdout.strip())

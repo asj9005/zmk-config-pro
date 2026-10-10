@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <stdio.h>
+#include <totem/field_diagnostics.h>
 #include <totem/hid_report_queue.h>
 #define ARG_UNUSED(x) (void)(x)
 #define K_NO_WAIT 0
@@ -28,6 +29,22 @@ static const struct device *hid_dev = &device_instance;
 static int hid_sem = 1, usb_endpoint_lock;
 static struct totem_hid_packet in_flight_packet;
 static bool in_flight, reports_need_resync;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+static uint64_t field_submitted_at_us, field_now_us, field_write_delay_us;
+static bool field_submit_committed, field_completion_early, field_complete_during_write;
+static uint64_t field_sum[64], field_last[64];
+static unsigned int field_count[64], field_issues[128];
+static int32_t field_issue_code[128];
+uint64_t totem_field_now_us(void) { return field_now_us; }
+void totem_field_observe(enum totem_field_metric metric, uint64_t elapsed) {
+    assert((unsigned int)metric < 64); field_count[metric]++;
+    field_sum[metric] += elapsed; field_last[metric] = elapsed;
+}
+void totem_field_issue(enum totem_field_reason reason, uint8_t scope, int32_t code) {
+    assert((unsigned int)reason < 128 && scope == TOTEM_FIELD_SCOPE_LOCAL);
+    field_issues[reason]++; field_issue_code[reason] = code;
+}
+#endif
 static uint8_t hid_protocol = HID_PROTOCOL_REPORT;
 enum usb_dc_status_code { USB_DC_SUSPEND, USB_DC_ERROR, USB_DC_RESET, USB_DC_DISCONNECTED,
     USB_DC_UNKNOWN, USB_DC_CONFIGURED, USB_DC_RESUME, USB_DC_CLEAR_HALT, USB_DC_SOF,
@@ -49,6 +66,7 @@ static bool *driver_ready;
 static int usb_dc_ep_write(uint8_t ep, const uint8_t *data, uint32_t length,
                            uint32_t *ret_bytes);
 static void set_proto_cb(const struct device *dev, uint8_t protocol);
+static void in_ready_cb(const struct device *dev);
 static void usb_status_cb(enum usb_dc_status_code status, const uint8_t *params);
 static enum usb_dc_status_code zmk_usb_get_status(void);
 static bool zmk_usb_is_hid_ready(void);
@@ -84,12 +102,22 @@ static int usb_wakeup_request(void) { wakes++; return 0; }
 static int hid_int_ep_write(const struct device *dev, const uint8_t *data, size_t len, void *unused) {
     (void)dev; (void)unused;
     assert(usb_endpoint_lock && !report_queue_lock.held);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    field_now_us += field_write_delay_us;
+#endif
     if (write_error) { return write_error; }
     if (use_nrfx_driver) { return usb_dc_ep_write(0x81, data, (uint32_t)len, NULL); }
     assert(!dma_pointer && writes < 256);
     /* Retain the pointer: nrfx does not copy this buffer on submission. */
     assert(data == in_flight_packet.data);
     dma_pointer = data; dma_length = len; dma_slot = writes++;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    if (field_complete_during_write) {
+        field_complete_during_write = false;
+        dma_pointer = NULL;
+        in_ready_cb(hid_dev);
+    }
+#endif
     if (replace_generation_on_write) {
         uint8_t replacement[] = {1, 77};
         totem_hid_queue_reset(&report_queue);
@@ -206,6 +234,13 @@ static void driver_status_cb(enum usb_dc_status_code status, const uint8_t *para
 /* ACTUAL_NRFX_RECOVERY */
 
 static void reset(void) {
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    field_submitted_at_us = field_now_us = field_write_delay_us = 0;
+    field_submit_committed = field_completion_early = field_complete_during_write = false;
+    memset(field_sum, 0, sizeof(field_sum)); memset(field_last, 0, sizeof(field_last));
+    memset(field_count, 0, sizeof(field_count)); memset(field_issues, 0, sizeof(field_issues));
+    memset(field_issue_code, 0, sizeof(field_issue_code));
+#endif
     memset(&report_queue, 0, sizeof(report_queue));
     memset(&in_flight_packet, 0, sizeof(in_flight_packet));
     memset(diagnostics, 0, sizeof(diagnostics)); memset(sent, 0, sizeof(sent));
@@ -248,6 +283,64 @@ static void drain(void) {
         usb_report_work_cb(&usb_report_work);
     }
 }
+static void field_timing_scenarios(void) {
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    reset(); field_now_us = 1000; offer(4);
+    field_now_us = 2000; field_write_delay_us = 50; usb_report_work_cb(&usb_report_work);
+    assert(field_count[TOTEM_FIELD_USB_QUEUE] == 1 && field_last[TOTEM_FIELD_USB_QUEUE] == 1050);
+    field_now_us = 2550; complete(); in_ready_cb(hid_dev);
+    assert(field_count[TOTEM_FIELD_USB_TRANSFER] == 1 && field_last[TOTEM_FIELD_USB_TRANSFER] == 500);
+
+    reset(); field_now_us = 100; offer(4); field_now_us = 400;
+    write_error = -EIO; field_write_delay_us = 100; usb_report_work_cb(&usb_report_work);
+    assert(field_count[TOTEM_FIELD_USB_QUEUE] == 0 && field_count[TOTEM_FIELD_USB_TRANSFER] == 0);
+    assert(field_issues[TOTEM_FIELD_USB_RETRY] == 1);
+    write_error = 0; field_now_us = 800; field_write_delay_us = 25;
+    usb_report_work_cb(&usb_report_work); field_now_us = 1000; complete();
+    assert(field_last[TOTEM_FIELD_USB_QUEUE] == 725 && field_last[TOTEM_FIELD_USB_TRANSFER] == 175);
+
+    reset(); field_now_us = 1000;
+    for (unsigned int i = 0; i < TOTEM_HID_QUEUE_SLOTS; i++) { offer(1); }
+    field_now_us = 2000; offer(9); field_now_us = 3000; offer(0);
+    field_now_us = 4000; drain();
+    assert(field_count[TOTEM_FIELD_USB_QUEUE] == 64);
+    assert(field_count[TOTEM_FIELD_USB_QUEUE_RECOVERY] == 1);
+    assert(field_last[TOTEM_FIELD_USB_QUEUE_RECOVERY] == 1000);
+    assert(field_count[TOTEM_FIELD_USB_QUEUE_RESYNC] == 0 && field_issues[TOTEM_FIELD_USB_OVERFLOW] == 2);
+
+    reset(); field_now_us = 100; offer(4); field_now_us = 200;
+    usb_report_work_cb(&usb_report_work); field_now_us = 300; abort_and_notify(USB_DC_RESET);
+    in_ready_cb(hid_dev);
+    assert(field_count[TOTEM_FIELD_USB_TRANSFER] == 0 && field_issues[TOTEM_FIELD_USB_TIMING_DISCARD] == 1);
+    assert(field_issue_code[TOTEM_FIELD_USB_TIMING_DISCARD] == 2);
+    field_now_us = 500; usb_status_cb(USB_DC_CONFIGURED, NULL); drain();
+    assert(field_count[TOTEM_FIELD_USB_QUEUE] == 1 && field_count[TOTEM_FIELD_USB_QUEUE_RESYNC] == 3);
+    assert(field_last[TOTEM_FIELD_USB_QUEUE_RESYNC] == 0 && field_count[TOTEM_FIELD_USB_TRANSFER] == 3);
+
+    reset(); field_now_us = 100; offer(4); field_now_us = 200;
+    field_write_delay_us = 50; field_complete_during_write = true;
+    usb_report_work_cb(&usb_report_work);
+    assert(field_last[TOTEM_FIELD_USB_QUEUE] == 150 && field_count[TOTEM_FIELD_USB_TRANSFER] == 0);
+    assert(field_issues[TOTEM_FIELD_USB_TIMING_DISCARD] == 1 && field_issue_code[TOTEM_FIELD_USB_TIMING_DISCARD] == 1);
+    field_now_us = 300; offer(0); field_now_us = 400; usb_report_work_cb(&usb_report_work);
+    field_now_us = 650; complete(); assert(field_last[TOTEM_FIELD_USB_TRANSFER] == 200);
+
+    reset(); field_now_us = (uint64_t)UINT32_MAX * 1000U + 1000U; offer(0);
+    field_now_us += 2500; usb_report_work_cb(&usb_report_work);
+    field_now_us += 750; complete();
+    assert(field_last[TOTEM_FIELD_USB_QUEUE] == 2500 && field_last[TOTEM_FIELD_USB_TRANSFER] == 750);
+
+    reset(); offer(1); usb_report_work_cb(&usb_report_work);
+    set_proto_cb(hid_dev, HID_PROTOCOL_BOOT);
+    for (unsigned int i = 0; i < TOTEM_HID_QUEUE_SLOTS; i++) { offer((uint8_t)i); }
+    usb_status_cb(USB_DC_SUSPEND, NULL); offer(0);
+    assert(field_issues[TOTEM_FIELD_USB_OVERFLOW] == 1);
+    assert(field_issue_code[TOTEM_FIELD_USB_OVERFLOW] ==
+           ((USB_DC_SUSPEND & 255) << 16 | (64 << 8) | 3));
+    puts("7 field USB timing scenarios passed");
+#endif
+}
+
 int main(void) {
     reset(); offer(4); offer(0);
     assert(writes == 0 && report_queue.count == 2);
@@ -369,6 +462,7 @@ int main(void) {
     /* A controller without an upper stack still aborts and restarts safely. */
     usbd_reinit();
     assert(aborts == 1 && detected == 1 && !usbd_ctx.ready);
+    field_timing_scenarios();
     puts("18 actual USB pipeline scenarios passed");
     return 0;
 }

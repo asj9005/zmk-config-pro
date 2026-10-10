@@ -20,6 +20,7 @@
 #define ZMK_KEYMAP_LEN 38
 #define CONFIG_ZMK_SPLIT_ESB_EVENT_BUFFER_ITEMS 128
 #define CONFIG_ZMK_SPLIT_ESB_CMD_BUFFER_ITEMS 16
+#define CONFIG_TOTEM_FIELD_DIAGNOSTICS 1
 #define IS_ENABLED(x) (x)
 #define ARG_UNUSED(x) (void)(x)
 #define LOG_ERR(...) ((void)0)
@@ -64,6 +65,14 @@ static void k_mutex_unlock(void *mutex) {
 }
 #endif
 static int64_t now;
+enum { TOTEM_FIELD_RX_QUEUE, TOTEM_FIELD_RX_PROCESS };
+static uint64_t field_clock, field_last[2];
+static unsigned int field_count[2];
+static uint64_t totem_field_now_us(void) { field_clock += 25; return field_clock; }
+static void totem_field_observe(int metric, uint64_t duration_us) {
+    CHECK(locks == 0 && metric >= 0 && metric < 2);
+    field_last[metric] = duration_us; field_count[metric]++;
+}
 static uint32_t k_uptime_get_32(void) { return (uint32_t)now; }
 static int64_t k_uptime_get(void) { return now; }
 struct ring_buf { uint8_t *buffer; uint32_t capacity, size, head; };
@@ -240,6 +249,8 @@ static void reset_fixture(const char *name) {
     memset(state.rx_overflow_count, 0, sizeof(state.rx_overflow_count));
     scheduled = invalid_count = overflow_count = frame_errors = worker_errors = bad_positions = 0;
     delivered_count = 0; replenish = false; now = high_water = max_age = 0; CHECK(locks == 0);
+    field_clock = 0;
+    memset(field_last, 0, sizeof(field_last)); memset(field_count, 0, sizeof(field_count));
 #if !TEST_CENTRAL && CONFIG_TOTEM_ESB_V3
     CHECK(!event_mutex.held && !rekey_waiting);
     mutex_locks = mutex_unlocks = key_generation = 0;
@@ -374,6 +385,10 @@ static void wrap_and_age(void) {
     }
     now = UINT32_MAX - 9U; enqueue_id(first_pipe(), 601); now = (int64_t)UINT32_MAX + 16;
     CHECK(pop(&env, &pipe) == 0 && max_age == 25);
+    CHECK(field_count[TOTEM_FIELD_RX_QUEUE] == 601);
+    CHECK(field_count[TOTEM_FIELD_RX_PROCESS] == 601);
+    CHECK(field_last[TOTEM_FIELD_RX_QUEUE] == 25000);
+    CHECK(field_last[TOTEM_FIELD_RX_PROCESS] == 25);
     CHECK(high_water > sizeof(struct esb_rx_record));
 }
 static void position_validation(void) {

@@ -14,6 +14,7 @@
 #include "esb_key_state.h"
 #define CONFIG_TOTEM_ESB_DIAGNOSTICS 1
 #include "esb_diagnostics.h"
+#include "field_diagnostics.h"
 
 #define CONFIG_ZMK_SPLIT 1
 #define CONFIG_ZMK_BEHAVIOR_METADATA 0
@@ -44,6 +45,18 @@
 
 static const char *scenario = "initialization";
 static int64_t now;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+static uint64_t field_last[TOTEM_FIELD_METRIC_COUNT];
+static unsigned int field_count[TOTEM_FIELD_METRIC_COUNT], field_decisions[TOTEM_FIELD_GROUP_COUNT][2];
+uint64_t totem_field_now_us(void) { return (uint64_t)now * 1000U; }
+void totem_field_observe(enum totem_field_metric metric, uint64_t duration_us) {
+    field_last[metric] = duration_us; field_count[metric]++;
+}
+void totem_field_hold_tap(enum totem_field_group group, bool hold) { field_decisions[group][hold]++; }
+void totem_field_issue(enum totem_field_reason reason, uint8_t scope, int32_t code) {
+    (void)reason; (void)scope; (void)code;
+}
+#endif
 static unsigned sleep_calls, overflow_count, dispatch_depth, maximum_dispatch_depth;
 static unsigned scenario_count;
 static bool cancel_in_progress;
@@ -155,7 +168,7 @@ static int zmk_keymap_layer_to(int, bool);
 
 static struct behavior_hold_tap_config configurations[16];
 static struct device devices[16];
-static char device_names[16][12];
+static char device_names[16][24];
 static struct zmk_behavior_binding mapping[38], pressed_mapping[38];
 static bool physical_bindings[38];
 static bool mouse_layer;
@@ -235,7 +248,9 @@ static int keymap_event(struct zmk_position_state_changed *event) {
     }
     struct zmk_behavior_binding binding = pressed_mapping[position];
     struct zmk_behavior_binding_event bev = {.position = position, .source = event->source, .timestamp = event->timestamp};
-    if (binding.behavior_dev != NULL && strncmp(binding.behavior_dev, "ht", 2) == 0)
+    if (binding.behavior_dev != NULL &&
+        (strncmp(binding.behavior_dev, "ht", 2) == 0 || strcmp(binding.behavior_dev, "SIGN_LAYER") == 0 ||
+         strcmp(binding.behavior_dev, "AUTOLAYER_FAST") == 0 || strcmp(binding.behavior_dev, "AUTOLAYER_SLOW") == 0))
         return event->state ? on_hold_tap_binding_pressed(&binding, bev) : on_hold_tap_binding_released(&binding, bev);
     if (binding.behavior_dev != NULL && strcmp(binding.behavior_dev, "mouse") == 0) {
         mouse_refs += event->state ? 1 : -1;
@@ -290,6 +305,10 @@ static int raise_zmk_keycode_state_changed_from_encoded(uint32_t keycode, bool p
     return zmk_event_manager_raise_at(&event.header, &zmk_listener_behavior_hold_tap);
 }
 static void reset_fixture(const char *name) {
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    memset(field_last, 0, sizeof(field_last)); memset(field_count, 0, sizeof(field_count));
+    memset(field_decisions, 0, sizeof(field_decisions));
+#endif
     scenario = name; scenario_count++;
     now = 1000;
     memset(active_hold_taps, 0, sizeof(active_hold_taps));
@@ -461,6 +480,59 @@ static void ingress_timing_scenarios(void) {
     wire_key(0, 2, false, 1300); expect_idle();
 }
 
+static void field_timing_scenarios(void) {
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    const char *names[] = {"SIGN_LAYER", "SIGN_LAYER", "AUTOLAYER_FAST", "AUTOLAYER_SLOW", "SIGN_LAYER"};
+    const uint32_t parameters[] = {2, 3, 4, 5, 9};
+    const enum totem_field_metric metrics[] = {TOTEM_FIELD_HOLD_TAP_BASE_E, TOTEM_FIELD_HOLD_TAP_BASE_R,
+        TOTEM_FIELD_HOLD_TAP_MOUSE_FAST, TOTEM_FIELD_HOLD_TAP_MOUSE_SLOW, TOTEM_FIELD_HOLD_TAP_OTHER};
+    for (unsigned int group = 0; group < 5; group++) {
+        reset_fixture("field_classification_and_decision_without_semantic_change");
+        bool mouse = group == 2 || group == 3;
+        bind_ht(2, 0, mouse, false); strcpy(device_names[0], names[group]);
+        mapping[2].param1 = parameters[group]; configurations[0].tapping_term_ms = mouse ? 180 : 200;
+        send_key(2, true, 1000);
+        CHECK(find_hold_tap(2)->field_group == (enum totem_field_group)group);
+        CHECK(field_count[metrics[group]] == 0 && field_decisions[group][0] == 0 && field_decisions[group][1] == 0);
+        if (mouse) {
+            CHECK(hold_press_count == 1); fire_timeout(2, 1195);
+            CHECK(field_last[metrics[group]] == 195000 && field_count[TOTEM_FIELD_TIMER_LATE] == 1);
+            CHECK(field_last[TOTEM_FIELD_TIMER_LATE] == 15000 && field_decisions[group][1] == 1);
+            send_key(2, false, 1200); CHECK(hold_press_count == 1 && hold_release_count == 1);
+        } else {
+            send_key(2, false, 1080);
+            CHECK(field_last[metrics[group]] == 80000 && field_decisions[group][0] == 1);
+            CHECK(field_count[TOTEM_FIELD_TIMER_LATE] == 0);
+        }
+        CHECK(field_count[metrics[group]] == 1); expect_idle();
+    }
+    CHECK(hold_tap_field_group("OTHER", 2) == TOTEM_FIELD_OTHER);
+
+    reset_fixture("field_inferred_deadline_is_not_scheduler_callback");
+    bind_ht(2, 0, false, false); send_key(2, true, 1000); send_key(2, false, 1230);
+    CHECK(field_decisions[TOTEM_FIELD_OTHER][1] == 1 && field_last[TOTEM_FIELD_HOLD_TAP_OTHER] == 230000);
+    CHECK(field_count[TOTEM_FIELD_TIMER_LATE] == 0); expect_idle();
+
+    reset_fixture("field_timer_yields_are_not_duplicate_scheduler_samples");
+    bind_ht(2, 0, false, false); wire_key(0, 2, true, 1000);
+    enqueue_timed_key(0, 2, false, 1080); fire_timeout(2, 1250); fire_timeout(2, 1251);
+    CHECK(field_count[TOTEM_FIELD_TIMER_LATE] == 1 && field_last[TOTEM_FIELD_TIMER_LATE] == 50000);
+    CHECK(field_count[TOTEM_FIELD_HOLD_TAP_OTHER] == 0); drain_timed_keys(8);
+    CHECK(field_last[TOTEM_FIELD_HOLD_TAP_OTHER] == 251000 && field_decisions[TOTEM_FIELD_OTHER][0] == 1);
+    expect_idle();
+
+    reset_fixture("field_cancelled_timer_does_not_add_lateness");
+    bind_ht(2, 0, false, false); send_key(2, true, 1000);
+    cancel_in_progress = true; send_key(2, false, 1080);
+    struct active_hold_tap *cancelled = find_hold_tap(2);
+    now = 1400; cancelled->work.pending = false; behavior_hold_tap_timer_work_handler(&cancelled->work.work);
+    /* A stale/free-slot callback is not a new timer latency observation. */
+    behavior_hold_tap_timer_work_handler(&cancelled->work.work);
+    CHECK(field_count[TOTEM_FIELD_TIMER_LATE] == 0 && field_count[TOTEM_FIELD_HOLD_TAP_OTHER] == 1);
+    expect_idle();
+#endif
+}
+
 int main(void) {
     reset_fixture("normal_tap_preferred_autobase_roll");
     bind_ht(2, 0, true, true); mouse_layer = true;
@@ -619,6 +691,7 @@ int main(void) {
     expect_idle();
 
     ingress_timing_scenarios();
+    field_timing_scenarios();
     printf("%u actual hold-tap scenarios passed\n", scenario_count);
     return 0;
 }

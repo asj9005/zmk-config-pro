@@ -138,6 +138,63 @@ if(CONFIG_TOTEM_ESB_COMPAT)
     zephyr_library_sources(src/totem_esb_hooks.c)
     zephyr_library_sources_ifdef(CONFIG_TOTEM_ESB_DIAGNOSTICS src/esb_diagnostics.c)
 
+    if(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        # Identify this source checkout, not a containing workspace repository.
+        # Generated key/config files live outside this source tree.
+        set(TOTEM_FIELD_SOURCE_DIR "${ZEPHYR_CURRENT_MODULE_DIR}")
+        set(TOTEM_FIELD_BUILD_SHA "unknown")
+        set(TOTEM_FIELD_BUILD_TREE "unknown")
+        set(TOTEM_FIELD_BUILD_DIRTY 2)
+        execute_process(COMMAND git -c "safe.directory=${TOTEM_FIELD_SOURCE_DIR}"
+            -C "${TOTEM_FIELD_SOURCE_DIR}" rev-parse --show-toplevel
+            RESULT_VARIABLE TOTEM_FIELD_ROOT_RESULT OUTPUT_VARIABLE TOTEM_FIELD_GIT_ROOT
+            OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+        file(REAL_PATH "${TOTEM_FIELD_SOURCE_DIR}" TOTEM_FIELD_SOURCE_REAL)
+        if(TOTEM_FIELD_ROOT_RESULT EQUAL 0)
+            file(REAL_PATH "${TOTEM_FIELD_GIT_ROOT}" TOTEM_FIELD_GIT_REAL)
+        endif()
+        if(TOTEM_FIELD_ROOT_RESULT EQUAL 0 AND
+           TOTEM_FIELD_GIT_REAL STREQUAL TOTEM_FIELD_SOURCE_REAL)
+            execute_process(COMMAND git -c "safe.directory=${TOTEM_FIELD_SOURCE_DIR}"
+                -C "${TOTEM_FIELD_SOURCE_DIR}" rev-parse HEAD "HEAD^{tree}"
+                RESULT_VARIABLE TOTEM_FIELD_REV_RESULT OUTPUT_VARIABLE TOTEM_FIELD_REVISIONS
+                OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+            string(REPLACE "\n" ";" TOTEM_FIELD_REV_LIST "${TOTEM_FIELD_REVISIONS}")
+            list(LENGTH TOTEM_FIELD_REV_LIST TOTEM_FIELD_REV_COUNT)
+            if(TOTEM_FIELD_REV_RESULT EQUAL 0 AND TOTEM_FIELD_REV_COUNT EQUAL 2)
+                list(GET TOTEM_FIELD_REV_LIST 0 TOTEM_FIELD_SHA_CANDIDATE)
+                list(GET TOTEM_FIELD_REV_LIST 1 TOTEM_FIELD_TREE_CANDIDATE)
+                string(LENGTH "${TOTEM_FIELD_SHA_CANDIDATE}" TOTEM_FIELD_SHA_LENGTH)
+                string(LENGTH "${TOTEM_FIELD_TREE_CANDIDATE}" TOTEM_FIELD_TREE_LENGTH)
+                if(TOTEM_FIELD_SHA_LENGTH EQUAL 40 AND TOTEM_FIELD_TREE_LENGTH EQUAL 40 AND
+                   TOTEM_FIELD_SHA_CANDIDATE MATCHES "^[0-9a-f]+$" AND
+                   TOTEM_FIELD_TREE_CANDIDATE MATCHES "^[0-9a-f]+$")
+                    set(TOTEM_FIELD_BUILD_SHA "${TOTEM_FIELD_SHA_CANDIDATE}")
+                    set(TOTEM_FIELD_BUILD_TREE "${TOTEM_FIELD_TREE_CANDIDATE}")
+                    execute_process(COMMAND git -c "safe.directory=${TOTEM_FIELD_SOURCE_DIR}"
+                        -C "${TOTEM_FIELD_SOURCE_DIR}" status --porcelain --untracked-files=normal
+                        RESULT_VARIABLE TOTEM_FIELD_DIRTY_RESULT OUTPUT_VARIABLE TOTEM_FIELD_STATUS
+                        OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+                    if(TOTEM_FIELD_DIRTY_RESULT EQUAL 0)
+                        if(TOTEM_FIELD_STATUS STREQUAL "")
+                            set(TOTEM_FIELD_BUILD_DIRTY 0)
+                        else()
+                            set(TOTEM_FIELD_BUILD_DIRTY 1)
+                        endif()
+                    endif()
+                endif()
+            endif()
+        endif()
+        file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/totem")
+        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/generated/totem/field_build_info.h"
+            "/* Generated public source identity; no key material. */\n#pragma once\n"
+            "#define TOTEM_FIELD_BUILD_SHA \"${TOTEM_FIELD_BUILD_SHA}\"\n"
+            "#define TOTEM_FIELD_BUILD_TREE \"${TOTEM_FIELD_BUILD_TREE}\"\n"
+            "#define TOTEM_FIELD_BUILD_DIRTY ${TOTEM_FIELD_BUILD_DIRTY}\n")
+        zephyr_include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
+        zephyr_library_sources(src/field_diagnostics.c)
+    endif()
+
     if(CONFIG_TOTEM_ESB_V3)
         function(totem_esb_v3_hex_key_to_initializer KEY_HEX OUTPUT_VARIABLE)
             string(LENGTH "${KEY_HEX}" TOTEM_KEY_HEX_LENGTH)

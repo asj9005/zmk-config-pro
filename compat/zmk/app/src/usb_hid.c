@@ -15,6 +15,7 @@
 #include <zmk/keymap.h>
 #include <totem/hid_report_queue.h>
 #include <totem/esb_diagnostics.h>
+#include <totem/field_diagnostics.h>
 
 #if IS_ENABLED(CONFIG_ZMK_POINTING_SMOOTH_SCROLLING)
 #include <zmk/pointing/resolution_multipliers.h>
@@ -40,13 +41,29 @@ static K_MUTEX_DEFINE(usb_endpoint_lock);
 static struct totem_hid_packet in_flight_packet;
 static bool in_flight;
 static bool reports_need_resync;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+static uint64_t field_submitted_at_us;
+static bool field_submit_committed;
+static bool field_completion_early;
+#endif
 static void usb_report_work_cb(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(usb_report_work, usb_report_work_cb);
 
 static void in_ready_cb(const struct device *dev) {
     ARG_UNUSED(dev);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    uint64_t completed_at_us = totem_field_now_us();
+#endif
     k_spinlock_key_t key = k_spin_lock(&report_queue_lock);
     if (in_flight) {
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        if (field_submit_committed) {
+            totem_field_observe(TOTEM_FIELD_USB_TRANSFER, completed_at_us - field_submitted_at_us);
+            field_submit_committed = false;
+        } else {
+            field_completion_early = true;
+        }
+#endif
         in_flight = false;
         k_sem_give(&hid_sem);
     }
@@ -224,10 +241,27 @@ static const struct hid_ops ops = {
  * aborted transfers. The deferred connection event can coalesce RESET away. */
 void totem_usb_hid_status_changed(enum usb_dc_status_code status) {
     if (status == USB_DC_RESET || status == USB_DC_DISCONNECTED) {
+        /* Bounded reason code: 0 reset, 1 disconnected. Never report HID data. */
+        totem_field_issue(TOTEM_FIELD_USB_RESET, TOTEM_FIELD_SCOPE_LOCAL,
+                          status == USB_DC_DISCONNECTED ? 1 : 0);
+    } else if (status == USB_DC_SUSPEND) {
+        totem_field_issue(TOTEM_FIELD_USB_SUSPEND, TOTEM_FIELD_SCOPE_LOCAL, 0);
+    } else if (status == USB_DC_RESUME) {
+        totem_field_issue(TOTEM_FIELD_USB_RESUME, TOTEM_FIELD_SCOPE_LOCAL, 0);
+    }
+    if (status == USB_DC_RESET || status == USB_DC_DISCONNECTED) {
         k_mutex_lock(&usb_endpoint_lock, K_FOREVER);
         k_spinlock_key_t key = k_spin_lock(&report_queue_lock);
         totem_hid_queue_reset(&report_queue);
         reports_need_resync = true;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        if (in_flight && field_submit_committed) {
+            /* Timing discard codes: 1 completion before submit returned,
+             * 2 accepted transfer aborted by reset/disconnect. */
+            totem_field_issue(TOTEM_FIELD_USB_TIMING_DISCARD, TOTEM_FIELD_SCOPE_LOCAL, 2);
+        }
+        field_submit_committed = field_completion_early = false;
+#endif
         in_flight = false;
         /* These aborts do not call int_in_ready. nrfx's ordered status and
          * completion callbacks cannot complete this old DMA after reset. */
@@ -241,22 +275,20 @@ void totem_usb_hid_status_changed(enum usb_dc_status_code status) {
 static void usb_queue_current_reports_locked(void) {
     size_t len;
     uint8_t *keyboard = get_keyboard_report(&len);
-    (void)totem_hid_queue_offer(&report_queue, TOTEM_HID_KEYBOARD, keyboard, keyboard,
-                              (uint8_t)len);
+    (void)totem_hid_queue_offer_resync(&report_queue, TOTEM_HID_KEYBOARD, keyboard, (uint8_t)len);
 #if IS_ENABLED(CONFIG_ZMK_USB_BOOT)
     if (hid_protocol == HID_PROTOCOL_BOOT) {
         return;
     }
 #endif
     struct zmk_hid_consumer_report *consumer = zmk_hid_get_consumer_report();
-    (void)totem_hid_queue_offer(&report_queue, TOTEM_HID_CONSUMER, (uint8_t *)consumer,
-                              (uint8_t *)consumer, sizeof(*consumer));
+    (void)totem_hid_queue_offer_resync(&report_queue, TOTEM_HID_CONSUMER, (uint8_t *)consumer,
+                                     sizeof(*consumer));
 #if IS_ENABLED(CONFIG_ZMK_POINTING)
     struct zmk_hid_mouse_report mouse = *zmk_hid_get_mouse_report();
     mouse.body.d_x = mouse.body.d_y = 0;
     mouse.body.d_scroll_x = mouse.body.d_scroll_y = 0;
-    (void)totem_hid_queue_offer(&report_queue, TOTEM_HID_MOUSE, (uint8_t *)&mouse,
-                              (uint8_t *)&mouse, sizeof(mouse));
+    (void)totem_hid_queue_offer_resync(&report_queue, TOTEM_HID_MOUSE, (uint8_t *)&mouse, sizeof(mouse));
 #endif
 }
 
@@ -296,6 +328,9 @@ static void usb_report_work_cb(struct k_work *work) {
     pending = totem_hid_queue_peek(&report_queue, &in_flight_packet);
     uint32_t generation = report_queue.generation;
     in_flight = pending;
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    field_submit_committed = field_completion_early = false;
+#endif
     k_spin_unlock(&report_queue_lock, key);
     if (!pending) {
         k_sem_give(&hid_sem);
@@ -305,6 +340,9 @@ static void usb_report_work_cb(struct k_work *work) {
     /* The endpoint retains this pointer until int_in_ready or an abort.
      * Producer snapshots and queue resets never modify the DMA buffer. */
     int err = hid_int_ep_write(hid_dev, in_flight_packet.data, in_flight_packet.length, NULL);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    uint64_t submitted_at_us = totem_field_now_us();
+#endif
     key = k_spin_lock(&report_queue_lock);
     if (err != 0) {
         in_flight = false;
@@ -312,9 +350,24 @@ static void usb_report_work_cb(struct k_work *work) {
         k_spin_unlock(&report_queue_lock, key);
         k_mutex_unlock(&usb_endpoint_lock);
         totem_esb_diag_event(TOTEM_DIAG_USB_RETRY, err);
+        totem_field_issue(TOTEM_FIELD_USB_RETRY, TOTEM_FIELD_SCOPE_LOCAL, err);
         k_work_reschedule(&usb_report_work, K_MSEC(1));
         return;
     }
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    /* The API return is the observable successful-submit boundary, not host
+     * receipt. An earlier ready callback cannot yield a valid transfer interval. */
+    enum totem_field_metric metric = in_flight_packet.origin == TOTEM_HID_RECOVERY
+        ? TOTEM_FIELD_USB_QUEUE_RECOVERY : in_flight_packet.origin == TOTEM_HID_RESYNC
+        ? TOTEM_FIELD_USB_QUEUE_RESYNC : TOTEM_FIELD_USB_QUEUE;
+    totem_field_observe(metric, submitted_at_us - in_flight_packet.queued_at_us);
+    if (field_completion_early) {
+        totem_field_issue(TOTEM_FIELD_USB_TIMING_DISCARD, TOTEM_FIELD_SCOPE_LOCAL, 1);
+    } else if (in_flight) {
+        field_submitted_at_us = submitted_at_us;
+        field_submit_committed = true;
+    }
+#endif
     if (generation == report_queue.generation) {
         totem_hid_queue_pop(&report_queue);
     }
@@ -339,6 +392,14 @@ static int zmk_usb_hid_queue_report(enum totem_hid_kind kind, const uint8_t *rep
     }
     if (result > 0) {
         totem_esb_diag_event(TOTEM_DIAG_USB_OVERFLOW, 0);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        /* Bounded pressure snapshot: status[23:16], queued reports[15:8],
+         * in-flight[0], resync pending[1]. No report bytes or input identity. */
+        uint32_t context = (((uint32_t)zmk_usb_get_status() & 0xffU) << 16) |
+                           ((used & 0xffU) << 8) | (in_flight ? 1U : 0U) |
+                           (reports_need_resync ? 2U : 0U);
+        totem_field_issue(TOTEM_FIELD_USB_OVERFLOW, TOTEM_FIELD_SCOPE_LOCAL, (int32_t)context);
+#endif
     }
     totem_esb_diag_usb_observe(used);
     k_work_reschedule(&usb_report_work, K_NO_WAIT);

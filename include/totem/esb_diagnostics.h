@@ -50,6 +50,17 @@ enum totem_esb_diag_tx_step {
     TOTEM_DIAG_TX_STEP_COUNT,
 };
 
+/* Non-secret cumulative state, copied one atomic field at a time. This is not
+ * a single-time event trace. Unknown startup results remain INT32_MIN. */
+struct totem_esb_diag_snapshot {
+    int32_t stages[TOTEM_DIAG_STAGE_COUNT];
+    uint32_t events[TOTEM_DIAG_EVENT_COUNT];
+    uint32_t tx_counts[TOTEM_DIAG_TX_STEP_COUNT];
+    int32_t tx_results[TOTEM_DIAG_TX_STEP_COUNT];
+    int32_t frame_error, kat_step, kat_status;
+    uint32_t rx_high, rx_age_max, scan_high, usb_high;
+};
+
 #if defined(CONFIG_TOTEM_ESB_DIAGNOSTICS)
 
 /* Initialization context only: records a result and prints one status line. */
@@ -68,6 +79,8 @@ void totem_esb_diag_tx_step(enum totem_esb_diag_tx_step step, int result);
 void totem_esb_diag_rx_observe(uint32_t queued_bytes, uint32_t age_ms);
 void totem_esb_diag_scan_observe(uint32_t queued_events);
 void totem_esb_diag_usb_observe(uint32_t queued_reports);
+
+void totem_esb_diag_snapshot(struct totem_esb_diag_snapshot *snapshot);
 
 #else
 

@@ -4,14 +4,24 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+#include <totem/field_diagnostics.h>
+#endif
 
 #define TOTEM_HID_QUEUE_SLOTS 64U
 #define TOTEM_HID_REPORT_BYTES 64U
 #define TOTEM_HID_REPORT_KINDS 3U
 
 enum totem_hid_kind { TOTEM_HID_KEYBOARD, TOTEM_HID_CONSUMER, TOTEM_HID_MOUSE };
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+enum totem_hid_origin { TOTEM_HID_FIFO, TOTEM_HID_RECOVERY, TOTEM_HID_RESYNC };
+#endif
 
 struct totem_hid_packet {
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    uint64_t queued_at_us;
+    enum totem_hid_origin origin;
+#endif
     uint8_t length;
     uint8_t data[TOTEM_HID_REPORT_BYTES];
 };
@@ -47,6 +57,11 @@ static inline int totem_hid_queue_offer(struct totem_hid_queue *queue, enum tote
     }
     queue->recovery[kind].length = length;
     memcpy(queue->recovery[kind].data, recovery, length);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    uint64_t queued_at_us = totem_field_now_us();
+    queue->recovery[kind].queued_at_us = queued_at_us;
+    queue->recovery[kind].origin = TOTEM_HID_RECOVERY;
+#endif
     if (queue->count == TOTEM_HID_QUEUE_SLOTS || queue->recovery_mask != 0) {
         queue->recovery_mask |= (uint8_t)(1U << kind);
         return 1;
@@ -54,8 +69,30 @@ static inline int totem_hid_queue_offer(struct totem_hid_queue *queue, enum tote
     uint16_t tail = (uint16_t)((queue->head + queue->count) % TOTEM_HID_QUEUE_SLOTS);
     queue->packets[tail].length = length;
     memcpy(queue->packets[tail].data, report, length);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    queue->packets[tail].queued_at_us = queued_at_us;
+    queue->packets[tail].origin = TOTEM_HID_FIFO;
+#endif
     queue->count++;
     return 0;
+}
+
+/* Generated current-state reports have their own timing population. A reset
+ * discards old timestamps; overflow uses the latest recovery snapshot's time. */
+static inline int totem_hid_queue_offer_resync(struct totem_hid_queue *queue,
+                                             enum totem_hid_kind kind,
+                                             const uint8_t *report, uint8_t length) {
+    int result = totem_hid_queue_offer(queue, kind, report, report, length);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    if (result >= 0) {
+        queue->recovery[kind].origin = TOTEM_HID_RESYNC;
+        if (result == 0) {
+            uint16_t tail = (uint16_t)((queue->head + queue->count - 1U) % TOTEM_HID_QUEUE_SLOTS);
+            queue->packets[tail].origin = TOTEM_HID_RESYNC;
+        }
+    }
+#endif
+    return result;
 }
 
 static inline bool totem_hid_queue_peek(struct totem_hid_queue *queue,

@@ -197,7 +197,8 @@ def check_generated_header(data: bytes, role: str, keys: dict[str, bytes]) -> No
     require(values == expected, "Generated key header does not match the requested role and key set")
 
 
-def validate_uf2(data: bytes, role: str, keys: dict[str, bytes]) -> bytes:
+def validate_uf2(data: bytes, role: str, keys: dict[str, bytes], *,
+                 field_diagnostics: bool = False) -> bytes:
     require(role in ("left", "right", "dongle"), "Unsupported firmware role")
     require(bool(data) and len(data) % 512 == 0, "Invalid UF2 file length")
     total = len(data) // 512
@@ -226,9 +227,35 @@ def validate_uf2(data: bytes, role: str, keys: dict[str, bytes]) -> bytes:
         require(all(marker in payload for marker in STARTUP_MARKERS),
                 "Peripheral UF2 lacks the tested automatic delayed startup markers")
     require(b"ESB_DIAG USB_START" not in payload, "UF2 contains DTR-gated startup code")
-    require(b"[esb-diag] role=%s" in payload and b"tx_steps=done:result" in payload,
-            "UF2 lacks the tested diagnostic markers")
+    if field_diagnostics:
+        require(b"[totem-field]" in payload and b"TOTEM_FIELD_V1" in payload,
+                "UF2 lacks the field diagnostic markers")
+    else:
+        require(b"[esb-diag] role=%s" in payload and b"tx_steps=done:result" in payload,
+                "UF2 lacks the tested diagnostic markers")
     return bytes(payload)
+
+
+def check_field_build_header(data: bytes, payload: bytes) -> dict:
+    text = re.sub(r"/\*[\s\S]*?\*/", "", decode(data, "Field build header"))
+    definitions = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line == "#pragma once":
+            continue
+        match = re.fullmatch(r'#define TOTEM_FIELD_BUILD_(SHA|TREE|DIRTY)\s+("[0-9a-f]{40}"|[012])', line)
+        require(match is not None and match[1] not in definitions,
+                "Field build header is malformed or has unknown revision")
+        definitions[match[1]] = match[2]
+    require(set(definitions) == {"SHA", "TREE", "DIRTY"} and definitions["DIRTY"] == "0",
+            "Field firmware must identify a clean source revision")
+    for name in ("SHA", "TREE"):
+        require(re.fullmatch(r'"[0-9a-f]{40}"', definitions[name]) is not None,
+                "Field source identity is invalid")
+        require(definitions[name][1:-1].encode("ascii") in payload,
+                "UF2 does not contain the generated field source identity")
+    return {"schema": 1, "source_sha": definitions["SHA"][1:-1],
+            "source_tree": definitions["TREE"][1:-1], "clean": True}
 
 
 def verify(key_dir: Path, role: str | None = None, build_dir: Path | None = None) -> dict:
@@ -244,7 +271,8 @@ def verify(key_dir: Path, role: str | None = None, build_dir: Path | None = None
     if build_dir is None:
         return result
     config_data = read_bytes(build_dir / "zephyr" / ".config", 2 * 1024 * 1024, "Build configuration")
-    check_build_config(parse_config(decode(config_data, "Build configuration"), "Build configuration"), role, keys)
+    config = parse_config(decode(config_data, "Build configuration"), "Build configuration")
+    check_build_config(config, role, keys)
     try:
         headers = [path for path in build_dir.rglob("esb_v3_keys.h")
                    if path.parts[-3:] == ("generated", "totem", "esb_v3_keys.h")]
@@ -254,7 +282,14 @@ def verify(key_dir: Path, role: str | None = None, build_dir: Path | None = None
     header_data = read_bytes(headers[0], 65536, "Generated key header")
     check_generated_header(header_data, role, keys)
     uf2_data = read_bytes(build_dir / "zephyr" / "zmk.uf2", 2 * (FLASH_LIMIT - FLASH_START), "UF2")
-    payload = validate_uf2(uf2_data, role, keys)
+    field_enabled = config.get("CONFIG_TOTEM_FIELD_DIAGNOSTICS", "n") == "y"
+    payload = validate_uf2(uf2_data, role, keys, field_diagnostics=field_enabled)
+    if field_enabled:
+        field_headers = [path for path in build_dir.rglob("field_build_info.h")
+                         if path.parts[-3:] == ("generated", "totem", "field_build_info.h")]
+        require(len(field_headers) == 1, "Expected exactly one field source identity header")
+        result["field_diagnostics"] = check_field_build_header(
+            read_bytes(field_headers[0], 4096, "Field build header"), payload)
     result.update(role=role, build_config_matches=True, generated_header_matches=True,
                   uf2_role_keys_match=True, uf2_blocks=len(uf2_data) // 512,
                   config_sha256=sha256(config_data), header_sha256=sha256(header_data),

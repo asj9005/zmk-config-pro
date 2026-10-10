@@ -43,6 +43,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
 #include <totem/esb_benchmark.h>
 #include <totem/esb_diagnostics.h>
+#include <totem/field_diagnostics.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 #include <totem/esb_backoff.h>
 #include <totem/esb_v3_crypto.h>
@@ -277,6 +278,9 @@ static int begin_fresh_v3_handshake(void) {
 }
 
 static void restart_v3_after_auth_failure(void) {
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    totem_field_issue(TOTEM_FIELD_AUTH_RESTART, 2, (int32_t)get_secure_state());
+#endif
     /*
      * Fail closed before asking the RNG for a replacement nonce. If entropy
      * is temporarily unavailable, handshake_work retries while NO_SESSION
@@ -793,6 +797,11 @@ static void handshake_work_cb(struct k_work *work) {
                 CONFIG_TOTEM_ESB_V3_SESSION_OK_TIMEOUT_MS;
         k_mutex_unlock(&event_mutex);
         if (wait_expired) {
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+            /* Counts expiry observations/recovery attempts, not unique outages. */
+            totem_field_issue(TOTEM_FIELD_HANDSHAKE_TIMEOUT, 2,
+                              CONFIG_TOTEM_ESB_V3_SESSION_OK_TIMEOUT_MS);
+#endif
             /*
              * The central may have discarded this pending key during a long
              * RF outage. A fresh boot nonce is required because continuing
@@ -1142,6 +1151,9 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
         downlink_sequence = 0;
         wait_session_ok_started_at = 0;
         set_secure_state(ESB_V3_ESTABLISHED);
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        totem_field_issue(TOTEM_FIELD_SESSION_ESTABLISHED, 2, 0);
+#endif
 #if IS_ENABLED(CONFIG_ZMK_BATTERY_REPORTING)
         battery_refresh_schedule_locked();
 #endif

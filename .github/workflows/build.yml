@@ -46,7 +46,9 @@ jobs:
             tests/test_auto_base.py \
             tests/test_owned_swapper.py \
             tests/test_prospector_brightness_runtime.py \
-            tests/test_prospector_runtime.py
+            tests/test_prospector_runtime.py \
+            tests/test_field_diagnostics_runtime.py \
+            tests/test_field_diagnostics_tools.py
 
   build:
     uses: ./.github/workflows/build-pinned.yml

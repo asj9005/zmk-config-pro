@@ -16,6 +16,7 @@
 
 #include <totem/esb_benchmark.h>
 #include <totem/esb_diagnostics.h>
+#include <totem/field_diagnostics.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
 #include <totem/esb_v3_crypto.h>
 #endif
@@ -410,5 +411,17 @@ int zmk_split_esb_rx_get(struct zmk_split_esb_state *state, uint8_t *env,
         *received_at = rx_record_timestamp(record.received_at);
     }
     totem_esb_diag_rx_observe(queued_bytes, k_uptime_get_32() - record.received_at);
-    return decode_rx_packet(packet, record.length, env, env_size, downlink, *pipe);
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    /* The existing local admission timestamp has millisecond resolution.
+     * Do not imply radio one-way latency or microsecond RX queue precision. */
+    totem_field_observe(TOTEM_FIELD_RX_QUEUE,
+                       (uint64_t)(uint32_t)(k_uptime_get_32() - record.received_at) * 1000U);
+    uint64_t decode_started = totem_field_now_us();
+#endif
+    int result = decode_rx_packet(packet, record.length, env, env_size, downlink, *pipe);
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    /* Includes local frame validation/decryption, excludes behavior dispatch. */
+    totem_field_observe(TOTEM_FIELD_RX_PROCESS, totem_field_now_us() - decode_started);
+#endif
+    return result;
 }

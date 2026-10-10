@@ -35,6 +35,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_SPLIT_ESB_LOG_LEVEL);
 
 #include <totem/esb_benchmark.h>
 #include <totem/esb_diagnostics.h>
+#include <totem/field_diagnostics.h>
 #include <totem/esb_key_state.h>
 #include <totem/owned_swapper.h>
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
@@ -692,6 +693,11 @@ static void update_source_session(
     if (!force && seq->session_initialized && seq->session_id == session_id) {
         return;
     }
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    /* Report only a role and first/replacement flag, never a wire session ID. */
+    totem_field_issue(TOTEM_FIELD_SESSION_ESTABLISHED, source,
+                      seq->session_initialized ? 1 : 0);
+#endif
 
     if (seq->session_initialized) {
 #if !IS_ENABLED(CONFIG_TOTEM_ESB_V3)

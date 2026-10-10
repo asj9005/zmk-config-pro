@@ -4,6 +4,7 @@
  */
 
 #include <totem/esb_diagnostics.h>
+#include <totem/field_diagnostics.h>
 
 #if defined(CONFIG_TOTEM_ESB_DIAGNOSTICS)
 
@@ -52,6 +53,7 @@ void totem_esb_diag_usb_observe(uint32_t queued_reports) {
     observe_max(&usb_high_water, queued_reports);
 }
 
+#if !defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
 static const char *const stage_names[TOTEM_DIAG_STAGE_COUNT] = {
     [TOTEM_DIAG_CRYPTO_INIT] = "crypto_init",
     [TOTEM_DIAG_CRYPTO_KAT] = "crypto_kat",
@@ -61,6 +63,7 @@ static const char *const stage_names[TOTEM_DIAG_STAGE_COUNT] = {
     [TOTEM_DIAG_RADIO] = "radio",
     [TOTEM_DIAG_TRANSPORT] = "transport",
 };
+#endif
 
 #if defined(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)
 #define TOTEM_DIAG_ROLE "dongle"
@@ -78,8 +81,10 @@ void totem_esb_diag_stage(enum totem_esb_diag_stage stage, int result) {
     }
 
     atomic_set(&stage_results[stage], result);
+#if !defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
     printk("[esb-diag] role=%s stage=%s result=%d\n", TOTEM_DIAG_ROLE,
            stage_names[stage], result);
+#endif
 #if defined(CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START)
     /* This profile invokes startup on its own thread, after USB DTR. Let the
      * USB workqueues deliver this checkpoint before the next operation. */
@@ -96,6 +101,20 @@ void totem_esb_diag_event(enum totem_esb_diag_event event, int value) {
         atomic_set(&last_frame_error, value);
     }
     atomic_inc(&event_counts[event]);
+#if defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    /* USB records richer state at its caller. Do not double-count it here. */
+    switch (event) {
+    case TOTEM_DIAG_RX_OVERFLOW:
+        totem_field_issue(TOTEM_FIELD_RX_OVERFLOW, TOTEM_FIELD_SCOPE_LOCAL, value); break;
+    case TOTEM_DIAG_SCAN_OVERFLOW:
+        totem_field_issue(TOTEM_FIELD_SCAN_OVERFLOW, TOTEM_FIELD_SCOPE_LOCAL, value); break;
+    case TOTEM_DIAG_HOLD_TAP_OVERFLOW:
+        totem_field_issue(TOTEM_FIELD_HOLD_TAP_OVERFLOW, TOTEM_FIELD_SCOPE_LOCAL, value); break;
+    case TOTEM_DIAG_INPUT_OVERFLOW:
+        totem_field_issue(TOTEM_FIELD_INPUT_OVERFLOW, TOTEM_FIELD_SCOPE_LOCAL, value); break;
+    default: break;
+    }
+#endif
 }
 
 void totem_esb_diag_kat(int checkpoint, int status) {
@@ -113,6 +132,27 @@ void totem_esb_diag_tx_step(enum totem_esb_diag_tx_step step, int result) {
     }
 }
 
+void totem_esb_diag_snapshot(struct totem_esb_diag_snapshot *snapshot) {
+    for (unsigned int i = 0; i < TOTEM_DIAG_STAGE_COUNT; i++) {
+        snapshot->stages[i] = atomic_get(&stage_results[i]);
+    }
+    for (unsigned int i = 0; i < TOTEM_DIAG_EVENT_COUNT; i++) {
+        snapshot->events[i] = (uint32_t)atomic_get(&event_counts[i]);
+    }
+    for (unsigned int i = 0; i < TOTEM_DIAG_TX_STEP_COUNT; i++) {
+        snapshot->tx_counts[i] = (uint32_t)atomic_get(&tx_step_counts[i]);
+        snapshot->tx_results[i] = atomic_get(&tx_step_results[i]);
+    }
+    snapshot->frame_error = atomic_get(&last_frame_error);
+    snapshot->kat_step = atomic_get(&last_kat_checkpoint);
+    snapshot->kat_status = atomic_get(&last_kat_status);
+    snapshot->rx_high = (uint32_t)atomic_get(&rx_high_water);
+    snapshot->rx_age_max = (uint32_t)atomic_get(&rx_max_age_ms);
+    snapshot->scan_high = (uint32_t)atomic_get(&scan_high_water);
+    snapshot->usb_high = (uint32_t)atomic_get(&usb_high_water);
+}
+
+#if !defined(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
 static void diagnostics_work_handler(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(diagnostics_work, diagnostics_work_handler);
 
@@ -209,5 +249,7 @@ static int diagnostics_init(void) {
 }
 
 SYS_INIT(diagnostics_init, APPLICATION, 99);
+
+#endif /* Legacy periodic console output is replaced by the field worker. */
 
 #endif

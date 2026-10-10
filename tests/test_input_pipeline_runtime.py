@@ -49,6 +49,10 @@ class InputPipelineTests(unittest.TestCase):
                 fixture = fixture.replace('/* ACTUAL_CALLBACKS */', callbacks)
                 cases = [('current', fixture, True)]
                 if variant == 'usb':
+                    field_fixture = '#define CONFIG_TOTEM_FIELD_DIAGNOSTICS 1\n' + fixture
+                    cases.append(('field', field_fixture, True))
+                    cases.append(('field_missing_completion', field_fixture.replace(
+                        'field_submit_committed = true;', 'field_submit_committed = false;', 1), False))
                     mutations = (
                         ('local_dma', 'int err = hid_int_ep_write(hid_dev, in_flight_packet.data, in_flight_packet.length, NULL);',
                          'struct totem_hid_packet local = in_flight_packet;\n    int err = hid_int_ep_write(hid_dev, local.data, local.length, NULL);'),

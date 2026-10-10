@@ -9,6 +9,7 @@
 #include <string.h>
 
 #include <totem/esb_benchmark.h>
+#include <totem/field_diagnostics.h>
 
 #if IS_ENABLED(CONFIG_TOTEM_ESB_BENCHMARK) && IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL) &&         \
     IS_ENABLED(CONFIG_ZMK_USB)
@@ -90,6 +91,9 @@ void totem_esb_peer_auth_failed(uint8_t source) {
      * This path is never taken for successfully authenticated traffic.
      */
     bool was_connected = peers[source].seen;
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    totem_field_issue(TOTEM_FIELD_AUTH_RESTART, source, was_connected ? 1 : 0);
+#endif
     peers[source].seen = false;
     peers[source].last_seen = 0;
     totem_esb_source_disconnected(source);
@@ -118,6 +122,10 @@ static void peer_timeout_work_handler(struct k_work *work) {
     for (uint8_t source = 0; source < ARRAY_SIZE(peers); source++) {
         if (peers[source].seen &&
             now - peers[source].last_seen > CONFIG_TOTEM_ESB_PEER_TIMEOUT_MS) {
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+            totem_field_issue(TOTEM_FIELD_PEER_TIMEOUT, source,
+                              CONFIG_TOTEM_ESB_PEER_TIMEOUT_MS);
+#endif
             peers[source].seen = false;
             totem_esb_source_disconnected(source);
             publish_peer(source, false);
@@ -342,6 +350,11 @@ void totem_esb_transport_queue_pressure(bool producer_ring) {
     if (IS_ENABLED(CONFIG_ZMK_SPLIT_ROLE_CENTRAL)) {
         return;
     }
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+    /* Same classification as the existing link metrics: producer admission
+     * pressure versus application TX admission. This is not a lost-key count. */
+    totem_field_issue(TOTEM_FIELD_TX_QUEUE_FULL, 2, producer_ring ? 1 : 0);
+#endif
     atomic_inc(&link_metrics[producer_ring
                                  ? TOTEM_ESB_LINK_METRIC_PRODUCER_QUEUE_OVERFLOW
                                  : TOTEM_ESB_LINK_METRIC_APP_QUEUE_PRESSURE]);

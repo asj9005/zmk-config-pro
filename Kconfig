@@ -31,6 +31,33 @@ config TOTEM_ESB_DIAGNOSTICS
       Does not print keys or packet contents. Enable only in diagnostic builds;
       console output changes timing and is not a latency benchmark.
 
+config TOTEM_FIELD_DIAGNOSTICS
+    bool "Bounded aggregate field diagnostics on the USB console"
+    depends on TOTEM_ESB_DIAGNOSTICS && USB_DEVICE_STACK && UART_CONSOLE
+    depends on !TOTEM_ESB_BENCHMARK && !TOTEM_ESB_DIAGNOSTIC_USB_START
+    select UART_INTERRUPT_DRIVEN
+    default y
+    help
+      Replaces legacy periodic printk with bounded snapshots from a dedicated
+      low-priority workqueue, using the pinned CDC ACM FIFO's nonblocking write.
+      Only a CDC ACM zephyr,console is supported. No callbacks or Studio port
+      are replaced; no console reader or DTR is required for keyboard startup.
+      Aggregates contain no key positions, keycodes, payloads or link secrets.
+      Sampling/output still costs CPU, RAM and USB bandwidth; not a zero-cost
+      end-to-end latency benchmark.
+
+config TOTEM_FIELD_INTERVAL_MS
+    int "Aggregate snapshot interval in milliseconds"
+    depends on TOTEM_FIELD_DIAGNOSTICS
+    default 30000
+    range 5000 300000
+
+config TOTEM_FIELD_THREAD_PRIORITY
+    int "Field diagnostics worker priority"
+    depends on TOTEM_FIELD_DIAGNOSTICS
+    default 12
+    range 5 14
+
 config TOTEM_ESB_V3
     bool "Enable authenticated/encrypted Totem ESB v3 transport"
     depends on TOTEM_ESB_COMPAT

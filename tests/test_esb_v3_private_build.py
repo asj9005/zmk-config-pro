@@ -146,6 +146,35 @@ class PrivateBuildVerifierTests(unittest.TestCase):
         (self.keys / "dongle.keyconf").write_text(key_line(verifier.LEFT, TEST_RIGHT) + key_line(verifier.RIGHT, TEST_LEFT))
         self.rejected()
 
+    def test_field_build_identity_and_profile(self):
+        sha, tree = "a" * 40, "b" * 40
+        header_text = ('#pragma once\n#define TOTEM_FIELD_BUILD_SHA "' + sha +
+                       '"\n#define TOTEM_FIELD_BUILD_TREE "' + tree +
+                       '"\n#define TOTEM_FIELD_BUILD_DIRTY 0\n')
+        for role in ("left", "right", "dongle"):
+            with self.subTest(role=role):
+                build = self.build(role)
+                (build / "zephyr/.config").write_text(
+                    config_for(role) + "CONFIG_TOTEM_FIELD_DIAGNOSTICS=y\n")
+                header = build / "modules/totem-esb-compat/generated/totem/field_build_info.h"
+                header.write_text(header_text)
+                payload = payload_for(role).replace(b"[esb-diag] role=%s", b"[totem-field]")
+                payload = payload.replace(b"tx_steps=done:result", b"TOTEM_FIELD_V1")
+                payload += (sha + "\x00" + tree + "\x00").encode("ascii")
+                (build / "zephyr/zmk.uf2").write_bytes(make_uf2(payload))
+                result = verifier.verify(self.keys, role, build)
+                self.assertEqual(result["field_diagnostics"], {
+                    "schema": 1, "source_sha": sha, "source_tree": tree, "clean": True})
+                for altered in (header_text.replace("DIRTY 0", "DIRTY 1"),
+                                header_text.replace(sha, "unknown"),
+                                header_text + '#define TOTEM_FIELD_BUILD_SHA "' + sha + '"\n',
+                                header_text.replace(tree, "c" * 40)):
+                    header.write_text(altered)
+                    self.rejected(role, build)
+                header.write_text(header_text)
+                (build / "zephyr/zmk.uf2").write_bytes(make_uf2(payload_for(role)))
+                self.rejected(role, build)
+
     def test_public_equal_and_zero_keys(self):
         for left, right in ((verifier.PUBLIC_CI_KEYS[0], TEST_RIGHT),
                             (TEST_LEFT, verifier.PUBLIC_CI_KEYS[1]),
