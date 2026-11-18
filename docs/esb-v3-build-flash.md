@@ -105,7 +105,7 @@ Production 빌드에는 `CONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n`을 명시한다. �
 |---|---|---|
 | ESB 진단 | `TOTEM_ESB_DIAGNOSTICS=y` | `TOTEM_ESB_DIAGNOSTICS=y` |
 | low-priority workqueue stack | `4096` bytes | 기존 `768` bytes |
-| 부팅 시 ESB 시작 지연 | `3000` ms, USB 콘솔 대기 없음 | 해당 없음 |
+| 부팅 시 ESB 시작 지연 | 전원 투입·일반 리셋 `3000` ms, GPIO 딥슬립 복귀 `1000` ms | 해당 없음 |
 | LVGL 화면 버퍼 | 해당 없음 | VDB `25`, double buffer 유지 |
 | 개인키 입력 | 각 half의 `.keyconf` | 양쪽 키가 들어간 `dongle.keyconf` |
 
@@ -244,7 +244,7 @@ west build -p always -s zmk/app -d build/totem_dongle_esb_v3_prospector_benchmar
 2. Prospector 동글을 bootloader mode로 열고 개인키 v3 dongle UF2를 플래시한다.
 3. 왼쪽에 같은 key set의 left UF2를 플래시한다.
 4. 오른쪽에 같은 key set의 right UF2를 플래시한다.
-5. 세 장치를 재부팅한다. Half는 ESB 시작 전 3초를 기다리므로 충분히 기다린 뒤 동글 USB enumerate, Prospector 화면, 좌우 연결·battery와 모든 key release를 확인한다. 각 half 전원 재시작과 동글 USB 재연결 후에도 다시 입력되는지 확인한다.
+5. 세 장치를 재부팅한다. 좌우는 전원 투입 후 ESB 시작 전 3초를 기다린다. 동글 USB 인식, Prospector 화면, 좌우 입력·배터리와 키 해제를 확인한다. 배터리로 사용하는 좌우가 1시간 이상 유휴 상태로 딥슬립에 들어가면 키로 깨워 다시 입력해 본다. nRF52840이 GPIO 복귀만 보고하면 ESB 시작 전 대기는 1초다. 실제 첫 입력까지는 부트로더·펌웨어 초기화와 무선 연결 시간도 걸린다. 개인키 빌드는 좌우의 시작 로그에 선택한 대기를 `ESB_DIAG DELAY_START delay_ms=`로 표시한다.
 
 동글→왼쪽→오른쪽 순서는 역할과 키 세트를 혼동하지 않기 위한 작업 순서이며, 프로토콜의 필수 플래시 순서는 아니다. 공개 테스트키에서 개인키로 바꾸는 동안에는 아직 다른 키를 쓰는 장치가 연결되지 않는 것이 정상이다. 세 장치의 업로드가 모두 끝난 뒤 판단한다.
 

@@ -92,6 +92,15 @@ config TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS
       This isolates startup timing without requiring USB console DTR or changing
       initialization checkpoints. Leave at zero outside controlled diagnostics.
 
+config TOTEM_ESB_GPIO_WAKE_START_DELAY_MS
+    int "Maximum ESB startup delay after a GPIO wake from System OFF (ms)"
+    depends on SOC_NRF52840 && ZMK_SLEEP && TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS > 0
+    range 0 10000
+    default 1000
+    help
+      Caps the configured peripheral startup delay after a confirmed GPIO wake.
+      Power-on, other resets and ambiguous reset causes use the normal delay.
+
 config TOTEM_ESB_V3_CI_TEST_KEYS
     bool "Use public disposable ESB v3 CI test keys"
     depends on TOTEM_ESB_V3

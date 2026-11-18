@@ -24,6 +24,9 @@
 #if IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
 #include <zephyr/sys/printk.h>
 #endif
+#if defined(CONFIG_TOTEM_ESB_GPIO_WAKE_START_DELAY_MS)
+#include <helpers/nrfx_reset_reason.h>
+#endif
 
 #include <zephyr/logging/log.h>
 
@@ -1260,6 +1263,21 @@ static int zmk_split_esb_peripheral_init(void) {
 K_THREAD_STACK_DEFINE(peripheral_start_stack, 4096);
 static struct k_thread peripheral_start_thread;
 
+#if defined(CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS) && CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS > 0
+static uint32_t peripheral_start_delay_ms(void) {
+#if defined(CONFIG_TOTEM_ESB_GPIO_WAKE_START_DELAY_MS)
+    /* The nRF52840 latches reasons across resets until the observed bits are cleared. */
+    uint32_t reason = nrfx_reset_reason_get();
+    nrfx_reset_reason_clear(reason);
+    if (reason == NRFX_RESET_REASON_OFF_MASK) {
+        return MIN(CONFIG_TOTEM_ESB_GPIO_WAKE_START_DELAY_MS,
+                   CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS);
+    }
+#endif
+    return CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS;
+}
+#endif
+
 static void peripheral_start_thread_cb(void *unused1, void *unused2, void *unused3) {
     ARG_UNUSED(unused1);
     ARG_UNUSED(unused2);
@@ -1282,9 +1300,9 @@ static void peripheral_start_thread_cb(void *unused1, void *unused2, void *unuse
     k_msleep(200);
 #elif IS_ENABLED(CONFIG_TOTEM_ESB_DIAGNOSTICS)
 #if CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS > 0
-    printk("ESB_DIAG DELAY_START delay_ms=%u\n",
-           (unsigned int)CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS);
-    k_msleep(CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS);
+    uint32_t delay_ms = peripheral_start_delay_ms();
+    printk("ESB_DIAG DELAY_START delay_ms=%u\n", (unsigned int)delay_ms);
+    k_msleep(delay_ms);
 #endif
     printk("ESB_DIAG AUTO_START transport_init source=%u stack=4096\n", peripheral_id);
 #endif

@@ -18,6 +18,7 @@ import unittest
 
 from tests.test_esb_ack_runtime import braced_definition
 from tests.test_esb_firmware import compiler_command
+from tests.test_esb_tx_liveness_runtime import compile_and_run
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -66,6 +67,33 @@ def fixture_source(*, negative: str | None = None) -> str:
 
 
 class ActualStartupRuntimeTest(unittest.TestCase):
+    def test_boot_delay_after_system_off(self) -> None:
+        if compiler_command() is None:
+            if os.environ.get("ESB_REQUIRE_C_COMPILER") == "1":
+                self.fail("A host C compiler is required for the wake runtime test")
+            self.skipTest("Set CC to execute the wake runtime test")
+
+        peripheral = (ROOT / "compat/zmk-feature-split-esb/src/split/esb/peripheral.c").read_text(
+            encoding="utf-8"
+        )
+        start_marker = "static struct k_thread peripheral_start_thread;"
+        start = peripheral.index(start_marker) + len(start_marker)
+        end = peripheral.index("static int peripheral_start_init(", start)
+        fixture = (ROOT / "tests/esb_wake_runtime_fixture.c").read_text(encoding="utf-8")
+        fixture = fixture.replace("/* ACTUAL_STARTUP_PATH */", peripheral[start:end])
+
+        for cold_ms, wake_ms, expected_ms in (
+            (3000, 1000, 1000), (3000, None, 3000), (250, 1000, 250),
+            (3000, 0, 0), (0, None, 0),
+        ):
+            with self.subTest(cold_ms=cold_ms, wake_ms=wake_ms):
+                config = f"#define CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS {cold_ms}\n"
+                if wake_ms is not None:
+                    config += f"#define CONFIG_TOTEM_ESB_GPIO_WAKE_START_DELAY_MS {wake_ms}\n"
+                config += f"#define EXPECTED_GPIO_WAKE_MS {expected_ms}\n"
+                result = compile_and_run(config + fixture)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_input_during_deferred_startup(self) -> None:
         compiler = compiler_command()
         if compiler is None:
