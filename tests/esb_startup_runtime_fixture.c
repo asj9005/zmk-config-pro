@@ -18,6 +18,9 @@
 
 #define IS_ENABLED(option) (option)
 #define CONFIG_TOTEM_ESB_V3 1
+#define CONFIG_TOTEM_FIELD_DIAGNOSTICS 1
+#define TOTEM_FIELD_SCOPE_LOCAL 2U
+#define TOTEM_FIELD_PRESESSION_OVERFLOW 1
 #define CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START 0
 #define CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX 64
 #define CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS 2
@@ -65,6 +68,9 @@ static struct fake_msgq presession_events;
 static struct { uint8_t keys[8]; } local_key_state;
 static struct { unsigned int resets; } handshake_backoff;
 static atomic_t transport_ready;
+static atomic_t handshake_radio_ack;
+static bool expedited_phase_probe;
+static unsigned int presession_overflows;
 static enum esb_v3_peripheral_state secure_state;
 static unsigned int lock_depth, pressure_count, enqueue_calls, rekey_calls;
 static unsigned int transmitted_count, snapshot_count;
@@ -74,6 +80,11 @@ static uint8_t received_key_state[8];
 static struct zmk_split_transport_peripheral_event last_attempt;
 
 #define atomic_get(value) (*(value))
+static int atomic_set(atomic_t *target, int value) {
+    int previous = *target;
+    *target = value;
+    return previous;
+}
 static enum esb_v3_peripheral_state get_secure_state(void) { return secure_state; }
 static int k_mutex_lock(struct k_mutex *mutex, int timeout) {
     assert(mutex == &event_mutex && timeout == K_FOREVER);
@@ -122,9 +133,20 @@ static int k_work_reschedule(struct k_work_delayable *work, int delay) {
     work->delay = delay;
     return 1;
 }
+/* The test clock uses one tick per millisecond. */
+#define k_ms_to_ticks_ceil32(ms) (ms)
+static int k_work_delayable_remaining_get(const struct k_work_delayable *work) {
+    assert(lock_depth == 1U && work == &handshake_work);
+    return work->delay;
+}
 static void totem_esb_transport_queue_pressure(bool presession) {
     assert(presession && lock_depth == 1U);
     pressure_count++;
+}
+static void totem_field_issue(int reason, unsigned int scope, int value) {
+    assert(reason == TOTEM_FIELD_PRESESSION_OVERFLOW && scope == TOTEM_FIELD_SCOPE_LOCAL);
+    assert(value == -ENOMSG && lock_depth == 1U);
+    presession_overflows++;
 }
 static void totem_esb_backoff_reset(void *backoff, unsigned int delay) {
     assert(backoff == &handshake_backoff && lock_depth == 1U);
@@ -184,6 +206,9 @@ static void reset(void) {
     memset(received_key_state, 0, sizeof(received_key_state));
     memset(&last_attempt, 0, sizeof(last_attempt));
     transport_ready = 0;
+    handshake_radio_ack = 0;
+    expedited_phase_probe = false;
+    presession_overflows = 0;
     secure_state = ESB_V3_NO_SESSION;
     lock_depth = pressure_count = enqueue_calls = rekey_calls = 0U;
     transmitted_count = snapshot_count = 0U;
@@ -258,6 +283,7 @@ static void full_startup_queue_keeps_current_bitmap(void) {
     assert(report(key(5U, false)) == -ENOSPC && !held(5U));
     assert(report(key(9U, true)) == -ENOSPC && held(9U));
     assert(presession_events.used == QUEUE_CAPACITY && pressure_count == 2U);
+    assert(presession_overflows == 2U);
     expect_key(0U, 5U, true);
     for (unsigned int i = 1U; i < QUEUE_CAPACITY; i++) {
         assert(presession_events.events[i].data.battery_event.level == i);
@@ -285,6 +311,33 @@ static void established_input_uses_normal_sender(void) {
     assert(!transmitted[1].data.key_position_event.pressed);
     assert(handshake_work.scheduled == 0U && handshake_backoff.resets == 0U);
     assert(flush_presession_work.scheduled == 0U && key_state_work.scheduled == 0U);
+}
+static void radio_acks_preserve_handshake_pacing(void) {
+    reset();
+    secure_state = ESB_V3_WAIT_CHALLENGE;
+    handshake_work.delay = 1000;
+    handshake_radio_ack = 1;
+    handshake_wakeup_work_cb(NULL);
+    assert(handshake_work.scheduled == 1U && handshake_work.delay == K_NO_WAIT);
+
+    /* Empty ACKs leave a due, short, or already scheduled probe alone. */
+    for (int remaining = 0; remaining <= CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS + 1; remaining++) {
+        handshake_work.delay = remaining;
+        handshake_radio_ack = 1;
+        handshake_wakeup_work_cb(NULL);
+        assert(handshake_work.scheduled == 1U && handshake_work.delay == remaining);
+    }
+    /* Radio contact after a longer loss shortens the pending offline backoff. */
+    handshake_work.delay = 1000;
+    handshake_radio_ack = 1;
+    handshake_wakeup_work_cb(NULL);
+    assert(handshake_work.scheduled == 2U);
+    assert(handshake_work.delay == CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
+
+    secure_state = ESB_V3_ESTABLISHED;
+    handshake_radio_ack = 1;
+    handshake_wakeup_work_cb(NULL);
+    assert(handshake_work.scheduled == 2U && handshake_radio_ack == 0);
 }
 static void newly_ready_input_cannot_overtake_startup_edges(void) {
     reset();
@@ -325,6 +378,7 @@ static void ready_tx_pressure_retains_complete_tap(void) {
     assert(report(key(9U, true)) == 0 && held(9U));
     assert(enqueue_calls == 1U && transmitted_count == 0U);
     assert(presession_events.used == 3U);
+    assert(presession_overflows == 0U);
     assert(handshake_work.scheduled == 0U && flush_presession_work.scheduled == 3U);
     assert(flush_presession_work.delay == K_NO_WAIT && key_state_work.scheduled == 0U);
 
@@ -363,6 +417,7 @@ static void pressure_queue_overflow_repairs_release_after_drain(void) {
     }
     assert(report(key(5U, false)) == -ENOSPC && !held(5U));
     assert(pressure_count == 1U && presession_events.used == QUEUE_CAPACITY);
+    assert(presession_overflows == 1U);
     unsigned int before = enqueue_calls;
     snapshot();
     assert(enqueue_calls == before && snapshot_count == 0U);
@@ -454,12 +509,13 @@ int main(void) {
     full_startup_queue_keeps_current_bitmap();
     ready_input_wakes_handshake();
     established_input_uses_normal_sender();
+    radio_acks_preserve_handshake_pacing();
     newly_ready_input_cannot_overtake_startup_edges();
     ready_tx_pressure_retains_complete_tap();
     pressure_queue_overflow_repairs_release_after_drain();
     pressure_queue_batches_preserve_newer_input_order();
     queued_pressure_waits_for_rekey_without_losing_head();
     ready_rekey_preserves_triggering_input();
-    puts("11 peripheral startup and backpressure input cases passed");
+    puts("12 peripheral startup and backpressure input cases passed");
     return 0;
 }

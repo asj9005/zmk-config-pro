@@ -28,7 +28,8 @@ def fixture_source(*, negative: str | None = None) -> str:
         encoding="utf-8"
     )
     functions = {}
-    for name in ("report_event_locked", "split_peripheral_esb_report_event",
+    for name in ("handshake_wakeup_work_cb", "retain_presession_event",
+                 "report_event_locked", "split_peripheral_esb_report_event",
                  "flush_presession_work_cb", "key_state_work_cb"):
         functions[name] = braced_definition(
             source, rf"^static (?:int|void)\s+{name}\([^;{{}}]*\)\s*\{{"
@@ -49,6 +50,12 @@ def fixture_source(*, negative: str | None = None) -> str:
             "if (k_msgq_num_used_get(&presession_events) > 0)", "if (false)", 1
         )
         assert functions["key_state_work_cb"] != previous
+    elif negative == "unpaced_radio_acks":
+        previous = functions["handshake_wakeup_work_cb"]
+        functions["handshake_wakeup_work_cb"] = previous.replace(
+            "if (!expedited_phase_probe)", "if (true)", 1
+        )
+        assert previous != functions["handshake_wakeup_work_cb"]
     elif negative is not None:
         raise ValueError(negative)
     batch = re.search(r"^#define ESB_V3_PRESESSION_FLUSH_BATCH .+$", source, re.MULTILINE)
@@ -78,7 +85,8 @@ class ActualStartupRuntimeTest(unittest.TestCase):
             test_c = workdir / "test_startup.c"
             executable = workdir / ("test_startup.exe" if os.name == "nt" else "test_startup")
             cases = [(4, None), (32, None), (4, "drop_on_enospc"),
-                     (4, "pop_failed_head"), (4, "snapshot_overtakes_edges")]
+                     (4, "pop_failed_head"), (4, "snapshot_overtakes_edges"),
+                     (4, "unpaced_radio_acks")]
             for capacity, negative in cases:
                 with self.subTest(capacity=capacity, negative=negative):
                     test_c.write_text(fixture_source(negative=negative), encoding="utf-8")
@@ -103,7 +111,7 @@ class ActualStartupRuntimeTest(unittest.TestCase):
                     )
                     if negative is None:
                         self.assertEqual(result.returncode, 0, result.stdout)
-                        self.assertIn("11 peripheral startup and backpressure input cases passed", result.stdout)
+                        self.assertIn("12 peripheral startup and backpressure input cases passed", result.stdout)
                     else:
                         self.assertNotEqual(result.returncode, 0, result.stdout)
                         self.assertIn("startup assertion failed:", result.stdout)

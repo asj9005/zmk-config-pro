@@ -22,7 +22,7 @@ def fixture_source(negative: str | None = None) -> str:
         encoding="utf-8"
     )
     functions = {}
-    for name in ("battery_refresh_schedule_locked", "cache_battery_event_locked",
+    for name in ("retain_presession_event", "battery_refresh_schedule_locked", "cache_battery_event_locked",
                  "battery_refresh_work_cb", "split_peripheral_esb_report_event"):
         functions[name] = braced_definition(
             source, rf"^static (?:int|void)\s+{name}\([^;{{}}]*\)\s*\{{"

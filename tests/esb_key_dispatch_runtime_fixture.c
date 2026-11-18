@@ -13,9 +13,12 @@
 
 #define CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX 38
 #define CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT 2
+#define CONFIG_TOTEM_ESB_V3 1
+#define IS_ENABLED(option) (option)
 #define ZMK_KEYMAP_LEN 38
 #define TOTEM_DIAG_RX_INVALID_POSITION 1
 #define LOG_WRN(...) ((void)0)
+#define LOG_INF(...) ((void)0)
 #define CHECK(condition) do { if (!(condition)) { \
     fprintf(stderr, "%s:%d: %s\n", scenario, __LINE__, #condition); \
     exit(EXIT_FAILURE); } } while (0)
@@ -37,6 +40,8 @@ struct zmk_position_state_changed {
 };
 struct transition { uint8_t source; uint32_t position; bool pressed; bool direct; int64_t timestamp; };
 static const char *scenario;
+/* ACTUAL_SEQUENCE_STATE */
+static struct esb_rx_sequence_state rx_sequences[CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT];
 static uint8_t key_pos_states[2][5];
 static int activity[2][38];
 static struct transition transitions[128];
@@ -91,6 +96,7 @@ static void totem_owned_swapper_source_reset(uint8_t source) {
 
 static void reset_fixture(const char *name) {
     scenario = name;
+    memset(rx_sequences, 0, sizeof(rx_sequences));
     memset(key_pos_states, 0, sizeof(key_pos_states));
     memset(activity, 0, sizeof(activity));
     memset(reset_count, 0, sizeof(reset_count));
@@ -186,7 +192,7 @@ static void cleanup_and_reconnect_keep_sources_independent(void) {
     wire_key(0, 0, true);
     wire_key(0, 37, true);
     wire_key(1, 8, true);
-    release_source_keys(0);
+    release_source_keys(0, k_uptime_get());
     CHECK(transition_count == 5);
     expect_transition(3, 0, 0, false, true);
     expect_transition(4, 0, 37, false, true);
@@ -198,7 +204,7 @@ static void cleanup_and_reconnect_keep_sources_independent(void) {
     uint8_t held[5] = {1};
     CHECK(snapshot(0, held) == 1 && activity[0][0] == 1);
     wire_key(0, 0, false);
-    release_source_keys(1);
+    release_source_keys(1, k_uptime_get());
     CHECK(activity[0][0] == 0 && activity[1][8] == 0);
 }
 static void non_key_events_are_unchanged(void) {
@@ -238,8 +244,28 @@ static void wire_and_snapshot_keep_ingress_order(void) {
     CHECK(transition_count == 3);
     CHECK(transitions[0].timestamp == 1000 && transitions[1].timestamp == 1080 &&
           transitions[2].timestamp == 1090);
-    release_source_keys(0);
+    release_source_keys(0, k_uptime_get());
     CHECK(transitions[3].timestamp > 1500 && activity[0][2] == 0);
+}
+static void session_handover_keeps_ingress_order(void) {
+    reset_fixture("session_handover_keeps_ingress_order");
+    now = 1500;
+    struct zmk_split_transport_peripheral_event event = {
+        .type = ZMK_SPLIT_TRANSPORT_PERIPHERAL_EVENT_TYPE_KEY_POSITION_EVENT,
+        .data.key_position_event = {.position = 2, .pressed = true},
+    };
+    update_source_session(0, 1, true, 950);
+    dispatch_wire_zmk_event(0, &event, 1000);
+    event.data.key_position_event.position = 3;
+    dispatch_wire_zmk_event(0, &event, 1010);
+    update_source_session(0, 2, true, 1080);
+    dispatch_wire_zmk_event(0, &event, 1090);
+    CHECK(transition_count == 5 && reset_count[0] == 1);
+    expect_transition(2, 0, 2, false, true);
+    expect_transition(3, 0, 3, false, true);
+    expect_transition(4, 0, 3, true, true);
+    CHECK(transitions[2].timestamp == 1080 && transitions[3].timestamp == 1080 &&
+          transitions[4].timestamp == 1090);
 }
 int main(void) {
     orphan_release_stays_idle();
@@ -251,6 +277,7 @@ int main(void) {
     non_key_events_are_unchanged();
     invalid_source_and_position_stay_outside_zmk();
     wire_and_snapshot_keep_ingress_order();
-    puts("9 actual central dispatch/snapshot/cleanup scenarios passed");
+    session_handover_keeps_ingress_order();
+    puts("10 actual central dispatch/snapshot/cleanup scenarios passed");
     return 0;
 }

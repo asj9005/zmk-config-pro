@@ -28,17 +28,20 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
         )
         helpers = "\n\n".join(
             braced_definition(source, rf"^static void\s+{name}\([^;{{}}]*\)\s*\{{")
-            for name in ("release_source_keys", "emit_snapshot_key", "dispatch_wire_zmk_event")
+            for name in ("release_source_keys", "emit_snapshot_key", "dispatch_wire_zmk_event",
+                         "update_source_session")
         )
         fixture = (ROOT / "tests/esb_key_dispatch_runtime_fixture.c").read_text(encoding="utf-8")
         generated = fixture.replace("/* ACTUAL_CENTRAL_HELPERS */", helpers)
+        generated = generated.replace("/* ACTUAL_SEQUENCE_STATE */",
+                                      braced_definition(source, r"^struct esb_rx_sequence_state\s*\{") + ";")
         self.assertEqual(generated.count("if (!was_pressed)"), 1)
         environment = os.environ.copy()
         compiler_path = shutil.which(compiler[0]) or compiler[0]
         environment["PATH"] = str(Path(compiler_path).resolve().parent) + os.pathsep + environment.get("PATH", "")
         with tempfile.TemporaryDirectory(prefix="esb-key-dispatch-") as directory:
             work = Path(directory)
-            for negative in (None, "orphan", "position", "source", "snapshot_time"):
+            for negative in (None, "orphan", "position", "source", "snapshot_time", "session_time"):
                 with self.subTest(removed_guard=negative):
                     test_c = work / f"guard_{negative}.c"
                     executable = work / (test_c.stem + (".exe" if os.name == "nt" else ""))
@@ -54,6 +57,9 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
                     elif negative == "snapshot_time":
                         variant = variant.replace("    event.position = position;",
                             "    event.timestamp = k_uptime_get();\n    event.position = position;", 1)
+                    elif negative == "session_time":
+                        variant = variant.replace("release_source_keys(source, received_at);",
+                            "(void)received_at; release_source_keys(source, k_uptime_get());", 1)
                     if negative:
                         self.assertNotEqual(variant, generated)
                     test_c.write_text(variant, encoding="utf-8")
@@ -72,11 +78,12 @@ class ActualKeyDispatchRuntimeTest(unittest.TestCase):
                         self.assertNotEqual(run.returncode, 0)
                         expected = ("orphan_release_stays_idle" if negative == "orphan" else
                                     "wire_and_snapshot_keep_ingress_order" if negative == "snapshot_time" else
+                                    "session_handover_keeps_ingress_order" if negative == "session_time" else
                                     "invalid_source_and_position_stay_outside_zmk")
                         self.assertIn(expected, run.stderr)
                     else:
                         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-                        self.assertIn("9 actual central dispatch/snapshot/cleanup scenarios passed", run.stdout)
+                        self.assertIn("10 actual central dispatch/snapshot/cleanup scenarios passed", run.stdout)
 
 
 if __name__ == "__main__":

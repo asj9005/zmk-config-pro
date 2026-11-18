@@ -188,6 +188,7 @@ static struct totem_esb_backoff handshake_backoff = {
     .next_ms = CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS,
 };
 static atomic_t handshake_radio_ack;
+static bool expedited_phase_probe;
 K_MSGQ_DEFINE(presession_events,
               sizeof(struct zmk_split_transport_peripheral_event),
               CONFIG_TOTEM_ESB_V3_PRESESSION_EVENT_QUEUE_SIZE, 4);
@@ -220,10 +221,18 @@ static void handshake_wakeup_work_cb(struct k_work *work) {
     k_mutex_lock(&event_mutex, K_FOREVER);
     if (atomic_set(&handshake_radio_ack, 0) != 0 &&
         get_secure_state() != ESB_V3_ESTABLISHED) {
-        /* Pick up the dongle's next ACK payload before its queue entry expires. */
+        /* An ESB ACK can be empty while the dongle is preparing its reply. */
         totem_esb_backoff_reset(&handshake_backoff,
                                 CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
-        k_work_reschedule(&handshake_work, K_NO_WAIT);
+        if (!expedited_phase_probe) {
+            expedited_phase_probe = true;
+            k_work_reschedule(&handshake_work, K_NO_WAIT);
+        } else if (k_work_delayable_remaining_get(&handshake_work) >
+                   (int64_t)k_ms_to_ticks_ceil32(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS) + 1) {
+            /* A relative Zephyr timeout may include one extra alignment tick. */
+            k_work_reschedule(&handshake_work,
+                              K_MSEC(CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS));
+        }
     }
     k_mutex_unlock(&event_mutex);
 }
@@ -254,6 +263,7 @@ static void reset_v3_session_locked(enum esb_v3_peripheral_state next,
     peripheral_nonce = next_peripheral_nonce;
     root_sequence = 0;
     last_probe_sequence = 0;
+    expedited_phase_probe = false;
     totem_esb_backoff_reset(&handshake_backoff,
                             CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
     atomic_clear(&handshake_radio_ack);
@@ -599,13 +609,27 @@ static int enqueue_wire_event(enum esb_wire_event_type wire_type,
 }
 #endif
 
+#if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
+static int retain_presession_event(const struct zmk_split_transport_peripheral_event *event) {
+    int err = k_msgq_put(&presession_events, event, K_NO_WAIT);
+    if (err != 0) {
+        totem_esb_transport_queue_pressure(true);
+#if IS_ENABLED(CONFIG_TOTEM_FIELD_DIAGNOSTICS)
+        totem_field_issue(TOTEM_FIELD_PRESESSION_OVERFLOW, TOTEM_FIELD_SCOPE_LOCAL, err);
+#endif
+        return -ENOSPC;
+    }
+    return 0;
+}
+#endif
+
 static int report_event_locked(const struct zmk_split_transport_peripheral_event *event) {
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     if (get_secure_state() != ESB_V3_ESTABLISHED ||
         k_msgq_num_used_get(&presession_events) > 0) {
-        if (k_msgq_put(&presession_events, event, K_NO_WAIT) != 0) {
-            totem_esb_transport_queue_pressure(true);
-            return -ENOSPC;
+        int err = retain_presession_event(event);
+        if (err != 0) {
+            return err;
         }
         if (get_secure_state() == ESB_V3_ESTABLISHED) {
             k_work_reschedule(&flush_presession_work, K_NO_WAIT);
@@ -621,9 +645,9 @@ static int report_event_locked(const struct zmk_split_transport_peripheral_event
      * reconstruct a complete tap whose press and release were both lost.
      */
     if (err == -ENOTCONN || err == -EOVERFLOW || err == -ENOSPC) {
-        if (k_msgq_put(&presession_events, event, K_NO_WAIT) != 0) {
-            totem_esb_transport_queue_pressure(true);
-            return -ENOSPC;
+        int retention_err = retain_presession_event(event);
+        if (retention_err != 0) {
+            return retention_err;
         }
         if (err == -ENOSPC) {
             k_work_reschedule(&flush_presession_work, K_NO_WAIT);
@@ -713,11 +737,7 @@ split_peripheral_esb_report_event(const struct zmk_split_transport_peripheral_ev
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     if (!atomic_get(&transport_ready)) {
         /* Preserve startup edges without touching crypto or waking radio work. */
-        int err = k_msgq_put(&presession_events, event, K_NO_WAIT);
-        if (err != 0) {
-            totem_esb_transport_queue_pressure(true);
-            err = -ENOSPC;
-        }
+        int err = retain_presession_event(event);
         k_mutex_unlock(&event_mutex);
         return err;
     }
@@ -1111,6 +1131,7 @@ static int process_v3_downlink(const struct esb_command_envelope *env) {
         wire_session_id = session_id;
         accepted_challenge_request = request;
         wait_session_ok_started_at = k_uptime_get();
+        expedited_phase_probe = false;
         totem_esb_backoff_reset(&handshake_backoff,
                                 CONFIG_TOTEM_ESB_V3_HANDSHAKE_INTERVAL_MS);
         set_secure_state(ESB_V3_WAIT_SESSION_OK);

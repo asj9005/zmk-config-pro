@@ -304,11 +304,11 @@ int main(void) {
     totem_owned_swapper_source_reset(0); no_owned_keys(); cases++;
 
     reset(); press(0); release(0); memset(key_pos_states, 0, sizeof(key_pos_states));
-    synth_resolves_tap = false; release_source_keys(0); no_owned_keys(); cases++;
+    synth_resolves_tap = false; release_source_keys(0, k_uptime_get()); no_owned_keys(); cases++;
 
     reset(); memset(key_pos_states, 0, sizeof(key_pos_states));
     key_pos_states[0][12 / 8] |= BIT(12 % 8); synth_resolves_tap = true;
-    release_source_keys(0); assert(tab_presses == 1 && tab_releases == 1);
+    release_source_keys(0, k_uptime_get()); assert(tab_presses == 1 && tab_releases == 1);
     no_owned_keys(); assert(key_pos_states[0][12 / 8] == 0); cases++;
 
     reset(); zmk_hid_register_mods(MOD_LALT); sticky_pending = true;
@@ -344,7 +344,7 @@ int main(void) {
     /* Another unresolved hold-tap may replay old D edges only after the ESB
      * cleanup call returned. They must not create a new, unreleasable latch. */
     reset(); now = 100; memset(key_pos_states, 0, sizeof(key_pos_states));
-    synth_resolves_tap = false; release_source_keys(0);
+    synth_resolves_tap = false; release_source_keys(0, k_uptime_get());
     assert(source_reset_valid[0] && source_reset_cutoff[0] == 100);
     now = 1000; press_at(0, 12, 50); release_at(0, 12, 70);
     no_owned_keys(); assert(tab_presses == 0 && send_calls == 0); cases++;

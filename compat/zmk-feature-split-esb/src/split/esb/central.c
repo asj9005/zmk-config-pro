@@ -566,7 +566,7 @@ static bool event_payload_size_is_valid(const struct esb_event_envelope *env) {
            header_size + sizeof(env->payload.body.event.type) + data_size;
 }
 
-static void release_source_keys(uint8_t source) {
+static void release_source_keys(uint8_t source, int64_t timestamp) {
     uint8_t *source_keys = key_pos_states[source];
     for (uint16_t position = 0; position < CONFIG_ZMK_SPLIT_ESB_AUTO_HEAL_KEY_POS_MAX;
          position++) {
@@ -575,7 +575,7 @@ static void release_source_keys(uint8_t source) {
                 .source = source,
                 .position = position,
                 .state = false,
-                .timestamp = k_uptime_get(),
+                .timestamp = timestamp,
             });
         }
     }
@@ -656,7 +656,7 @@ void totem_esb_source_disconnected(uint8_t source) {
     if (source >= CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT) {
         return;
     }
-    release_source_keys(source);
+    release_source_keys(source, k_uptime_get());
     rx_sequences[source].initialized = false;
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
     k_mutex_lock(&command_mutex, K_FOREVER);
@@ -688,7 +688,7 @@ static void update_source_session(
 #else
     uint32_t session_id,
 #endif
-    bool force) {
+    bool force, int64_t received_at) {
     struct esb_rx_sequence_state *seq = &rx_sequences[source];
     if (!force && seq->session_initialized && seq->session_id == session_id) {
         return;
@@ -703,7 +703,8 @@ static void update_source_session(
 #if !IS_ENABLED(CONFIG_TOTEM_ESB_V3)
         drop_source_commands(source);
 #endif
-        release_source_keys(source);
+        /* Keep the old session's releases ordered with queued wire edges. */
+        release_source_keys(source, received_at);
         seq->session_changes++;
 #if IS_ENABLED(CONFIG_TOTEM_ESB_V3)
         LOG_INF("ESB source %u started session %llu (previous %llu)", source,
@@ -944,7 +945,8 @@ static void confirm_v3_active_session(uint8_t source) {
 }
 
 static int process_v3_control_event(uint8_t source,
-                                    const struct esb_event_envelope *env) {
+                                    const struct esb_event_envelope *env,
+                                    int64_t received_at) {
     struct esb_v3_central_peer *peer = &secure_peers[source];
     expire_v3_pending_if_needed(source);
     switch (env->payload.wire_type) {
@@ -1109,7 +1111,7 @@ static int process_v3_control_event(uint8_t source,
         }
         k_mutex_unlock(&command_mutex);
         if (session_changed) {
-            update_source_session(source, peer->active_session, true);
+            update_source_session(source, peer->active_session, true, received_at);
         }
         /*
          * A valid duplicate READY proves that the half is alive even if its
@@ -1161,7 +1163,7 @@ static void process_rx_work_cb(struct k_work *work) {
             if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO ||
                 env.payload.wire_type == ESB_WIRE_EVENT_V3_RECOVERY ||
                 env.payload.wire_type == ESB_WIRE_EVENT_V3_READY) {
-                int control_err = process_v3_control_event(source, &env);
+                int control_err = process_v3_control_event(source, &env, received_at);
                 if (control_err == 0) {
                     /* Count authenticated, accepted handshake receptions. */
                     if (env.payload.wire_type == ESB_WIRE_EVENT_V3_HELLO) {
@@ -1184,7 +1186,7 @@ static void process_rx_work_cb(struct k_work *work) {
                 break;
             }
 #else
-            update_source_session(source, env.payload.session_id, false);
+            update_source_session(source, env.payload.session_id, false, received_at);
 #endif
             struct esb_rx_sequence_state *seq = &rx_sequences[source];
             uint32_t gap = 0;
