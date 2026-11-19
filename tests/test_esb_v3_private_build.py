@@ -62,7 +62,8 @@ def config_for(role):
         values.update({"CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT": "0",
                        "CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID": "1" if role == "left" else "2",
                        "CONFIG_ZMK_LOW_PRIORITY_THREAD_STACK_SIZE": "4096",
-                       "CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS": "3000",
+                       "CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS": "1000",
+                       "CONFIG_TOTEM_ESB_GPIO_WAKE_START_DELAY_MS": "1000",
                        verifier.LOCAL: '"' + TEST_KEYS[role].hex() + '"'})
     return "\n".join(symbol + "=" + value for symbol, value in values.items()) + "\n"
 
@@ -195,7 +196,8 @@ class PrivateBuildVerifierTests(unittest.TestCase):
     def test_untested_build_config_is_rejected(self):
         changes = {
             "left": [("STACK_SIZE=4096", "STACK_SIZE=768"),
-                     ("START_DELAY_MS=3000", "START_DELAY_MS=0"),
+                     ("DIAGNOSTIC_START_DELAY_MS=1000", "DIAGNOSTIC_START_DELAY_MS=3000"),
+                     ("GPIO_WAKE_START_DELAY_MS=1000", "GPIO_WAKE_START_DELAY_MS=500"),
                      ("DIAGNOSTICS=y", "DIAGNOSTICS=n"),
                      ("CI_TEST_KEYS=n", "CI_TEST_KEYS=y"),
                      ("PERIPHERAL_ID=1", "PERIPHERAL_ID=2"),

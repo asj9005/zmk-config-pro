@@ -99,17 +99,17 @@ Production 빌드에는 `CONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n`을 명시한다. �
 
 ## 5. 검증 설정을 유지한 개인키 빌드
 
-아래 명령은 `fc3e326`의 성공한 CI 조합인 좌우 `lowprioprobe`와 동글 `ram25`의 설정을 유지하고, 공개 테스트키 대신 역할별 개인키를 주입한다. CI 빌드 성공과 개인키로 빌드한 실물의 연결 검증은 별개다. 이 단계에서는 마우스 속도·키맵이나 진단 설정을 함께 바꾸지 않는다.
+아래 명령은 현재 CI의 좌우 `lowprioprobe`와 동글 `ram25` 설정을 사용하고 각 역할의 개인키를 주입한다. 좌우 전원 투입·리셋 후 첫 입력은 실제 키보드에서 확인한다.
 
 | 유지할 설정 | 왼쪽·오른쪽 | 동글 |
 |---|---|---|
 | ESB 진단 | `TOTEM_ESB_DIAGNOSTICS=y` | `TOTEM_ESB_DIAGNOSTICS=y` |
 | low-priority workqueue stack | `4096` bytes | 기존 `768` bytes |
-| 부팅 시 ESB 시작 지연 | 전원 투입·일반 리셋 `3000` ms, GPIO 딥슬립 복귀 `1000` ms | 해당 없음 |
+| 부팅 시 ESB 시작 지연 | 전원 투입·리셋·GPIO 딥슬립 복귀 모두 `1000` ms | 해당 없음 |
 | LVGL 화면 버퍼 | 해당 없음 | VDB `25`, double buffer 유지 |
 | 개인키 입력 | 각 half의 `.keyconf` | 양쪽 키가 들어간 `dongle.keyconf` |
 
-`TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS`는 진단 기능을 켠 v3 peripheral에서만 적용된다. 따라서 여기서 `DIAGNOSTICS=n`으로만 바꾸면 검증한 3000 ms 시작 지연도 유지되지 않는다. 현재 진단은 초기화 결과와 집계 카운터를 출력하며 키나 packet 내용은 출력하지 않지만, 출력 부하가 있으므로 진단 제거는 별도의 비교 빌드로 검증한다. 두 half의 low-priority stack 4096과 별도 ESB 시작 thread의 stack 4096은 서로 다른 설정이다.
+`TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS`는 진단 기능을 켠 v3 peripheral에서만 적용된다. 현재 진단은 초기화 결과와 집계 카운터를 출력하며 키나 packet 내용은 출력하지 않지만, 출력 부하가 있으므로 진단 제거는 별도의 비교 빌드로 검증한다. 두 half의 low-priority stack 4096과 별도 ESB 시작 thread의 stack 4096은 서로 다른 설정이다.
 
 ### 왼쪽
 
@@ -118,7 +118,7 @@ west build -p always -s zmk/app -d build/totem_left_esb_v3 -b "xiao_ble//zmk" --
   "-DSHIELD=totem_left totem_esb_left totem_esb_v3" `
   "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DCONFIG_TOTEM_ESB_DIAGNOSTICS=y" `
-  "-DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000" `
+  "-DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=1000" `
   "-DCONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START=n" `
   "-DCONFIG_ZMK_LOW_PRIORITY_THREAD_STACK_SIZE=4096" `
   "-DEXTRA_CONF_FILE=$keyDir\left.keyconf" `
@@ -139,7 +139,7 @@ west build -p always -s zmk/app -d build/totem_right_esb_v3 -b "xiao_ble//zmk" -
   "-DSHIELD=totem_right totem_esb_right totem_esb_v3" `
   "-DCONFIG_TOTEM_ESB_V3_CI_TEST_KEYS=n" `
   "-DCONFIG_TOTEM_ESB_DIAGNOSTICS=y" `
-  "-DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000" `
+  "-DCONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=1000" `
   "-DCONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START=n" `
   "-DCONFIG_ZMK_LOW_PRIORITY_THREAD_STACK_SIZE=4096" `
   "-DEXTRA_CONF_FILE=$keyDir\right.keyconf" `
@@ -189,7 +189,8 @@ CONFIG_TOTEM_ESB_DIAGNOSTICS=y
 
 ```text
 CONFIG_ZMK_LOW_PRIORITY_THREAD_STACK_SIZE=4096
-CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=3000
+CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS=1000
+CONFIG_TOTEM_ESB_GPIO_WAKE_START_DELAY_MS=1000
 # CONFIG_TOTEM_ESB_DIAGNOSTIC_USB_START is not set
 ```
 
@@ -244,7 +245,7 @@ west build -p always -s zmk/app -d build/totem_dongle_esb_v3_prospector_benchmar
 2. Prospector 동글을 bootloader mode로 열고 개인키 v3 dongle UF2를 플래시한다.
 3. 왼쪽에 같은 key set의 left UF2를 플래시한다.
 4. 오른쪽에 같은 key set의 right UF2를 플래시한다.
-5. 세 장치를 재부팅한다. 좌우는 전원 투입 후 ESB 시작 전 3초를 기다린다. 동글 USB 인식, Prospector 화면, 좌우 입력·배터리와 키 해제를 확인한다. 배터리로 사용하는 좌우가 1시간 이상 유휴 상태로 딥슬립에 들어가면 키로 깨워 다시 입력해 본다. nRF52840이 GPIO 복귀만 보고하면 ESB 시작 전 대기는 1초다. 실제 첫 입력까지는 부트로더·펌웨어 초기화와 무선 연결 시간도 걸린다. 개인키 빌드는 좌우의 시작 로그에 선택한 대기를 `ESB_DIAG DELAY_START delay_ms=`로 표시한다.
+5. 좌우를 배터리 전원으로 껐다 켜고, USB를 연결한 상태에서도 각각 리셋 버튼을 한 번 눌러 확인한다. 각 경우 USB 인식(연결 시), 좌우 첫 입력과 키 해제를 확인한다. 1시간 이상 유휴 상태로 딥슬립에 들어간 뒤 키로 깨웠을 때도 첫 입력을 확인한다. ESB 초기화 전 대기는 모두 1초이며 좌우 시작 로그에 `ESB_DIAG DELAY_START delay_ms=1000`으로 표시된다. 실제 첫 입력까지는 부트로더·펌웨어 초기화와 무선 연결 시간도 걸린다. 동글을 재시작했을 때는 Prospector 화면과 양쪽 키 입력·배터리 표시를 확인한다.
 
 동글→왼쪽→오른쪽 순서는 역할과 키 세트를 혼동하지 않기 위한 작업 순서이며, 프로토콜의 필수 플래시 순서는 아니다. 공개 테스트키에서 개인키로 바꾸는 동안에는 아직 다른 키를 쓰는 장치가 연결되지 않는 것이 정상이다. 세 장치의 업로드가 모두 끝난 뒤 판단한다.
 

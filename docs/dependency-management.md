@@ -33,6 +33,6 @@
 
 클라우드로 이전하려면 별도 비공개 Actions 빌더를 구성한다. 기존 키는 그 빌더의 Secrets로 전달하고 생성 파일은 비공개로 보관한다. 공개 소스 저장소에는 키가 없는 개발 도구·설명만 두며, Codex Cloud 개발 환경에도 production 키를 넣지 않는다. 빌더로 넘길 소스는 검토한 GitHub 커밋 SHA로 고정하고, 빌드 성공·설정 검증과 장치 시험을 구분한다. 환경 구성 파일이 있다는 것만으로 클라우드 배포 또는 실물 검증을 마쳤다는 뜻은 아니다. 절차는 [클라우드 개발 흐름](cloud-development.md)을 참고한다.
 
-지금까지 검증한 좌우 연결 설정은 low-priority stack 4096바이트와 시작 지연 3000ms이다. 일반 좌우 프로필의 기본값이 모두 이 값으로 승격된 것은 아니므로 최종 production 빌드에서 명시적으로 보존한다. 시작 지연은 현재 `TOTEM_ESB_DIAGNOSTICS=y`에 종속된다. 동글 VDB25는 기본 ESB 동글 프로필에 반영했으며 이중 버퍼는 유지한다.
+좌우 개인키 빌드와 공개 `lowprioprobe` 빌드는 low-priority stack 4096바이트와 ESB 시작 지연 1000ms를 사용한다. 시작 지연은 `TOTEM_ESB_DIAGNOSTICS=y`에 종속된다. 전원 투입·리셋 때 3000ms를 기다리던 직전 개인키 빌드는 `4dde52a`이다. 기본 ESB 동글 프로필은 VDB25와 이중 버퍼를 사용한다.
 
 관련 문서: [동작·메모리 최적화](firmware-optimization.md), [개인키 빌드](esb-v3-build-flash.md), [Alt-Tab 동작](owned-swapper.md).

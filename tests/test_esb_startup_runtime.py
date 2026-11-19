@@ -83,7 +83,7 @@ class ActualStartupRuntimeTest(unittest.TestCase):
         fixture = fixture.replace("/* ACTUAL_STARTUP_PATH */", peripheral[start:end])
 
         for cold_ms, wake_ms, expected_ms in (
-            (3000, 1000, 1000), (3000, None, 3000), (250, 1000, 250),
+            (1000, 1000, 1000), (3000, 1000, 1000), (3000, None, 3000), (250, 1000, 250),
             (3000, 0, 0), (0, None, 0),
         ):
             with self.subTest(cold_ms=cold_ms, wake_ms=wake_ms):

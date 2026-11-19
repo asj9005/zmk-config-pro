@@ -160,7 +160,8 @@ def check_build_config(values: dict[str, str], role: str, keys: dict[str, bytes]
             "CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_COUNT": "0",
             "CONFIG_ZMK_SPLIT_ESB_PERIPHERAL_ID": "1" if role == "left" else "2",
             "CONFIG_ZMK_LOW_PRIORITY_THREAD_STACK_SIZE": "4096",
-            "CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS": "3000",
+            "CONFIG_TOTEM_ESB_DIAGNOSTIC_START_DELAY_MS": "1000",
+            "CONFIG_TOTEM_ESB_GPIO_WAKE_START_DELAY_MS": "1000",
             "CONFIG_ZMK_USB": "n",
         })
         required_keys = {LOCAL: keys[role]}
