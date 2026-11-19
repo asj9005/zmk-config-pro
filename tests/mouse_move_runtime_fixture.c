@@ -236,7 +236,7 @@ static void mode_selection(void) {
 
 static void absolute_fixed_speeds(void) {
     reset_case("absolute_fixed_speeds");
-    CHECK(cfg.fast_speed == 5250 && cfg.precise_speed == 450);
+    CHECK(cfg.fast_speed == 3500 && cfg.precise_speed == 450);
     const float signs[] = {-2700, -1, 0, 1, 2700};
     const int64_t times[] = {0, 1, 16, 500, 900, 901, INT64_C(4294967295)};
     for (int variant = 0; variant < 2; variant++) {
@@ -248,7 +248,7 @@ static void absolute_fixed_speeds(void) {
         for (size_t s = 0; s < sizeof(signs) / sizeof(signs[0]); s++) {
             for (size_t t = 0; t < sizeof(times) / sizeof(times[0]); t++) {
                 float direction = signs[s] < 0 ? -1 : (signs[s] > 0 ? 1 : 0);
-                CHECK(speed(&cfg, INPUT_REL_X, signs[s], times[t], MOUSE_SPEED_FAST) == direction * 5250);
+                CHECK(speed(&cfg, INPUT_REL_X, signs[s], times[t], MOUSE_SPEED_FAST) == direction * 3500);
                 CHECK(speed(&cfg, INPUT_REL_Y, signs[s], times[t], MOUSE_SPEED_PRECISE) == direction * 450);
             }
         }
@@ -319,8 +319,8 @@ static void single_tick_snapshot(void) {
     tick_at(1016);
     CHECK(snapshot_calls == 1 && default_calls == 1);
     CHECK(report_count == 2);
-    CHECK(reports[0].code == INPUT_REL_X && reports[0].value == 84 && !reports[0].sync);
-    CHECK(reports[1].code == INPUT_REL_Y && reports[1].value == -84 && reports[1].sync);
+    CHECK(reports[0].code == INPUT_REL_X && reports[0].value == 56 && !reports[0].sync);
+    CHECK(reports[1].code == INPUT_REL_Y && reports[1].value == -56 && reports[1].sync);
     CHECK(data.state.x.start_time == 1000 && data.state.y.start_time == 1000);
     CHECK(data.tick_work.pending);
     report_count = snapshot_calls = default_calls = 0;
@@ -387,7 +387,7 @@ static void zero_and_delay_gates(void) {
     cfg.delay_ms = 20;
     CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1016, MOUSE_SPEED_FAST) == 0);
     CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1020, MOUSE_SPEED_FAST) == 0);
-    CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1032, MOUSE_SPEED_FAST) == 84);
+    CHECK(update_movement_1d(&cfg, INPUT_REL_X, &data.state.x, 1032, MOUSE_SPEED_FAST) == 56);
     CHECK(data.state.x.start_time == 1000);
 }
 
@@ -396,14 +396,14 @@ static void partial_sync_after_release(void) {
     struct zmk_behavior_binding diagonal = binding(2700, -2700);
     layer_state = BIT(2);
     press(&diagonal); input_slots = 1; tick_at(1016);
-    CHECK(data.sync_pending && report_count == 1 && !synced_frames && pending_x == 84);
+    CHECK(data.sync_pending && report_count == 1 && !synced_frames && pending_x == 56);
     layer_state = 0; release(&diagonal);
     CHECK(data.tick_work.pending && !cancel_calls);
     tick_at(1032); tick_at(1048);
     CHECK(data.sync_pending && input_failures == 3 && report_count == 1);
     input_slots = 1; tick_at(1064);
     CHECK(!data.sync_pending && !data.tick_work.pending && synced_frames == 1);
-    CHECK(sent_x == 84 && sent_y == 0 && pending_x == 0 && pending_y == 0);
+    CHECK(sent_x == 56 && sent_y == 0 && pending_x == 0 && pending_y == 0);
     CHECK(reports[1].code == INPUT_REL_Y && reports[1].value == 0 && reports[1].sync);
     tick_at(1080); CHECK(report_count == 2 && synced_frames == 1);
 }
@@ -418,7 +418,7 @@ static void partial_sync_before_new_movement(void) {
     CHECK(reports[1].value == 0 && data.tick_work.pending);
     tick_at(1048);
     CHECK(report_count == 4 && reports[2].value == 7 && reports[3].value == -7);
-    CHECK(synced_frames == 2 && sent_x == 91 && sent_y == -7);
+    CHECK(synced_frames == 2 && sent_x == 63 && sent_y == -7);
     release(&diagonal); CHECK(!data.tick_work.pending);
 }
 
@@ -430,7 +430,7 @@ static void rejected_axes_do_not_create_partial_frames(void) {
     CHECK(!data.sync_pending && input_failures == 2 && report_count == 0);
     input_slots = -1; fail_x = true; tick_at(1032);
     CHECK(!data.sync_pending && input_failures == 3 && report_count == 1);
-    CHECK(synced_frames == 1 && sent_x == 0 && sent_y == -84);
+    CHECK(synced_frames == 1 && sent_x == 0 && sent_y == -56);
     release(&diagonal); CHECK(!data.tick_work.pending);
 }
 

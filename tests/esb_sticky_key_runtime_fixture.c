@@ -28,6 +28,7 @@
 #define ZMK_EV_EVENT_CAPTURED 1
 #define K_NO_WAIT 0
 #define K_MSEC(value) (value)
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define CONTAINER_OF(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 #define ZMK_HID_USAGE_ID(value) ((value) & 0xffffU)
 #define ZMK_HID_USAGE_PAGE(value) (((value) >> 16) & 0xffU)
@@ -53,12 +54,20 @@ struct zmk_keycode_state_changed_event { struct zmk_keycode_state_changed data; 
 static struct active_sticky_key active_sticky_keys[ZMK_BHV_STICKY_KEY_MAX_HELD];
 static struct behavior_sticky_key_config test_config;
 static struct device test_device = { .config = &test_config };
+static struct behavior_sticky_key_config inner_config;
+static struct device inner_device = { .config = &inner_config };
 static const char binding_name[] = "sticky";
 static const char child_name[] = "mo";
+static const char inner_name[] = "sk";
+static const uint32_t right_shift = (7U << 16) | 229;
 static struct zmk_behavior_binding test_binding = { .behavior_dev = binding_name, .param1 = 6 };
 static int64_t now, pending_rx_at, last_release_at;
 static bool rx_pending, held, cancel_in_progress;
 static unsigned int press_count, release_count, delivered_events, pending_queries;
+static int on_sticky_key_binding_pressed(struct zmk_behavior_binding *binding,
+                                         struct zmk_behavior_binding_event event);
+static int on_sticky_key_binding_released(struct zmk_behavior_binding *binding,
+                                          struct zmk_behavior_binding_event event);
 
 static int64_t k_uptime_get(void) { return now; }
 static int k_work_schedule(struct k_work_delayable *work, int64_t delay) {
@@ -83,12 +92,18 @@ static bool totem_esb_rx_pending_before(int64_t deadline) {
     return rx_pending && pending_rx_at <= deadline;
 }
 static const struct device *zmk_behavior_get_binding(const char *name) {
+    if (name == inner_name) { return &inner_device; }
     assert(name == binding_name);
     return &test_device;
 }
 static int zmk_behavior_invoke_binding(struct zmk_behavior_binding *binding,
                                      struct zmk_behavior_binding_event event, bool pressed) {
-    assert(binding->behavior_dev == child_name && binding->param1 == 6);
+    if (binding->behavior_dev == inner_name) {
+        return pressed ? on_sticky_key_binding_pressed(binding, event)
+                       : on_sticky_key_binding_released(binding, event);
+    }
+    assert((binding->behavior_dev == child_name && binding->param1 == 6) ||
+           (strcmp(binding->behavior_dev, KEY_PRESS) == 0 && binding->param1 == right_shift));
     assert(event.position == 3 && event.source == 1);
     assert(held != pressed);
     held = pressed;
@@ -146,7 +161,76 @@ static int key_event(bool pressed, int64_t timestamp) {
     return sticky_key_keycode_state_changed_listener(&event);
 }
 
+static void setup_thumb(void) {
+    reset_fixture(false, true);
+    test_config.behavior.behavior_dev = inner_name;
+    test_config.ignore_modifiers = true;
+    inner_config = (struct behavior_sticky_key_config){
+        .release_after_ms = 100, .behavior.behavior_dev = KEY_PRESS,
+    };
+}
+
+static void pointer_consumes_thumb(void) {
+    struct zmk_behavior_binding thumb = {.behavior_dev = binding_name, .param1 = right_shift};
+    setup_thumb();
+    on_sticky_key_binding_pressed(&thumb, binding_event(980));
+    assert(held && !totem_sticky_consume_tap(&test_device, right_shift, 990));
+    on_sticky_key_binding_released(&thumb, binding_event(1000));
+    assert(!totem_sticky_consume_tap(&inner_device, right_shift, 1010));
+    assert(!totem_sticky_consume_tap(&test_device, right_shift - 1, 1010));
+    assert(held && totem_sticky_consume_tap(&test_device, right_shift, 1010));
+    assert(!held && press_count == 1 && release_count == 1 && last_release_at == 1010);
+    assert(!totem_sticky_consume_tap(&test_device, right_shift, 1011));
+    assert(key_event(true, 1012) == ZMK_EV_EVENT_BUBBLE);
+    assert(key_event(false, 1013) == ZMK_EV_EVENT_BUBBLE);
+    for (int i = 0; i < ZMK_BHV_STICKY_KEY_MAX_HELD; i++) {
+        assert(active_sticky_keys[i].position == ZMK_BHV_STICKY_KEY_POSITION_FREE);
+        assert(!active_sticky_keys[i].release_timer.pending);
+    }
+
+    setup_thumb();
+    on_sticky_key_binding_pressed(&thumb, binding_event(980));
+    on_sticky_key_binding_released(&thumb, binding_event(1000));
+    now = 1100;
+    fire_timer();
+    assert(held && active_sticky_keys[0].position == ZMK_BHV_STICKY_KEY_POSITION_FREE);
+    assert(totem_sticky_consume_tap(&test_device, right_shift, 1200));
+    assert(!held && release_count == 1 && last_release_at == 1200);
+
+    setup_thumb();
+    on_sticky_key_binding_pressed(&thumb, binding_event(980));
+    on_sticky_key_binding_released(&thumb, binding_event(1000));
+    now = 1300; /* Delayed RX callback overtook both original deadlines. */
+    assert(!totem_sticky_consume_tap(&test_device, right_shift, 1201));
+    assert(!held && release_count == 1 && last_release_at == 1200);
+
+    setup_thumb();
+    struct zmk_behavior_binding other = {.behavior_dev = inner_name, .param1 = right_shift};
+    on_sticky_key_binding_pressed(&other, binding_event(980));
+    on_sticky_key_binding_released(&other, binding_event(1000));
+    assert(!totem_sticky_consume_tap(&test_device, right_shift, 1010));
+    assert(held && release_count == 0);
+
+    setup_thumb();
+    on_sticky_key_binding_pressed(&thumb, binding_event(980));
+    on_sticky_key_binding_released(&thumb, binding_event(1000));
+    assert(key_event(true, 1010) == ZMK_EV_EVENT_CAPTURED);
+    assert(!held && delivered_events == 1 && release_count == 1);
+    assert(!totem_sticky_consume_tap(&test_device, right_shift, 1011));
+
+    setup_thumb();
+    on_sticky_key_binding_pressed(&thumb, binding_event(980));
+    on_sticky_key_binding_released(&thumb, binding_event(1000));
+    cancel_in_progress = true;
+    assert(totem_sticky_consume_tap(&test_device, right_shift, 1010));
+    assert(active_sticky_keys[0].timer_cancelled);
+    now = 1100;
+    fire_timer();
+    assert(!active_sticky_keys[0].timer_cancelled && release_count == 1);
+}
+
 int main(void) {
+    pointer_consumes_thumb();
     /* Normal release: the configured deadline is unchanged. */
     reset_fixture(false, false);
     tap_sticky(980, 1000);

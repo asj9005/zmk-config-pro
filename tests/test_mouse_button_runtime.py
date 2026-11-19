@@ -29,7 +29,9 @@ def fixture_source(mutation=None):
     elif mutation is not None:
         raise ValueError(mutation)
     fixture = (ROOT / "tests/mouse_button_runtime_fixture.c").read_text(encoding="utf-8")
-    return fixture.replace("/* ACTUAL_BUTTON_BEHAVIOR */", source)
+    thumb = (ROOT / "src/behavior_thumb_click.c").read_text(encoding="utf-8")
+    thumb = thumb[thumb.index("struct thumb_click_config {"):thumb.index("static const struct behavior_driver_api")]
+    return fixture.replace("/* ACTUAL_BUTTON_BEHAVIOR */", source).replace("/* ACTUAL_THUMB_CLICK */", thumb)
 
 
 class ActualMouseButtonRuntimeTest(unittest.TestCase):
@@ -42,7 +44,7 @@ class ActualMouseButtonRuntimeTest(unittest.TestCase):
     def test_button_release_backpressure_and_overflow(self):
         run = compile_and_run(fixture_source())
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
-        self.assertIn("8 actual mouse button cases passed", run.stdout)
+        self.assertIn("9 actual mouse button cases passed", run.stdout)
 
     def test_negative_controls(self):
         for mutation, case in (("drop_failed_release", "final_release_retried_without_new_input"),

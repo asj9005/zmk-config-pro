@@ -48,12 +48,13 @@ def fixture_source(negative: str | None = None) -> str:
         "store_sticky_key", "clear_sticky_key", "find_sticky_key",
         "press_sticky_key_behavior", "release_sticky_key_behavior",
         "on_sticky_key_timeout", "stop_timer", "on_sticky_key_binding_pressed",
-        "on_sticky_key_binding_released", "sticky_key_keycode_state_changed_listener",
+        "on_sticky_key_binding_released", "totem_sticky_consume_tap",
+        "sticky_key_keycode_state_changed_listener",
         "behavior_sticky_key_timer_handler",
     )
     functions = "\n\n".join(
         braced_definition(
-            source, rf"^(?:static\s+)?(?:inline\s+)?(?:struct active_sticky_key\s*\*\s*|int\s+|void\s+){name}\([^;{{}}]*\)\s*\{{"
+            source, rf"^(?:static\s+)?(?:inline\s+)?(?:struct active_sticky_key\s*\*\s*|int\s+|bool\s+|void\s+){name}\([^;{{}}]*\)\s*\{{"
         ) for name in names
     )
     fixture = (ROOT / "tests/esb_sticky_key_runtime_fixture.c").read_text(encoding="utf-8")

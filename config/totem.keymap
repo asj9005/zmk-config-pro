@@ -233,6 +233,13 @@
             mods = <(MOD_RSFT|MOD_LSFT)>;
         };
 
+        thumb_click: thumb_click {
+            compatible = "totem,behavior-thumb-click";
+            #binding-cells = <1>;
+            sticky = <&LangShift_1>;
+            bindings = <&Mod_MKP3>, <&mkp MB2>;
+        };
+
         Mod_MKP3: Mod_MKP3 {
             compatible = "zmk,behavior-mod-morph";
             label = "MOD_MKP3";
@@ -909,7 +916,7 @@
             bindings = <
         &AutoLayer_1 LC(LS(LA(P)))  &AutoLayer_4 9 W         &AutoLayer_Fast Acc E &AutoLayer_Slow Prec R     &AutoLayer_1 T    &mkp MB2         &Mod_MKP4       &mmv MOVE_UP    &Mod_MKP5        &trans
         &At_Gui                     &At_Alt                  &At_Ctrl              &At_Shift                  &AutoLayer_1 G    &msc SCRL_LEFT   &mmv MOVE_LEFT  &mmv MOVE_DOWN  &mmv MOVE_RIGHT  &trans
-&trans  &AutoLayer_3 LEFT_GUI Z     &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &Mod_MKP3        &trans  &trans
+&trans  &AutoLayer_3 LEFT_GUI Z     &AutoLayer_3 LEFT_ALT X  &AutoLayer_3 LCTRL C  &AutoLayer_3 LEFT_SHIFT V  &AutoLayer_1 Q    &msc SCRL_RIGHT  &msc SCRL_UP    &msc SCRL_DOWN  &thumb_click RIGHT_SHIFT  &trans  &trans
                                                              &trans                &trans                     &mkp MB1          &trans           &trans          &trans
             >;
         };

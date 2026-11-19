@@ -20,6 +20,7 @@
 #include <zmk/hid.h>
 #include <zmk/keymap.h>
 #include <totem/esb_rx_timing.h>
+#include <totem/sticky_tap.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -46,6 +47,7 @@ struct active_sticky_key {
 #endif
     uint32_t param1;
     const struct behavior_sticky_key_config *config;
+    const struct behavior_sticky_key_config *tap_origin;
     // timer data.
     bool timer_started;
     bool timer_cancelled;
@@ -173,6 +175,17 @@ static int on_sticky_key_binding_pressed(struct zmk_behavior_binding *binding,
     }
 
     LOG_DBG("%d new sticky_key", event.position);
+    /* A nested &sk may outlive its outer sticky's timeout. Retain which
+     * binding generated that press so a pointer key can consume only its own
+     * thumb's one-shot, including during the inner timeout. A nested press
+     * receives the very same behavior_dev pointer as the parent's binding. */
+    struct active_sticky_key *parent = find_sticky_key(event.position, *binding, binding->param1);
+#if IS_ENABLED(CONFIG_ZMK_SPLIT)
+    if (parent != NULL && parent->source != event.source) {
+        parent = NULL;
+    }
+#endif
+    sticky_key->tap_origin = parent != NULL ? parent->tap_origin : cfg;
     if (!sticky_key->config->lazy) {
         // press the key now if it's not lazy
         press_sticky_key_behavior(sticky_key, event.timestamp);
@@ -204,6 +217,50 @@ static int on_sticky_key_binding_released(struct zmk_behavior_binding *binding,
     // An old ingress timestamp still needs expiry; never leave it unarmed.
     k_work_schedule(&sticky_key->release_timer, ms_left > 0 ? K_MSEC(ms_left) : K_NO_WAIT);
     return ZMK_BEHAVIOR_OPAQUE;
+}
+
+bool totem_sticky_consume_tap(const struct device *sticky, uint32_t keycode, int64_t timestamp) {
+    for (int i = 0; i < ZMK_BHV_STICKY_KEY_MAX_HELD; i++) {
+        struct active_sticky_key *leaf = &active_sticky_keys[i];
+        if (leaf->position == ZMK_BHV_STICKY_KEY_POSITION_FREE ||
+            leaf->tap_origin != sticky->config || leaf->param1 != keycode ||
+            leaf->modified_key_usage_page || leaf->modified_key_keycode ||
+            strcmp(leaf->config->behavior.behavior_dev, KEY_PRESS) != 0) {
+            continue;
+        }
+
+        if (!leaf->timer_started && leaf->config != sticky->config) {
+            /* Releasing the outer thumb arms the nested &sk. Do it first,
+             * using the original deadline if dispatch fell behind its timer. */
+            for (int j = 0; j < ZMK_BHV_STICKY_KEY_MAX_HELD; j++) {
+                struct active_sticky_key *outer = &active_sticky_keys[j];
+                if (outer->position != leaf->position || outer->config != sticky->config ||
+#if IS_ENABLED(CONFIG_ZMK_SPLIT)
+                    outer->source != leaf->source ||
+#endif
+                    outer->param1 != keycode || !outer->timer_started ||
+                    outer->modified_key_usage_page || outer->modified_key_keycode) {
+                    continue;
+                }
+                stop_timer(outer);
+                release_sticky_key_behavior(outer, MIN(timestamp, outer->release_at));
+                break;
+            }
+        }
+
+        if (leaf->position == ZMK_BHV_STICKY_KEY_POSITION_FREE || !leaf->timer_started) {
+            continue; /* Held thumb or a nested binding already released. */
+        }
+        stop_timer(leaf);
+        bool in_time = timestamp <= leaf->release_at;
+        if (!in_time || leaf->config->lazy) {
+            on_sticky_key_timeout(leaf);
+        } else {
+            release_sticky_key_behavior(leaf, timestamp);
+        }
+        return in_time;
+    }
+    return false;
 }
 
 #if IS_ENABLED(CONFIG_ZMK_BEHAVIOR_METADATA)
@@ -361,11 +418,12 @@ void behavior_sticky_key_timer_handler(struct k_work *item) {
     struct k_work_delayable *d_work = k_work_delayable_from_work(item);
     struct active_sticky_key *sticky_key =
         CONTAINER_OF(d_work, struct active_sticky_key, release_timer);
-    if (sticky_key->position == ZMK_BHV_STICKY_KEY_POSITION_FREE) {
-        return;
-    }
     if (sticky_key->timer_cancelled) {
+        /* A consumed sticky may already be free. Release its cancellation
+         * guard before the slot can be reused. */
         sticky_key->timer_cancelled = false;
+    } else if (sticky_key->position == ZMK_BHV_STICKY_KEY_POSITION_FREE) {
+        return;
     } else if (totem_esb_rx_pending_before(sticky_key->release_at)) {
         // RX and timers share the system workqueue. Let the bounded RX batch
         // deliver earlier key events before expiring their sticky modifier/layer.

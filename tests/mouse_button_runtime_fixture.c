@@ -16,17 +16,21 @@
 #define K_MSEC(x) (x)
 #define CONTAINER_OF(p, t, m) ((t *)((char *)(p) - offsetof(t, m)))
 #define LOG_DBG(...) ((void)0)
+#define IS_ENABLED(x) (x)
+#define CONFIG_TOTEM_ESB_COMPAT 1
+#define ZMK_BEHAVIOR_OPAQUE 0
 static const char *case_name;
 #define CHECK(x) do { if (!(x)) { fprintf(stderr, "%s:%d: %s\n", case_name, __LINE__, #x); exit(1); } } while (0)
 struct k_work { int unused; };
 struct k_work_delayable { struct k_work work; void (*callback)(struct k_work *); bool pending; int delay; };
 struct k_spinlock { bool held; };
 typedef int k_spinlock_key_t;
-struct device { void *data; };
+struct device { void *data; const void *config; };
 struct zmk_behavior_binding { const char *behavior_dev; uint32_t param1; };
-struct zmk_behavior_binding_event { uint32_t position; };
+struct zmk_behavior_binding_event { uint32_t position; int64_t timestamp; };
 enum { TOTEM_DIAG_INPUT_RETRY, TOTEM_DIAG_INPUT_OVERFLOW };
 static const struct device *fake_device;
+static struct device thumb_dev, sticky_dev;
 static unsigned int diag[2], calls, reports;
 static int input_slots;
 static uint8_t set_bits, clear_bits, hid_buttons;
@@ -46,7 +50,10 @@ static int k_work_reschedule(struct k_work_delayable *work, int delay) {
     CHECK(delay >= 0); work->pending = true; work->delay = delay; return 1;
 }
 static void totem_esb_diag_event(int event, int result) { (void)result; CHECK(event < 2); diag[event]++; }
-static const struct device *zmk_behavior_get_binding(const char *name) { CHECK(strcmp(name, "mkp") == 0); return fake_device; }
+static const struct device *zmk_behavior_get_binding(const char *name) {
+    if (strcmp(name, "thumb_click") == 0) { return &thumb_dev; }
+    CHECK(strcmp(name, "mkp") == 0); return fake_device;
+}
 static int input_report_key(const struct device *dev, uint16_t code, int32_t value, bool sync, int timeout) {
     CHECK(dev == fake_device && timeout == K_NO_WAIT);
     CHECK(code >= INPUT_BTN_0 && code < INPUT_BTN_0 + 5);
@@ -83,7 +90,7 @@ static void reset_case(const char *name) {
 }
 static void key(uint32_t mask, bool pressed) {
     struct zmk_behavior_binding binding = {"mkp", mask};
-    struct zmk_behavior_binding_event event = {1};
+    struct zmk_behavior_binding_event event = {.position = 1};
     CHECK((pressed ? on_keymap_binding_pressed(&binding, event) : on_keymap_binding_released(&binding, event)) == 0);
 }
 static void run(void) {
@@ -167,11 +174,80 @@ static void overlapping_button_owners_survive_overflow(void) {
     drain(); CHECK(hid_counts[1] == 1 && hid_buttons == 2);
     key(2, false); CHECK(!data.work.pending && hid_counts[1] == 1);
 }
+
+/* Sticky ownership and the normal modifier report are exercised in the
+ * sticky-key fixture. Here the keyboard boundary precedes real &mkp admission. */
+static bool sticky_armed, sticky_expired, physical_shift;
+static uint8_t regular_button;
+static unsigned int consume_calls;
+static bool totem_sticky_consume_tap(const struct device *sticky, uint32_t code, int64_t timestamp) {
+    CHECK(sticky == &sticky_dev && code == 0x700e5 && timestamp == 123);
+    CHECK(data.count == 0);
+    consume_calls++;
+    bool was_armed = sticky_armed;
+    sticky_armed = false;
+    return was_armed && !sticky_expired;
+}
+static int zmk_behavior_invoke_binding(struct zmk_behavior_binding *binding,
+                                       struct zmk_behavior_binding_event event, bool pressed) {
+    CHECK(!sticky_armed && event.position == 11);
+    CHECK(event.timestamp == (pressed ? 123 : 124));
+    if (strcmp(binding->behavior_dev, "Mod_MKP3") == 0) {
+        if (pressed) { regular_button = physical_shift ? 2 : 4; }
+        *binding = (struct zmk_behavior_binding){"mkp", regular_button};
+    } else {
+        CHECK(binding->param1 == 2);
+    }
+    return pressed ? on_keymap_binding_pressed(binding, event) : on_keymap_binding_released(binding, event);
+}
+/* ACTUAL_THUMB_CLICK */
+static void thumb_tap_consumed_before_deferred_right_click(void) {
+    reset_case("thumb_tap_consumed_before_deferred_right_click");
+    static const struct thumb_click_config config = {
+        .sticky = &sticky_dev, .regular = {"Mod_MKP3", 0}, .click = {"mkp", 2},
+    };
+    static struct thumb_click_data owner;
+    thumb_dev.data = &owner;
+    thumb_dev.config = &config;
+    struct zmk_behavior_binding binding = {"thumb_click", 0x700e5};
+    struct zmk_behavior_binding_event event = {.position = 11, .timestamp = 123};
+    sticky_armed = true;
+    input_slots = 0;
+    CHECK(thumb_click_pressed(&binding, event) == 0);
+    CHECK(thumb_click_pressed(&binding, event) == 0);
+    run();
+    CHECK(!sticky_armed && data.count == 1 && !reports);
+    event.timestamp++;
+    event.position++;
+    CHECK(thumb_click_released(&binding, event) == 0);
+    event.position--;
+    CHECK(thumb_click_released(&binding, event) == 0);
+    CHECK(thumb_click_released(&binding, event) == 0);
+    input_slots = -1;
+    drain();
+    CHECK(consume_calls == 1 && !sticky_armed);
+    CHECK(reports == 2 && report_states[0] == 2 && report_states[1] == 0);
+    for (unsigned int i = 0; i < 3; i++) {
+        /* A second plain P, a late/expired one-shot, then a physical Shift. */
+        sticky_expired = sticky_armed = i == 1;
+        physical_shift = i == 2;
+        event.timestamp = 123;
+        CHECK(thumb_click_pressed(&binding, event) == 0);
+        physical_shift = false;
+        event.timestamp++;
+        CHECK(thumb_click_released(&binding, event) == 0);
+        drain();
+        CHECK(report_states[2 + 2 * i] == (i == 2 ? 2 : 4));
+        CHECK(report_states[3 + 2 * i] == 0);
+    }
+    CHECK(consume_calls == 4 && reports == 8);
+}
 int main(void) {
     final_release_retried_without_new_input(); tap_fifo_under_backpressure();
     combined_masks_keep_final_sync(); overflow_keeps_last_release();
     overflow_recovers_mixed_button_state(); producer_cannot_replace_inflight_head();
     invalid_bits_and_bounded_batches();
     overlapping_button_owners_survive_overflow();
-    puts("8 actual mouse button cases passed"); return 0;
+    thumb_tap_consumed_before_deferred_right_click();
+    puts("9 actual mouse button cases passed"); return 0;
 }

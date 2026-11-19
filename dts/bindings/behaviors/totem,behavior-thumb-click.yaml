@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+
+description: Consume the tapped thumb modifier before forwarding a mouse click
+
+compatible: "totem,behavior-thumb-click"
+
+include: one_param.yaml
+
+properties:
+  bindings:
+    type: phandle-array
+    required: true
+    description: Regular binding followed by the click selected by an armed thumb tap
+  sticky:
+    type: phandle
+    required: true
+    description: Sticky behavior whose armed tap is used by the click
