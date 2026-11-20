@@ -672,6 +672,11 @@
             key-positions = <17 36>;
         };
 
+        CBL_Lang {
+            bindings = <&lang>;
+            key-positions = <32 13>; // Left outer thumb + F
+        };
+
         Nav_CtrlShift {
             bindings = <&Nav_CtrlShift>;
             key-positions = <11 12 13>;
